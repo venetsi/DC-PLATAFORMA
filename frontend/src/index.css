@@ -85,3 +85,68 @@ th, td {
 .badge-verde { background: rgba(63, 182, 106, 0.2); color: var(--verde); }
 .badge-amarillo { background: rgba(224, 184, 63, 0.2); color: var(--amarillo); }
 .badge-rojo { background: rgba(224, 92, 63, 0.2); color: var(--rojo); }
+
+/* Reskin de FullCalendar (vistas Semana/Mes) con la identidad DCSMART --
+   por defecto trae un tema claro/generico que desentona con el resto de
+   la app. Se pisan las custom properties que expone FullCalendar en vez
+   de overrides sueltos, para que quede consistente en todos sus modos. */
+.fc {
+  --fc-border-color: rgba(255, 255, 255, 0.08);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: #222c3d;
+  --fc-list-event-hover-bg-color: rgba(255, 255, 255, 0.05);
+  --fc-today-bg-color: rgba(63, 182, 189, 0.08);
+  --fc-button-bg-color: #222c3d;
+  --fc-button-border-color: rgba(255, 255, 255, 0.12);
+  --fc-button-hover-bg-color: var(--teal);
+  --fc-button-hover-border-color: var(--teal);
+  --fc-button-active-bg-color: var(--teal);
+  --fc-button-active-border-color: var(--teal);
+  --fc-button-text-color: var(--texto);
+  font-family: inherit;
+  color: var(--texto);
+}
+.fc .fc-toolbar-title {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: 1.4rem;
+  color: var(--texto);
+}
+.fc .fc-button {
+  text-transform: capitalize;
+  box-shadow: none !important;
+  font-weight: 600;
+}
+.fc .fc-button:disabled { opacity: 0.45; }
+.fc .fc-button-primary:not(:disabled):active,
+.fc .fc-button-primary:not(:disabled).fc-button-active {
+  color: #06222a;
+}
+.fc .fc-col-header-cell-cushion {
+  color: var(--gold);
+  text-decoration: none;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  padding: 8px 4px;
+}
+.fc .fc-daygrid-day-number {
+  color: var(--texto-tenue);
+  text-decoration: none;
+  font-size: 0.85rem;
+  padding: 6px 8px;
+}
+.fc .fc-day-today .fc-daygrid-day-number { color: var(--teal); font-weight: 700; }
+.fc-theme-standard td, .fc-theme-standard th { border-color: rgba(255, 255, 255, 0.08); }
+.fc-scrollgrid { border-color: rgba(255, 255, 255, 0.08) !important; }
+.fc-daygrid-day-frame { min-height: 90px; }
+.fc-event {
+  border: none;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.fc-daygrid-event-dot { display: none; }
