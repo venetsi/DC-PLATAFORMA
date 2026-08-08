@@ -459,7 +459,7 @@ Se mantiene del diseño original:
 | Service account (Groups) | mismo `dc-plataforma-api`, con domain-wide delegation autorizada sobre `dcsmart.app` (dominio real confirmado por el usuario). **Excepción a "sin keys descargadas"**: la Directory API exige impersonar un usuario real (`GOOGLE_WORKSPACE_ADMIN_EMAIL=maximiliano@venetsi.com`), lo que solo se puede firmar con la key propia del service account — la key vive en el secreto `dc-plataforma-sa-key`, nunca en el repo |
 | Base de datos | nueva base lógica `dc_plataforma` en la instancia **existente** `dc-smart-mvp:us-central1:dcsmart-mvp-insta`, rol Postgres dedicado `dc_plataforma_app` |
 | Firebase Hosting | 2 sites nuevos: `dc-plataforma` (gestión) y `dc-plataforma-tv` (kiosko) |
-| Secretos nuevos | `dc-plataforma-database-url`, `dc-plataforma-jwt-secret`, `dc-plataforma-sa-key` (key JSON, solo para Directory API/Groups — Calendar sigue sin key, vía Workload Identity) |
+| Secretos nuevos | `dc-plataforma-database-url`, `dc-plataforma-jwt-secret`, `dc-plataforma-sa-key` (key JSON, solo para Directory API/Groups — Calendar sigue sin key, vía Workload Identity), `dc-plataforma-weather-key` (Google Weather API, restringida solo a esa API — llamada server-side desde `GET /api/tv/clima`, nunca expuesta al cliente) |
 | Secreto reusado | `internal-shared-secret` (ya existe) |
 | Cambio en repo `dcsmart` | Fase final agrupada — ver "Integración con dcsmart" |
 | Config manual única vez | Admin Console de Workspace: (a) domain-wide delegation para Groups, (b) permiso de webhooks de Chat |
