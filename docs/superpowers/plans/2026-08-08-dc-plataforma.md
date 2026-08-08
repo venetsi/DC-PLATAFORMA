@@ -492,10 +492,12 @@ roadmap.
    `CumplimientoDiario`, idempotente) y `src/jobs/reconciliar.js` (cierra la
    recurrencia con `UNTIL` al desactivar un local, sin perder historial) — ambos
    confirmados contra datos reales, no solo revisados por código.
-4. **Frontend de gestión**: checklist diario, reportes de cumplimiento, vista matriz
-   de administración de agenda — probado end-to-end con el login temporal.
-5. **Pantallas kiosko** con FullCalendar estilo DCSMART, clave privada por
-   departamento.
+4. ✅ **Frontend de gestión** — hecho y probado en el navegador (login, checklist,
+   reportes, admin de tareas y agenda).
+5. ✅ **Pantalla kiosko** — hecho y probado en el navegador: `kiosko/index.html`,
+   layout fijo **1920x1080** (resolución pedida por el usuario), FullCalendar (vista
+   `listDay`) vía CDN reskinneado con la identidad DCSMART, clave privada por
+   departamento, resiliencia igual a `dashboard-rendimiento-general`.
 6. **Google Groups + Chat**: requiere primero habilitar domain-wide delegation en el
    Admin Console — sync de Group por departamento, ACL `reader`, avisos de Chat.
 7. **Integración con `dcsmart` — al final, único punto de contacto con producción**:
