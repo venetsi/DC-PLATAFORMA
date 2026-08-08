@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="refresh" content="3600" />
+<title>DC-PLATAFORMA — Agenda</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<style>
+  :root {
+    --bg-0: #10161f;
+    --bg-1: #1a2230;
+    --bg-2: #222c3d;
+    --gold: #c9b086;
+    --teal: #3fb6bd;
+    --verde: #3fb66a;
+    --amarillo: #e0b83f;
+    --rojo: #e05c3f;
+    --texto: #eef1f5;
+    --texto-tenue: #9aa5b4;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    width: 1920px; height: 1080px;
+    overflow: hidden;
+    background: radial-gradient(circle at 20% 0%, var(--bg-1), var(--bg-0) 60%);
+    color: var(--texto);
+    font-family: 'Montserrat', system-ui, sans-serif;
+  }
+  #app { width: 1920px; height: 1080px; display: flex; flex-direction: column; padding: 40px 56px; }
+
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+  .titulo { display: flex; flex-direction: column; }
+  .titulo .marca { font-size: 20px; letter-spacing: 3px; color: var(--gold); font-weight: 700; text-transform: uppercase; }
+  .titulo .depto { font-size: 52px; font-weight: 800; margin-top: 4px; }
+  .reloj { text-align: right; }
+  .reloj .hora { font-size: 44px; font-weight: 700; color: var(--teal); font-variant-numeric: tabular-nums; }
+  .reloj .fecha { font-size: 18px; color: var(--texto-tenue); text-transform: capitalize; }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-bottom: 32px; }
+  .kpi { background: var(--bg-1); border-radius: 16px; padding: 24px 28px; border: 1px solid rgba(255,255,255,0.06); }
+  .kpi .valor { font-size: 56px; font-weight: 800; line-height: 1; }
+  .kpi .etiqueta { margin-top: 8px; font-size: 18px; color: var(--texto-tenue); text-transform: uppercase; letter-spacing: 1px; }
+  .kpi.general { display: flex; align-items: center; gap: 20px; }
+  .semaforo { width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 32px 4px currentColor; }
+  .semaforo.verde { background: var(--verde); color: var(--verde); }
+  .semaforo.amarillo { background: var(--amarillo); color: var(--amarillo); }
+  .semaforo.rojo { background: var(--rojo); color: var(--rojo); }
+  .kpi .valor.verde { color: var(--verde); }
+  .kpi .valor.amarillo { color: var(--amarillo); }
+  .kpi .valor.rojo { color: var(--rojo); }
+
+  #calendario { flex: 1; background: var(--bg-1); border-radius: 20px; padding: 28px 32px; border: 1px solid rgba(255,255,255,0.06); overflow: hidden; }
+
+  footer { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; font-size: 16px; color: var(--texto-tenue); }
+  .estado-conexion { display: flex; align-items: center; gap: 10px; }
+  .punto { width: 12px; height: 12px; border-radius: 50%; }
+  .punto.ok { background: var(--verde); }
+  .punto.mal { background: var(--rojo); }
+
+  /* Reskin de FullCalendar con la paleta DCSMART */
+  .fc { height: 100%; font-family: 'Montserrat', sans-serif; --fc-border-color: rgba(255,255,255,0.08); --fc-page-bg-color: transparent; --fc-neutral-bg-color: var(--bg-2); }
+  .fc .fc-toolbar-title { color: var(--texto); font-size: 26px; font-weight: 700; }
+  .fc .fc-col-header-cell-cushion, .fc .fc-list-day-text, .fc .fc-list-day-side-text { color: var(--texto); }
+  .fc-theme-standard .fc-list, .fc-theme-standard td, .fc-theme-standard th { border-color: rgba(255,255,255,0.08); }
+  .fc .fc-list-event:hover td { background: rgba(255,255,255,0.04); }
+  .fc-list-event-title strong { font-size: 20px; }
+  .fc-list-event-dot { border-color: currentColor !important; }
+  .fc-toolbar.fc-header-toolbar { display: none; }
+  .evento-pendiente { color: var(--amarillo); }
+  .evento-realizada { color: var(--verde); }
+  .evento-vencida { color: var(--rojo); }
+
+  .badge-evento { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; margin-left: 12px; text-transform: uppercase; }
+  .badge-evento.pendiente { background: rgba(224,184,63,0.18); color: var(--amarillo); }
+  .badge-evento.realizada { background: rgba(63,182,106,0.18); color: var(--verde); }
+  .badge-evento.vencida { background: rgba(224,92,63,0.18); color: var(--rojo); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="titulo">
+      <span class="marca">DC-PLATAFORMA</span>
+      <span class="depto" id="nombre-depto">Cargando…</span>
+    </div>
+    <div class="reloj">
+      <div class="hora" id="reloj-hora">--:--</div>
+      <div class="fecha" id="reloj-fecha"></div>
+    </div>
+  </header>
+
+  <div class="kpis">
+    <div class="kpi general">
+      <div class="semaforo" id="semaforo-general"></div>
+      <div>
+        <div class="valor" id="estado-general-texto">—</div>
+        <div class="etiqueta">Estado del día</div>
+      </div>
+    </div>
+    <div class="kpi"><div class="valor amarillo" id="kpi-pendientes">0</div><div class="etiqueta">Pendientes</div></div>
+    <div class="kpi"><div class="valor verde" id="kpi-realizadas">0</div><div class="etiqueta">Realizadas</div></div>
+    <div class="kpi"><div class="valor rojo" id="kpi-vencidas">0</div><div class="etiqueta">Vencidas</div></div>
+  </div>
+
+  <div id="calendario"></div>
+
+  <footer>
+    <div class="estado-conexion">
+      <span class="punto ok" id="punto-conexion"></span>
+      <span id="texto-conexion">Conectando…</span>
+    </div>
+    <span id="ultima-actualizacion"></span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var params = new URLSearchParams(location.search);
+  var departamento = params.get('depto');
+  var key = params.get('key');
+  var apiBase = params.get('api') || '/api';
+  var CACHE_KEY = 'dcplataforma_tv_' + departamento;
+
+  var REFRESH_MS = 2 * 60 * 1000;   // 2 min en condiciones normales
+  var RETRY_MS = 30 * 1000;          // 30s si el ultimo fetch fallo
+
+  document.getElementById('nombre-depto').textContent = departamento || '(sin departamento)';
+
+  function actualizarReloj() {
+    var ahora = new Date();
+    document.getElementById('reloj-hora').textContent =
+      String(ahora.getHours()).padStart(2, '0') + ':' + String(ahora.getMinutes()).padStart(2, '0');
+    document.getElementById('reloj-fecha').textContent =
+      ahora.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+  actualizarReloj();
+  setInterval(actualizarReloj, 1000 * 15);
+
+  var calendar = new FullCalendar.Calendar(document.getElementById('calendario'), {
+    initialView: 'listDay',
+    height: '100%',
+    headerToolbar: false,
+    locale: 'es',
+    noEventsText: 'No hay tareas agendadas para hoy',
+    eventDidMount: function (info) {
+      var estado = info.event.extendedProps.estado;
+      info.el.classList.add('evento-' + estado);
+      var titleEl = info.el.querySelector('.fc-list-event-title');
+      if (titleEl) {
+        var badge = document.createElement('span');
+        badge.className = 'badge-evento ' + estado;
+        badge.textContent = estado;
+        titleEl.appendChild(badge);
+      }
+    }
+  });
+  calendar.render();
+
+  function pintar(data) {
+    document.getElementById('nombre-depto').textContent = data.departamento.nombre;
+    document.getElementById('kpi-pendientes').textContent = data.totales.pendientes;
+    document.getElementById('kpi-realizadas').textContent = data.totales.realizadas;
+    document.getElementById('kpi-vencidas').textContent = data.totales.vencidas;
+
+    var semaforo = document.getElementById('semaforo-general');
+    semaforo.className = 'semaforo ' + data.estado_general;
+    var textoEstado = { verde: 'Todo al día', amarillo: 'Con pendientes', rojo: 'Con vencidas' }[data.estado_general] || '—';
+    document.getElementById('estado-general-texto').textContent = textoEstado;
+
+    calendar.removeAllEvents();
+    (data.eventos || []).forEach(function (ev) {
+      calendar.addEvent({
+        title: ev.titulo + (ev.id_local ? ' — ' + ev.id_local : ''),
+        start: ev.inicio,
+        end: ev.fin,
+        allDay: !ev.inicio || ev.inicio.length <= 10,
+        extendedProps: { estado: ev.estado }
+      });
+    });
+  }
+
+  function marcarConexion(ok, mensaje) {
+    document.getElementById('punto-conexion').className = 'punto ' + (ok ? 'ok' : 'mal');
+    document.getElementById('texto-conexion').textContent = mensaje;
+  }
+
+  function guardarCache(data) {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data: data, en: Date.now() })); } catch (e) {}
+  }
+  function leerCache() {
+    try { return JSON.parse(localStorage.getItem(CACHE_KEY)); } catch (e) { return null; }
+  }
+
+  function tick() {
+    if (!departamento || !key) {
+      marcarConexion(false, 'Falta ?depto= y ?key= en la URL');
+      return;
+    }
+    fetch(apiBase + '/tv/resumen?departamento=' + encodeURIComponent(departamento) + '&key=' + encodeURIComponent(key))
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        pintar(data);
+        guardarCache(data);
+        marcarConexion(true, 'En línea');
+        document.getElementById('ultima-actualizacion').textContent =
+          'Actualizado ' + new Date(data.actualizado).toLocaleTimeString('es-AR');
+        scheduleNext(REFRESH_MS);
+      })
+      .catch(function () {
+        var cache = leerCache();
+        if (cache) {
+          pintar(cache.data);
+          var minutos = Math.round((Date.now() - cache.en) / 60000);
+          marcarConexion(false, 'Sin conexión — mostrando datos de hace ' + minutos + ' min');
+        } else {
+          marcarConexion(false, 'Sin conexión — sin datos en caché todavía');
+        }
+        scheduleNext(RETRY_MS);
+      });
+  }
+
+  var timer;
+  function scheduleNext(ms) {
+    clearTimeout(timer);
+    timer = setTimeout(tick, ms);
+  }
+
+  // Cache inicial mientras llega la primera respuesta.
+  var cacheInicial = leerCache();
+  if (cacheInicial) pintar(cacheInicial.data);
+
+  tick();
+  window.addEventListener('online', tick);
+
+  // Doble red de recarga (ver dashboard-rendimiento-general: quedo 74hs sin
+  // actualizar por un bug de refresco silencioso) -- setInterval de JS +
+  // meta refresh a nivel navegador, independientes entre si.
+  setInterval(function () { location.reload(); }, 60 * 60 * 1000);
+})();
+</script>
+</body>
+</html>
