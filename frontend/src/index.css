@@ -1,0 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
+
+:root {
+  --bg-0: #10161f;
+  --bg-1: #1a2230;
+  --gold: #c9b086;
+  --teal: #3fb6bd;
+  --verde: #3fb66a;
+  --amarillo: #e0b83f;
+  --rojo: #e05c3f;
+  --texto: #eef1f5;
+  --texto-tenue: #9aa5b4;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Montserrat', system-ui, sans-serif;
+  background: var(--bg-0);
+  color: var(--texto);
+}
+
+a {
+  color: var(--teal);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input, select, textarea {
+  font-family: inherit;
+}
+
+.card {
+  background: var(--bg-1);
+  border-radius: 10px;
+  padding: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.btn {
+  background: var(--teal);
+  color: #06222a;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--texto-tenue);
+  color: var(--texto);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.badge-verde { background: rgba(63, 182, 106, 0.2); color: var(--verde); }
+.badge-amarillo { background: rgba(224, 184, 63, 0.2); color: var(--amarillo); }
+.badge-rojo { background: rgba(224, 92, 63, 0.2); color: var(--rojo); }
