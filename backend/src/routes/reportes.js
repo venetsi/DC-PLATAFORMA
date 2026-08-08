@@ -2,7 +2,7 @@
 // recalcula agregando eventos de Calendar en vivo, ver docs/superpowers.
 export default async function reportesRoutes(fastify) {
   fastify.get('/cumplimiento', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { departamento: idDepartamento, desde, hasta } = request.query
+    const { departamento: idDepartamento, local: idLocal, desde, hasta } = request.query
     if (!idDepartamento) return reply.code(400).send({ error: 'departamento requerido' })
 
     const usuario = await fastify.db.extUser.findUnique({ where: { id: request.user.id } })
@@ -11,9 +11,13 @@ export default async function reportesRoutes(fastify) {
       return reply.code(403).send({ error: 'No tenes acceso a este departamento' })
     }
 
+    // id_local_ext = '' trae la fila agregada de todo el departamento (default);
+    // pasar ?local=<id> trae el desglose de un local especifico -- nunca ambos
+    // a la vez, para no duplicar el conteo (ver nota en schema.prisma).
     const snapshots = await fastify.db.cumplimientoDiario.findMany({
       where: {
         id_departamento: idDepartamento,
+        id_local_ext: idLocal || '',
         fecha: {
           gte: desde ? new Date(desde) : undefined,
           lte: hasta ? new Date(hasta) : undefined

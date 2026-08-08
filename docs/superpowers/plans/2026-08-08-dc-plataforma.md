@@ -468,35 +468,43 @@ Se mantiene del diseño original:
 
 ## Roadmap por fases
 
-Ordenado para que **todo lo que toca `dcsmart` quede en una sola fase final** (Fase 8)
-— las fases 0 a 7 son 100% independientes de `dcsmart`, usando el login temporal.
+Ordenado para que **todo lo que toca `dcsmart` quede en una sola fase final** (Fase 7)
+— las fases 0 a 6 son 100% independientes de `dcsmart`, usando el login temporal.
+**Decisión del usuario (2026-08-08): no hace falta importador del Excel** — el archivo
+`DCSMART ESTRUCTURA.xlsx` fue solo un ejemplo estructural para validar el modelo de
+datos, no un requisito de migración real. La fase de carga inicial se eliminó del
+roadmap.
 
-0. **Crear el repo `DC-PLATAFORMA` en GitHub** (privado), estructura inicial
-   (`backend/`, `frontend/`, `kiosko/`, `.gitignore`, `README.md`).
-1. **Spike de validación técnica de Calendar (1-2 días)**: crear una serie recurrente
-   de prueba, listar instancias, parchear `extendedProperties`+`description` en una
-   sola instancia, confirmar que el resto no se afecta, y confirmar el comportamiento
-   de editar el `recurrence` del maestro con instancias futuras ya generadas.
-2. **Infra base propia**: DB `dc_plataforma` + rol Postgres, service account (scope
-   Calendar), login temporal de desarrollo, catálogo de departamentos sembrado a mano.
-3. **Backend core**: Departamento (config)/Tarea/TareaAsignacion + integración con
-   Calendar (`plugins/gcal.js`) + check de "marcar realizada" + snapshot diario de
-   cumplimiento.
-4. **Carga inicial**: importación masiva de la matriz local×tarea desde
-   `DCSMART ESTRUCTURA.xlsx`.
-5. **Frontend de gestión**: checklist diario, reportes de cumplimiento, vista matriz
+0. ✅ **Crear el repo `DC-PLATAFORMA` en GitHub** (privado) — hecho,
+   `github.com/venetsi/DC-PLATAFORMA`.
+1. ✅ **Spike de validación técnica de Calendar** — hecho y confirmado contra un
+   calendario de prueba real: parchear una instancia no afecta al resto de la serie;
+   editar el `recurrence` del maestro re-expande el futuro y preserva las excepciones
+   ya modificadas.
+2. ✅ **Infra base propia** — hecho: DB `dc_plataforma` + rol `dc_plataforma_app` en
+   la instancia Cloud SQL existente, service account `dc-plataforma-api` (Calendar API,
+   sin key JSON — impersonación en local vía `GOOGLE_IMPERSONATE_SERVICE_ACCOUNT`,
+   identidad adjunta en Cloud Run), login temporal (`ALLOW_DEV_LOGIN`), 5 departamentos
+   sembrados con su propio Calendar real creado automáticamente.
+3. ✅ **Backend core** — hecho y validado a mano de punta a punta (crear tarea →
+   agendar → checklist del día → marcar realizada → pantalla kiosko), incluyendo los
+   dos jobs periódicos: `src/jobs/snapshotCumplimiento.js` (snapshot diario a
+   `CumplimientoDiario`, idempotente) y `src/jobs/reconciliar.js` (cierra la
+   recurrencia con `UNTIL` al desactivar un local, sin perder historial) — ambos
+   confirmados contra datos reales, no solo revisados por código.
+4. **Frontend de gestión**: checklist diario, reportes de cumplimiento, vista matriz
    de administración de agenda — probado end-to-end con el login temporal.
-6. **Pantallas kiosko** con FullCalendar estilo DCSMART, clave privada por
+5. **Pantallas kiosko** con FullCalendar estilo DCSMART, clave privada por
    departamento.
-7. **Google Groups + Chat**: requiere primero habilitar domain-wide delegation en el
+6. **Google Groups + Chat**: requiere primero habilitar domain-wide delegation en el
    Admin Console — sync de Group por departamento, ACL `reader`, avisos de Chat.
-8. **Integración con `dcsmart` — al final, único punto de contacto con producción**:
+7. **Integración con `dcsmart` — al final, único punto de contacto con producción**:
    rama `DEV-XX-tareas-departamento`, agrega el endpoint `tareas-ticket` + el modelo
    `Departamento`/columna `User.id_departamento` + selector en la pantalla de Usuarios
    existente + ítem de Sidebar. PR revisado a `dev`, `prisma migrate diff` revisado
    antes de cualquier `db push`, confirmación explícita antes de aplicar. Reemplaza el
    login temporal de la Fase 2 por el ticket real.
-9. **Futuro, no bloqueante**: activar aprobación real (doble check, cola de
+8. **Futuro, no bloqueante**: activar aprobación real (doble check, cola de
    aprobación — el estado `APROBADA` ya está reservado en el diseño para esto), Chat
    bidireccional, evidencia/foto al marcar realizada, variante "día hábil" de
    recurrencia, integración con automatizaciones n8n existentes.
@@ -508,10 +516,8 @@ Ordenado para que **todo lo que toca `dcsmart` quede en una sola fase final** (F
   proyecto o para otra cosa.
 - Mecanismo exacto del login temporal de desarrollo de la Fase 2 — detalle menor, no
   bloquea nada más.
-- Formato exacto de la plantilla de importación masiva y qué pasa con valores no
-  parseables ("fecha a asignar") al importar.
 - ¿Quién es super-admin de Workspace en DCSMART y puede autorizar la domain-wide
-  delegation para Groups? Bloquea el arranque de la Fase 7, no de las anteriores.
+  delegation para Groups? Bloquea el arranque de la Fase 6, no de las anteriores.
 - Confirmar que la organización de Workspace permite agregar webhooks de Chat.
 - Cuándo activar la aprobación real (Fase 9) — no es parte de este plan todavía, el
   usuario decidirá cuándo tiene sentido prenderla.

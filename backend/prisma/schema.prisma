@@ -95,7 +95,11 @@ model TareaAsignacion {
 model CumplimientoDiario {
   id                 String   @id @default(uuid())
   id_departamento    String
-  id_local_ext       String?
+  // String vacio (no null) = fila agregada de todo el departamento. A
+  // proposito NO nullable: Postgres no trata dos NULL como iguales en el
+  // indice unico de abajo, asi que un NULL real dejaria que upsert() inserte
+  // duplicados en vez de actualizar la fila existente en cada corrida del job.
+  id_local_ext       String   @default("")
   fecha              DateTime @db.Date
   total_tareas       Int
   realizadas         Int

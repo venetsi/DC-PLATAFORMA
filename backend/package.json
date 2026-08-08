@@ -9,7 +9,9 @@
     "test": "node --test",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seed.js",
+    "job:snapshot": "node src/jobs/snapshotCumplimiento.js",
+    "job:reconciliar": "node src/jobs/reconciliar.js"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
