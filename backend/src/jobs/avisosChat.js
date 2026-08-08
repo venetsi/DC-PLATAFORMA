@@ -1,16 +1,22 @@
-// Job cada 1h: por cada Departamento con chat_webhook_url configurado,
-// escanea vencidas (de los ultimos dias, no solo hoy) y postea un aviso
-// simple por Chat. Una via -- no procesa respuestas (ver docs/superpowers).
-// Cada instancia avisada se marca (extendedProperties.aviso_chat_enviado)
-// para no repetir el mismo aviso en cada corrida.
-import { prisma, getCalendar, listarInstancias } from './lib.js'
+// Job diario (8am via Cloud Scheduler): por cada Departamento con
+// chat_webhook_url configurado, arma UN mensaje con sus tareas vencidas y
+// las pendientes de hoy, agrupadas por local, y lo postea por Chat. Una
+// via -- no procesa respuestas (ver docs/superpowers). No marca nada en el
+// evento: es un recordatorio que se repite todos los dias mientras la
+// tarea siga sin hacerse, no una alerta de "una sola vez".
+import { prisma, listarInstancias } from './lib.js'
 
-const DIAS_HACIA_ATRAS = 3 // suficiente para no perder avisos de un fin de semana largo
+const DIAS_HACIA_ATRAS = 14 // suficiente para no perder de vista una vencida vieja
 
 function haceNDias(n) {
   const d = new Date()
   d.setUTCDate(d.getUTCDate() - n)
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString()
+}
+
+function finDeHoy() {
+  const d = new Date()
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59)).toISOString()
 }
 
 async function postearWebhook(url, texto) {
@@ -22,13 +28,17 @@ async function postearWebhook(url, texto) {
   if (!res.ok) throw new Error(`Webhook respondio ${res.status}`)
 }
 
-async function marcarAvisado(calendarId, eventId, extendedPropsActuales) {
-  const calendar = await getCalendar()
-  await calendar.events.patch({
-    calendarId,
-    eventId,
-    requestBody: { extendedProperties: { private: { ...extendedPropsActuales, aviso_chat_enviado: 'true' } } }
-  })
+function armarMensaje(departamento, vencidas, pendientesHoy, nombreLocal) {
+  const linea = (ev) => {
+    const props = ev.extendedProperties?.private || {}
+    const local = props.id_local_ext ? nombreLocal.get(props.id_local_ext) || 'Local sin nombre' : 'Toda la empresa'
+    return `• ${ev.summary} (${local})`
+  }
+
+  const bloques = [`📋 *Recordatorio diario — ${departamento.nombre}*`]
+  if (vencidas.length) bloques.push(`\n⚠️ *Vencidas:*\n${vencidas.map(linea).join('\n')}`)
+  if (pendientesHoy.length) bloques.push(`\n🕒 *Pendientes de hoy:*\n${pendientesHoy.map(linea).join('\n')}`)
+  return bloques.join('\n')
 }
 
 async function esperar(ms) {
@@ -36,34 +46,40 @@ async function esperar(ms) {
 }
 
 async function correr() {
-  const departamentos = await prisma.departamento.findMany({
-    where: { activo: true, id_calendar_google: { not: null }, chat_webhook_url: { not: null } }
-  })
+  const [departamentos, locales] = await Promise.all([
+    prisma.departamento.findMany({
+      where: { activo: true, id_calendar_google: { not: null }, chat_webhook_url: { not: null } }
+    }),
+    prisma.extLocal.findMany()
+  ])
+  const nombreLocal = new Map(locales.map((l) => [l.id, l.nombre]))
 
+  const ahora = new Date()
+  const hoyISO = ahora.toISOString().slice(0, 10)
   let avisosEnviados = 0
+
   for (const depto of departamentos) {
     const items = await listarInstancias({
       calendarId: depto.id_calendar_google,
       timeMin: haceNDias(DIAS_HACIA_ATRAS),
-      timeMax: new Date().toISOString(),
+      timeMax: finDeHoy(),
       estado: 'PENDIENTE'
     })
 
-    const aVencidas = items.filter((ev) => {
-      const props = ev.extendedProperties?.private || {}
-      if (props.aviso_chat_enviado === 'true') return false
-      return new Date() > new Date(ev.end?.date || ev.end?.dateTime)
-    })
-
-    // En serie, no en paralelo -- limite de la API de Chat es 1 req/seg por Space.
-    for (const evento of aVencidas) {
-      const props = evento.extendedProperties?.private || {}
-      const local = props.id_local_ext ? ` (${props.id_local_ext})` : ''
-      await postearWebhook(depto.chat_webhook_url, `⚠️ *${evento.summary}*${local} venció sin hacerse.`)
-      await marcarAvisado(depto.id_calendar_google, evento.id, props)
-      avisosEnviados++
-      await esperar(1100)
+    const vencidas = []
+    const pendientesHoy = []
+    for (const ev of items) {
+      const fin = new Date(ev.end?.date || ev.end?.dateTime)
+      const fechaEvento = (ev.start?.date || ev.start?.dateTime || '').slice(0, 10)
+      if (ahora > fin) vencidas.push(ev)
+      else if (fechaEvento === hoyISO) pendientesHoy.push(ev)
     }
+
+    if (!vencidas.length && !pendientesHoy.length) continue
+
+    await postearWebhook(depto.chat_webhook_url, armarMensaje(depto, vencidas, pendientesHoy, nombreLocal))
+    avisosEnviados++
+    await esperar(1100) // limite de la API de Chat: 1 req/seg por Space
   }
 
   return { departamentos_con_webhook: departamentos.length, avisos_enviados: avisosEnviados }
