@@ -26,7 +26,15 @@ export default async function asignacionesRoutes(fastify) {
   fastify.post('/', { preHandler: [fastify.authenticate, fastify.requireAdminGlobal] }, async (request, reply) => {
     const { id_tarea, id_local_ext } = request.body || {}
     if (!id_tarea) return reply.code(400).send({ error: 'id_tarea requerido' })
-    const asignacion = await fastify.db.tareaAsignacion.create({ data: { id_tarea, id_local_ext } })
+    let asignacion
+    try {
+      asignacion = await fastify.db.tareaAsignacion.create({ data: { id_tarea, id_local_ext: id_local_ext || null } })
+    } catch (err) {
+      if (err.code === 'P2002') {
+        return reply.code(409).send({ error: 'Ya existe una asignacion para esta tarea y local' })
+      }
+      throw err
+    }
     return reply.code(201).send(asignacion)
   })
 

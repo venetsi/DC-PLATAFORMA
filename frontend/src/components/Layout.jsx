@@ -22,10 +22,10 @@ export default function Layout() {
         <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
           <strong style={{ color: 'var(--gold)' }}>DC-PLATAFORMA</strong>
           <nav style={{ display: 'flex', gap: '1rem' }}>
-            <NavLink to="/" style={linkStyle} end>Mi checklist</NavLink>
+            <NavLink to="/" style={linkStyle} end>Mi agenda</NavLink>
             <NavLink to="/reportes" style={linkStyle}>Reportes</NavLink>
             {esAdminGlobal && <NavLink to="/admin/tareas" style={linkStyle}>Tareas</NavLink>}
-            {esAdminGlobal && <NavLink to="/admin/agenda" style={linkStyle}>Agenda</NavLink>}
+            {esAdminGlobal && <NavLink to="/admin/agenda" style={linkStyle}>Definir agenda</NavLink>}
           </nav>
         </div>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', fontSize: '0.85rem', color: 'var(--texto-tenue)' }}>

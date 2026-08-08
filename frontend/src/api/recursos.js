@@ -21,6 +21,8 @@ export const asignacionesApi = {
 
 export const instanciasApi = {
   hoy: () => api.get('/instancias/hoy').then((r) => r.data),
+  listarRango: ({ departamento, desde, hasta }) =>
+    api.get('/instancias', { params: { departamento, desde, hasta } }).then((r) => r.data),
   marcar: (instanceId, idDepartamento) =>
     api.post(`/instancias/${instanceId}/marcar`, { departamento: idDepartamento }).then((r) => r.data)
 }

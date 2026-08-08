@@ -87,6 +87,17 @@ model TareaAsignacion {
   tarea Tarea     @relation(fields: [id_tarea], references: [id])
   local ExtLocal? @relation(fields: [id_local_ext], references: [id])
 
+  // OJO: @@unique de abajo NO alcanza para alcance EMPRESA (id_local_ext
+  // NULL) -- Postgres no trata dos NULL como iguales, asi que dos filas con
+  // el mismo id_tarea y ambas NULL pasan el chequeo de Prisma pero NO
+  // deberian existir. Confirmado como bug real: creo 3 asignaciones
+  // "CMV sin local" duplicadas durante pruebas manuales. El indice unico
+  // parcial que lo cierra de verdad esta agregado a mano en la migracion
+  // (Prisma no puede expresar "WHERE id_local_ext IS NULL" en el schema):
+  //   CREATE UNIQUE INDEX ux_tarea_asignaciones_empresa
+  //     ON tarea_asignaciones (id_tarea) WHERE id_local_ext IS NULL;
+  //   CREATE UNIQUE INDEX ux_tarea_asignaciones_local
+  //     ON tarea_asignaciones (id_tarea, id_local_ext) WHERE id_local_ext IS NOT NULL;
   @@unique([id_tarea, id_local_ext])
   @@index([id_local_ext])
   @@map("tarea_asignaciones")

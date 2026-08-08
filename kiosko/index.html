@@ -6,7 +6,6 @@
 <title>DC-PLATAFORMA — Agenda</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
 <style>
   :root {
     --bg-0: #10161f;
@@ -29,54 +28,59 @@
     color: var(--texto);
     font-family: 'Montserrat', system-ui, sans-serif;
   }
-  #app { width: 1920px; height: 1080px; display: flex; flex-direction: column; padding: 40px 56px; }
+  #app { width: 1920px; height: 1080px; display: flex; flex-direction: column; padding: 32px 48px; }
 
-  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
   .titulo { display: flex; flex-direction: column; }
-  .titulo .marca { font-size: 20px; letter-spacing: 3px; color: var(--gold); font-weight: 700; text-transform: uppercase; }
-  .titulo .depto { font-size: 52px; font-weight: 800; margin-top: 4px; }
-  .reloj { text-align: right; }
-  .reloj .hora { font-size: 44px; font-weight: 700; color: var(--teal); font-variant-numeric: tabular-nums; }
-  .reloj .fecha { font-size: 18px; color: var(--texto-tenue); text-transform: capitalize; }
+  .titulo .marca { font-size: 16px; letter-spacing: 3px; color: var(--gold); font-weight: 700; text-transform: uppercase; }
+  .titulo .depto { font-size: 38px; font-weight: 800; margin-top: 2px; }
 
-  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-bottom: 32px; }
-  .kpi { background: var(--bg-1); border-radius: 16px; padding: 24px 28px; border: 1px solid rgba(255,255,255,0.06); }
-  .kpi .valor { font-size: 56px; font-weight: 800; line-height: 1; }
-  .kpi .etiqueta { margin-top: 8px; font-size: 18px; color: var(--texto-tenue); text-transform: uppercase; letter-spacing: 1px; }
-  .kpi.general { display: flex; align-items: center; gap: 20px; }
-  .semaforo { width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 32px 4px currentColor; }
+  .header-derecha { display: flex; align-items: center; gap: 28px; }
+
+  .clima { display: flex; align-items: center; gap: 14px; }
+  .clima-hora { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  .clima-hora img { width: 26px; height: 26px; }
+  .clima-hora .h { font-size: 11px; color: var(--texto-tenue); font-weight: 600; }
+  .clima-hora .t { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .reloj { text-align: right; }
+  .reloj .hora { font-size: 34px; font-weight: 700; color: var(--teal); font-variant-numeric: tabular-nums; }
+  .reloj .fecha { font-size: 14px; color: var(--texto-tenue); text-transform: capitalize; }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+  .kpi { background: var(--bg-1); border-radius: 10px; padding: 10px 16px; border: 1px solid rgba(255,255,255,0.06); display: flex; align-items: center; gap: 12px; }
+  .kpi .valor { font-size: 26px; font-weight: 800; line-height: 1; }
+  .kpi .etiqueta { font-size: 12px; color: var(--texto-tenue); text-transform: uppercase; letter-spacing: 0.5px; }
+  .semaforo { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 18px 2px currentColor; }
   .semaforo.verde { background: var(--verde); color: var(--verde); }
   .semaforo.amarillo { background: var(--amarillo); color: var(--amarillo); }
   .semaforo.rojo { background: var(--rojo); color: var(--rojo); }
-  .kpi .valor.verde { color: var(--verde); }
-  .kpi .valor.amarillo { color: var(--amarillo); }
-  .kpi .valor.rojo { color: var(--rojo); }
+  .valor.verde { color: var(--verde); }
+  .valor.amarillo { color: var(--amarillo); }
+  .valor.rojo { color: var(--rojo); }
 
-  #calendario { flex: 1; background: var(--bg-1); border-radius: 20px; padding: 28px 32px; border: 1px solid rgba(255,255,255,0.06); overflow: hidden; }
+  #semana { flex: 1; display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; min-height: 0; }
+  .dia-col { background: var(--bg-1); border-radius: 14px; padding: 16px 18px; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .dia-col.hoy { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal) inset; }
+  .dia-nombre { font-size: 15px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--gold); margin-bottom: 2px; }
+  .dia-fecha { font-size: 12px; color: var(--texto-tenue); margin-bottom: 12px; }
+  .dia-contenido { overflow-y: auto; flex: 1; }
+  .local-grupo { margin-bottom: 12px; }
+  .local-nombre { font-size: 13px; font-weight: 700; color: var(--texto); margin-bottom: 4px; }
+  .tarea-bullets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .tarea-bullets li { font-size: 13px; display: flex; align-items: center; gap: 6px; color: var(--texto-tenue); }
+  .tarea-bullets li::before { content: '●'; font-size: 8px; }
+  .tarea-bullets li.pendiente::before { color: var(--amarillo); }
+  .tarea-bullets li.realizada::before { color: var(--verde); }
+  .tarea-bullets li.vencida::before { color: var(--rojo); }
+  .tarea-bullets li.realizada { color: var(--texto-tenue); text-decoration: line-through; }
+  .dia-vacio { font-size: 12px; color: var(--texto-tenue); font-style: italic; }
 
-  footer { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; font-size: 16px; color: var(--texto-tenue); }
-  .estado-conexion { display: flex; align-items: center; gap: 10px; }
-  .punto { width: 12px; height: 12px; border-radius: 50%; }
+  footer { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; font-size: 14px; color: var(--texto-tenue); }
+  .estado-conexion { display: flex; align-items: center; gap: 8px; }
+  .punto { width: 10px; height: 10px; border-radius: 50%; }
   .punto.ok { background: var(--verde); }
   .punto.mal { background: var(--rojo); }
-
-  /* Reskin de FullCalendar con la paleta DCSMART */
-  .fc { height: 100%; font-family: 'Montserrat', sans-serif; --fc-border-color: rgba(255,255,255,0.08); --fc-page-bg-color: transparent; --fc-neutral-bg-color: var(--bg-2); }
-  .fc .fc-toolbar-title { color: var(--texto); font-size: 26px; font-weight: 700; }
-  .fc .fc-col-header-cell-cushion, .fc .fc-list-day-text, .fc .fc-list-day-side-text { color: var(--texto); }
-  .fc-theme-standard .fc-list, .fc-theme-standard td, .fc-theme-standard th { border-color: rgba(255,255,255,0.08); }
-  .fc .fc-list-event:hover td { background: rgba(255,255,255,0.04); }
-  .fc-list-event-title strong { font-size: 20px; }
-  .fc-list-event-dot { border-color: currentColor !important; }
-  .fc-toolbar.fc-header-toolbar { display: none; }
-  .evento-pendiente { color: var(--amarillo); }
-  .evento-realizada { color: var(--verde); }
-  .evento-vencida { color: var(--rojo); }
-
-  .badge-evento { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; margin-left: 12px; text-transform: uppercase; }
-  .badge-evento.pendiente { background: rgba(224,184,63,0.18); color: var(--amarillo); }
-  .badge-evento.realizada { background: rgba(63,182,106,0.18); color: var(--verde); }
-  .badge-evento.vencida { background: rgba(224,92,63,0.18); color: var(--rojo); }
 </style>
 </head>
 <body>
@@ -86,26 +90,23 @@
       <span class="marca">DC-PLATAFORMA</span>
       <span class="depto" id="nombre-depto">Cargando…</span>
     </div>
-    <div class="reloj">
-      <div class="hora" id="reloj-hora">--:--</div>
-      <div class="fecha" id="reloj-fecha"></div>
+    <div class="header-derecha">
+      <div class="clima" id="clima"></div>
+      <div class="reloj">
+        <div class="hora" id="reloj-hora">--:--</div>
+        <div class="fecha" id="reloj-fecha"></div>
+      </div>
     </div>
   </header>
 
   <div class="kpis">
-    <div class="kpi general">
-      <div class="semaforo" id="semaforo-general"></div>
-      <div>
-        <div class="valor" id="estado-general-texto">—</div>
-        <div class="etiqueta">Estado del día</div>
-      </div>
-    </div>
-    <div class="kpi"><div class="valor amarillo" id="kpi-pendientes">0</div><div class="etiqueta">Pendientes</div></div>
-    <div class="kpi"><div class="valor verde" id="kpi-realizadas">0</div><div class="etiqueta">Realizadas</div></div>
-    <div class="kpi"><div class="valor rojo" id="kpi-vencidas">0</div><div class="etiqueta">Vencidas</div></div>
+    <div class="kpi"><div class="semaforo" id="semaforo-general"></div><div><div class="valor" id="estado-general-texto" style="font-size:16px">—</div><div class="etiqueta">Estado de hoy</div></div></div>
+    <div class="kpi"><div class="valor amarillo" id="kpi-pendientes">0</div><div class="etiqueta">Pendientes hoy</div></div>
+    <div class="kpi"><div class="valor verde" id="kpi-realizadas">0</div><div class="etiqueta">Realizadas hoy</div></div>
+    <div class="kpi"><div class="valor rojo" id="kpi-vencidas">0</div><div class="etiqueta">Vencidas hoy</div></div>
   </div>
 
-  <div id="calendario"></div>
+  <div id="semana"></div>
 
   <footer>
     <div class="estado-conexion">
@@ -124,8 +125,11 @@
   var apiBase = params.get('api') || '/api';
   var CACHE_KEY = 'dcplataforma_tv_' + departamento;
 
-  var REFRESH_MS = 2 * 60 * 1000;   // 2 min en condiciones normales
-  var RETRY_MS = 30 * 1000;          // 30s si el ultimo fetch fallo
+  var REFRESH_MS = 2 * 60 * 1000;
+  var RETRY_MS = 30 * 1000;
+  var CLIMA_REFRESH_MS = 30 * 60 * 1000; // el clima cambia mucho mas lento -- ciclo propio, independiente
+
+  var DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'];
 
   document.getElementById('nombre-depto').textContent = departamento || '(sin departamento)';
 
@@ -139,25 +143,57 @@
   actualizarReloj();
   setInterval(actualizarReloj, 1000 * 15);
 
-  var calendar = new FullCalendar.Calendar(document.getElementById('calendario'), {
-    initialView: 'listDay',
-    height: '100%',
-    headerToolbar: false,
-    locale: 'es',
-    noEventsText: 'No hay tareas agendadas para hoy',
-    eventDidMount: function (info) {
-      var estado = info.event.extendedProps.estado;
-      info.el.classList.add('evento-' + estado);
-      var titleEl = info.el.querySelector('.fc-list-event-title');
-      if (titleEl) {
-        var badge = document.createElement('span');
-        badge.className = 'badge-evento ' + estado;
-        badge.textContent = estado;
-        titleEl.appendChild(badge);
-      }
+  function lunesDeEstaSemana() {
+    var hoy = new Date();
+    var diaIso = hoy.getDay() === 0 ? 7 : hoy.getDay();
+    var lunes = new Date(hoy);
+    lunes.setDate(hoy.getDate() - (diaIso - 1));
+    lunes.setHours(0, 0, 0, 0);
+    return lunes;
+  }
+
+  function construirColumnasVacias() {
+    var lunes = lunesDeEstaSemana();
+    var hoyStr = new Date().toDateString();
+    var cols = [];
+    for (var i = 0; i < 5; i++) {
+      var fecha = new Date(lunes);
+      fecha.setDate(lunes.getDate() + i);
+      cols.push({ nombre: DIAS[i], fecha: fecha, esHoy: fecha.toDateString() === hoyStr, grupos: {} });
     }
-  });
-  calendar.render();
+    return cols;
+  }
+
+  function pintarSemana(eventos) {
+    var columnas = construirColumnasVacias();
+    var porFecha = {};
+    columnas.forEach(function (c) { porFecha[c.fecha.toDateString()] = c; });
+
+    (eventos || []).forEach(function (ev) {
+      var fechaEv = new Date(ev.inicio + 'T00:00:00');
+      var col = porFecha[fechaEv.toDateString()];
+      if (!col) return; // fuera de lunes-viernes (no deberia pasar, el backend ya filtra)
+      var local = ev.nombre_local || 'Toda la empresa';
+      col.grupos[local] = col.grupos[local] || [];
+      col.grupos[local].push(ev);
+    });
+
+    var html = columnas.map(function (col) {
+      var gruposHtml = Object.keys(col.grupos).sort().map(function (local) {
+        var itemsHtml = col.grupos[local].map(function (ev) {
+          return '<li class="' + ev.estado + '">' + ev.titulo + '</li>';
+        }).join('');
+        return '<div class="local-grupo"><div class="local-nombre">' + local + '</div><ul class="tarea-bullets">' + itemsHtml + '</ul></div>';
+      }).join('');
+      return '<div class="dia-col' + (col.esHoy ? ' hoy' : '') + '">'
+        + '<div class="dia-nombre">' + col.nombre + '</div>'
+        + '<div class="dia-fecha">' + col.fecha.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }) + '</div>'
+        + '<div class="dia-contenido">' + (gruposHtml || '<div class="dia-vacio">Sin tareas</div>') + '</div>'
+        + '</div>';
+    }).join('');
+
+    document.getElementById('semana').innerHTML = html;
+  }
 
   function pintar(data) {
     document.getElementById('nombre-depto').textContent = data.departamento.nombre;
@@ -170,16 +206,18 @@
     var textoEstado = { verde: 'Todo al día', amarillo: 'Con pendientes', rojo: 'Con vencidas' }[data.estado_general] || '—';
     document.getElementById('estado-general-texto').textContent = textoEstado;
 
-    calendar.removeAllEvents();
-    (data.eventos || []).forEach(function (ev) {
-      calendar.addEvent({
-        title: ev.titulo + (ev.id_local ? ' — ' + ev.id_local : ''),
-        start: ev.inicio,
-        end: ev.fin,
-        allDay: !ev.inicio || ev.inicio.length <= 10,
-        extendedProps: { estado: ev.estado }
-      });
-    });
+    pintarSemana(data.eventos);
+  }
+
+  function pintarClima(data) {
+    var html = (data.horas || []).map(function (h) {
+      return '<div class="clima-hora">'
+        + (h.icono ? '<img src="' + h.icono + '" alt="' + h.descripcion + '">' : '')
+        + '<span class="t">' + (h.temperatura != null ? h.temperatura + '°' : '—') + '</span>'
+        + '<span class="h">' + String(h.hora).padStart(2, '0') + 'h</span>'
+        + '</div>';
+    }).join('');
+    document.getElementById('clima').innerHTML = html;
   }
 
   function marcarConexion(ok, mensaje) {
@@ -225,22 +263,30 @@
       });
   }
 
+  // Clima: ciclo independiente -- si falla, no debe tocar el resto de la pantalla.
+  function tickClima() {
+    fetch(apiBase + '/tv/clima')
+      .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+      .then(pintarClima)
+      .catch(function (err) { console.error('[dc-plataforma-tv] clima fallo', err); });
+  }
+
   var timer;
   function scheduleNext(ms) {
     clearTimeout(timer);
     timer = setTimeout(tick, ms);
   }
 
-  // Cache inicial mientras llega la primera respuesta.
   var cacheInicial = leerCache();
   if (cacheInicial) pintar(cacheInicial.data);
 
   tick();
+  tickClima();
+  setInterval(tickClima, CLIMA_REFRESH_MS);
   window.addEventListener('online', tick);
 
   // Doble red de recarga (ver dashboard-rendimiento-general: quedo 74hs sin
-  // actualizar por un bug de refresco silencioso) -- setInterval de JS +
-  // meta refresh a nivel navegador, independientes entre si.
+  // actualizar por un bug de refresco silencioso).
   setInterval(function () { location.reload(); }, 60 * 60 * 1000);
 })();
 </script>
