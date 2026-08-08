@@ -6,10 +6,12 @@ import { randomUUID, randomBytes } from 'node:crypto'
 import { google } from 'googleapis'
 import 'dotenv/config'
 import { crearAuthClient } from '../src/lib/gcal-auth.js'
+import { getDirectory, emailDeGroup } from '../src/lib/directory-auth.js'
 
 const prisma = new PrismaClient()
 
 const DEPARTAMENTOS = ['auditoria', 'reportes', 'costos', 'tesoreria', 'rrhh']
+const CON_GROUPS = Boolean(process.env.GOOGLE_SA_KEY_PATH) // Fase 7 opcional -- sin la key, solo Calendar (Fase 3)
 
 async function main() {
   const auth = await crearAuthClient()
@@ -17,21 +19,37 @@ async function main() {
   const deptosPorSlug = {}
   for (const slug of DEPARTAMENTOS) {
     const existente = await prisma.departamento.findUnique({ where: { slug } })
+    const nombre = slug[0].toUpperCase() + slug.slice(1)
     let calendarId = existente?.id_calendar_google
     if (!calendarId) {
-      const nombre = slug[0].toUpperCase() + slug.slice(1)
       const { data } = await calendar.calendars.insert({ requestBody: { summary: `DC-PLATAFORMA — ${nombre}` } })
       calendarId = data.id
       console.log(`  calendario creado para ${slug}: ${calendarId}`)
     }
+
+    let groupEmail = existente?.email_group_google
+    if (CON_GROUPS && !groupEmail) {
+      const directory = await getDirectory()
+      groupEmail = emailDeGroup(slug)
+      try {
+        await directory.groups.insert({ requestBody: { email: groupEmail, name: `DC-PLATAFORMA — ${nombre}`, description: `Miembros del departamento ${nombre} (sync automatico, no editar a mano)` } })
+        console.log(`  group creado: ${groupEmail}`)
+      } catch (err) {
+        if (err.code !== 409) throw err
+      }
+      await calendar.acl.insert({ calendarId, requestBody: { role: 'reader', scope: { type: 'group', value: groupEmail } } })
+      console.log(`  calendario de ${slug} compartido (reader) con ${groupEmail}`)
+    }
+
     const depto = await prisma.departamento.upsert({
       where: { slug },
-      update: { id_calendar_google: calendarId },
+      update: { id_calendar_google: calendarId, ...(groupEmail ? { email_group_google: groupEmail } : {}) },
       create: {
         id: randomUUID(),
-        nombre: slug[0].toUpperCase() + slug.slice(1),
+        nombre,
         slug,
         id_calendar_google: calendarId,
+        email_group_google: groupEmail || null,
         kiosko_key: randomBytes(16).toString('hex')
       }
     })
@@ -52,6 +70,16 @@ async function main() {
       update: {},
       create: { id: randomUUID(), email, nombre: `Usuario ${slug} (dev)`, id_departamento: deptosPorSlug[slug].id }
     })
+    // Los emails de prueba no son cuentas reales de Workspace -- members.insert
+    // va a fallar con 404 y eso esta bien, no es una cuenta real para agregar.
+    if (CON_GROUPS && deptosPorSlug[slug].email_group_google) {
+      const directory = await getDirectory()
+      try {
+        await directory.members.insert({ groupKey: deptosPorSlug[slug].email_group_google, requestBody: { email, role: 'MEMBER' } })
+      } catch (err) {
+        if (err.code !== 409 && err.code !== 404) throw err
+      }
+    }
   }
 
   console.log('Seed listo. Login temporal: POST /api/auth/dev-login { "email": "tesoreria@dcsmart.app" }')

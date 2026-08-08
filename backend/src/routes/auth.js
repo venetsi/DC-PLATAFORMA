@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken'
+import { asegurarDepartamento, sincronizarMembresiaGroup } from '../lib/departamentos.js'
 
 // Email de dev que actua como admin global (equivalente a super_admin/dcsmart
 // una vez migrado al ticket real en Fase 8). Solo tiene efecto con
@@ -26,6 +27,8 @@ export default async function authRoutes(fastify) {
         error: `No existe ExtUser con email ${email} -- sembrar con prisma/seed.js primero`
       })
     }
+
+    await sincronizarMembresiaGroup(fastify, usuario)
 
     const token = signSession(fastify, usuario)
     reply.setCookie('dc_plataforma_token', token, { path: '/', httpOnly: true, sameSite: 'lax' })
@@ -62,22 +65,17 @@ export default async function authRoutes(fastify) {
     })
 
     // Admin global: el ticket trae el catalogo completo de departamentos --
-    // sync perezoso de cada uno que todavia no exista localmente.
+    // sync perezoso de cada uno que todavia no exista localmente (crea
+    // Calendar + Group la primera vez que se ve, ver lib/departamentos.js).
     if (Array.isArray(departamentos)) {
       for (const d of departamentos) {
-        await fastify.db.departamento.upsert({
-          where: { id: d.id },
-          create: { id: d.id, nombre: d.nombre, slug: d.slug ?? d.nombre.toLowerCase() },
-          update: { nombre: d.nombre }
-        })
+        await asegurarDepartamento(fastify, { id: d.id, nombre: d.nombre, slug: d.slug ?? d.nombre.toLowerCase() })
       }
     } else if (id_departamento && departamento_slug) {
-      await fastify.db.departamento.upsert({
-        where: { id: id_departamento },
-        create: { id: id_departamento, nombre: departamento_slug, slug: departamento_slug },
-        update: {}
-      })
+      await asegurarDepartamento(fastify, { id: id_departamento, nombre: departamento_slug, slug: departamento_slug })
     }
+
+    await sincronizarMembresiaGroup(fastify, usuario)
 
     const token = signSession(fastify, usuario)
     reply.setCookie('dc_plataforma_token', token, { path: '/', httpOnly: true, sameSite: 'lax' })

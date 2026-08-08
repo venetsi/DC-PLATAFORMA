@@ -11,7 +11,8 @@
     "prisma:push": "prisma db push",
     "seed": "node prisma/seed.js",
     "job:snapshot": "node src/jobs/snapshotCumplimiento.js",
-    "job:reconciliar": "node src/jobs/reconciliar.js"
+    "job:reconciliar": "node src/jobs/reconciliar.js",
+    "job:avisos": "node src/jobs/avisosChat.js"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

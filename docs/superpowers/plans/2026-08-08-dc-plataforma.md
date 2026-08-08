@@ -456,10 +456,10 @@ Se mantiene del diseño original:
 | Repo | `DC-PLATAFORMA` (nuevo; la carpeta vacía `PANTALLAS OFICINA` creada el mismo día no se usa como repo — confirmar con el usuario si era para esto) |
 | Cloud Run backend | `dc-plataforma-api`, `us-central1`, proyecto `dc-smart-mvp` |
 | Service account (Calendar) | `dc-plataforma-api@dc-smart-mvp.iam...`, roles GCP mínimos: `cloudsql.client` + `secretmanager.secretAccessor`; scope `https://www.googleapis.com/auth/calendar`, dueño de los calendarios que crea — no requiere domain-wide delegation |
-| Service account (Groups) | mismo o dedicado, **con domain-wide delegation** sobre `dcsmart.app` — requiere autorización explícita del super-admin de Workspace antes de esa fase |
+| Service account (Groups) | mismo `dc-plataforma-api`, con domain-wide delegation autorizada sobre `dcsmart.app` (dominio real confirmado por el usuario). **Excepción a "sin keys descargadas"**: la Directory API exige impersonar un usuario real (`GOOGLE_WORKSPACE_ADMIN_EMAIL=maximiliano@venetsi.com`), lo que solo se puede firmar con la key propia del service account — la key vive en el secreto `dc-plataforma-sa-key`, nunca en el repo |
 | Base de datos | nueva base lógica `dc_plataforma` en la instancia **existente** `dc-smart-mvp:us-central1:dcsmart-mvp-insta`, rol Postgres dedicado `dc_plataforma_app` |
 | Firebase Hosting | 2 sites nuevos: `dc-plataforma` (gestión) y `dc-plataforma-tv` (kiosko) |
-| Secretos nuevos | `dc-plataforma-database-url`, `dc-plataforma-jwt-secret`; credencial del service account de Calendar/Groups (preferir Workload Identity) |
+| Secretos nuevos | `dc-plataforma-database-url`, `dc-plataforma-jwt-secret`, `dc-plataforma-sa-key` (key JSON, solo para Directory API/Groups — Calendar sigue sin key, vía Workload Identity) |
 | Secreto reusado | `internal-shared-secret` (ya existe) |
 | Cambio en repo `dcsmart` | Fase final agrupada — ver "Integración con dcsmart" |
 | Config manual única vez | Admin Console de Workspace: (a) domain-wide delegation para Groups, (b) permiso de webhooks de Chat |
@@ -498,8 +498,15 @@ roadmap.
    layout fijo **1920x1080** (resolución pedida por el usuario), FullCalendar (vista
    `listDay`) vía CDN reskinneado con la identidad DCSMART, clave privada por
    departamento, resiliencia igual a `dashboard-rendimiento-general`.
-6. **Google Groups + Chat**: requiere primero habilitar domain-wide delegation en el
-   Admin Console — sync de Group por departamento, ACL `reader`, avisos de Chat.
+6. ✅ **Google Groups + Chat** — hecho y validado contra recursos reales de Workspace:
+   domain-wide delegation autorizada (dominio real `dcsmart.app`, confirmado por el
+   usuario), 5 Groups creados (`depto-<slug>@dcsmart.app`), cada Calendar compartido
+   `reader` con su Group (confirmado leyendo el ACL real), sync de membresía desde
+   `ExtUser.id_departamento` hacia el Group en cada login. Aviso de Chat probado de
+   punta a punta con un webhook real del departamento Tesorería (mensaje de prueba +
+   aviso real de una tarea vencida, sin duplicar en corridas repetidas gracias a
+   `extendedProperties.aviso_chat_enviado`). Los otros 4 departamentos quedan sin
+   webhook hasta que el usuario cree sus Spaces — el job ya tolera eso sin error.
 7. **Integración con `dcsmart` — al final, único punto de contacto con producción**:
    rama `DEV-XX-tareas-departamento`, agrega el endpoint `tareas-ticket` + el modelo
    `Departamento`/columna `User.id_departamento` + selector en la pantalla de Usuarios
