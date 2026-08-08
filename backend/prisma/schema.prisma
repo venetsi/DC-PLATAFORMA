@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- Cache de identidad de dcsmart (nunca fuente de verdad) ---
+
+model ExtUser {
+  id              String   @id
+  email           String   @unique
+  nombre          String
+  id_departamento String?
+  activo          Boolean  @default(true)
+  synced_at       DateTime @default(now())
+
+  @@map("ext_users")
+}
+
+model ExtLocal {
+  id        String   @id
+  nombre    String
+  grupo     String?
+  activo    Boolean  @default(true)
+  synced_at DateTime @default(now())
+
+  asignaciones TareaAsignacion[]
+
+  @@map("ext_locales")
+}
+
+// --- Cache del catálogo Departamento de dcsmart + configuración propia
+// (Calendar/Group/Chat/kiosko) que no tiene sentido guardar en dcsmart. ---
+
+model Departamento {
+  id                 String   @id
+  nombre             String
+  slug               String   @unique
+  id_calendar_google String?  @unique
+  email_group_google String?  @unique
+  chat_webhook_url   String?
+  kiosko_key         String?  @unique
+  activo             Boolean  @default(true)
+  synced_at          DateTime @default(now())
+
+  tareas       Tarea[]
+  cumplimiento CumplimientoDiario[]
+
+  @@map("departamentos")
+}
+
+// --- Catálogo de tipos de tarea ("TAREA -> DEPARTAMENTO" del ejemplo real) ---
+
+model Tarea {
+  id              String   @id @default(uuid())
+  id_departamento String
+  nombre          String   @unique
+  descripcion     String?
+  activa          Boolean  @default(true)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  departamento Departamento      @relation(fields: [id_departamento], references: [id])
+  asignaciones TareaAsignacion[]
+
+  @@index([id_departamento, activa])
+  @@map("tareas")
+}
+
+// --- Puntero tarea x local hacia Google Calendar. No guarda recurrencia ni
+// estado -- eso vive 100% en el evento de Calendar. Existe solo para: (a)
+// saber que combinaciones (tarea, local) estan planeadas aunque todavia no
+// tengan agenda definida, y (b) resolver id_tarea/id_local_ext -> evento. ---
+
+model TareaAsignacion {
+  id                String   @id @default(uuid())
+  id_tarea          String
+  id_local_ext      String?
+  id_calendar_event String?
+  activa            Boolean  @default(true)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  tarea Tarea     @relation(fields: [id_tarea], references: [id])
+  local ExtLocal? @relation(fields: [id_local_ext], references: [id])
+
+  @@unique([id_tarea, id_local_ext])
+  @@index([id_local_ext])
+  @@map("tarea_asignaciones")
+}
+
+model CumplimientoDiario {
+  id                 String   @id @default(uuid())
+  id_departamento    String
+  id_local_ext       String?
+  fecha              DateTime @db.Date
+  total_tareas       Int
+  realizadas         Int
+  vencidas_sin_hacer Int
+  created_at         DateTime @default(now())
+
+  departamento Departamento @relation(fields: [id_departamento], references: [id])
+
+  @@unique([id_departamento, id_local_ext, fecha])
+  @@map("cumplimiento_diario")
+}

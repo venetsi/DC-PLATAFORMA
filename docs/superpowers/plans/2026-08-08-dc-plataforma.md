@@ -182,6 +182,27 @@ Validado contra la documentación real de la API:
 - **`asignado_a` va como `extendedProperty`, no como `attendee`**: usar invitados
   nativos de Calendar dispararía emails de invitación de Google por cada tarea.
 
+### Spike de validación — resultado (2026-08-08, confirmado)
+
+Ejecutado contra un calendario de prueba real (service account `dc-plataforma-api`,
+proyecto `dc-smart-mvp`, calendario descartado al terminar). Confirmado con llamadas
+directas a la API (`events.insert`, `events.list?singleEvents=true`, `events.patch`):
+
+1. Un evento recurrente (`RRULE:FREQ=DAILY;COUNT=5`) con `extendedProperties.private`
+   en el maestro se expande en instancias con id `{masterId}_{YYYYMMDD}`, cada una
+   **heredando** el `extendedProperties` del maestro automáticamente.
+2. Parchear **una sola instancia** (`events.patch` sobre su id expandido) con un
+   `estado` distinto y una `description` propia **no afectó a ninguna otra
+   instancia** de la serie — quedaron las demás con el estado original del maestro.
+3. Editar la `recurrence` del **maestro** (`COUNT=5` → `COUNT=8`) generó las 3
+   instancias nuevas esperadas (heredando el estado del maestro, `PENDIENTE`) **y
+   preservó intacta** la instancia ya parchada (`REALIZADA`), sin necesidad de
+   ninguna lógica propia de reconciliación.
+
+Los tres supuestos de los que depende toda la arquitectura (herencia de estado,
+aislamiento de excepciones puntuales, preservación de excepciones al editar la regla)
+quedan confirmados — se puede construir el backend real sobre esto.
+
 ## Seguimiento de cumplimiento (pendientes y % de cumplimiento)
 
 Confirmado como objetivo central, no accesorio. Un job diario liviano (parte del mismo
