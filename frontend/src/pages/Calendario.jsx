@@ -12,7 +12,7 @@ const VISTAS = [
   { id: 'mes', etiqueta: 'Mes' }
 ]
 
-const COLOR_ESTADO = { PENDIENTE: '#e0b83f', REALIZADA: '#3fb66a', APROBADA: '#3fb66a' }
+const COLOR_ESTADO = { pendiente: '#e0b83f', vencida: '#e05c3f', realizada: '#3fb66a' }
 
 function semanaActualLunesAViernes() {
   const hoy = new Date()
@@ -72,13 +72,17 @@ export default function Calendario() {
     () =>
       eventos.map((ev) => {
         const props = ev.extendedProperties?.private || {}
+        const hecha = props.estado === 'REALIZADA' || props.estado === 'APROBADA'
+        const fin = ev.end?.dateTime || ev.end?.date
+        const vencida = !hecha && fin && new Date() > new Date(fin)
+        const color = COLOR_ESTADO[hecha ? 'realizada' : vencida ? 'vencida' : 'pendiente']
         return {
           id: ev.id,
           title: ev.summary,
           start: ev.start?.dateTime || ev.start?.date,
           allDay: !ev.start?.dateTime,
-          backgroundColor: COLOR_ESTADO[props.estado] || COLOR_ESTADO.PENDIENTE,
-          borderColor: 'transparent'
+          backgroundColor: color,
+          borderColor: color
         }
       }),
     [eventos]
@@ -113,6 +117,7 @@ export default function Calendario() {
             plugins={[dayGridPlugin]}
             initialView="dayGridWeek"
             hiddenDays={[0, 6]}
+            eventDisplay="list-item"
             events={fcEventos}
             datesSet={onDatesSet}
             eventClick={(info) => marcar(info.event.id)}
@@ -127,6 +132,7 @@ export default function Calendario() {
           <FullCalendar
             plugins={[dayGridPlugin]}
             initialView="dayGridMonth"
+            eventDisplay="list-item"
             events={fcEventos}
             datesSet={onDatesSet}
             eventClick={(info) => marcar(info.event.id)}

@@ -141,15 +141,21 @@ th, td {
 .fc-theme-standard td, .fc-theme-standard th { border-color: rgba(255, 255, 255, 0.08); }
 .fc-scrollgrid { border-color: rgba(255, 255, 255, 0.08) !important; }
 .fc-daygrid-day-frame { min-height: 90px; }
+/* Punto + texto (estilo kiosko/Agenda) en vez de la pastilla solida por
+   defecto de FullCalendar -- eventDisplay="list-item" en Calendario.jsx
+   ya pide este modo, aca solo se ajusta el color/tamano del punto. */
 .fc-event {
-  border: none;
-  border-radius: 4px;
-  padding: 1px 6px;
   font-size: 0.78rem;
-  font-weight: 600;
+  color: var(--texto);
   cursor: pointer;
 }
-.fc-daygrid-event-dot { display: none; }
+.fc-daygrid-event-dot {
+  border-width: 4px;
+  margin: 0 5px 0 1px;
+}
+.fc-daygrid-dot-event:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
 
 /* Vista Agenda: dia -> local -> bullets, mismo lenguaje visual que el
    kiosko (ver kiosko/index.html) para que ambas pantallas se sientan la
