@@ -86,8 +86,14 @@ export default async function authRoutes(fastify) {
     const usuario = await fastify.db.extUser.findUnique({ where: { id: request.user.id } })
     if (!usuario) return reply.code(404).send({ error: 'Usuario no encontrado' })
 
+    // select acotado a proposito -- Departamento tambien guarda kiosko_key y
+    // chat_webhook_url (secretos), que no tienen nada que hacer en una
+    // respuesta que llega al navegador del usuario.
     const departamento = usuario.id_departamento
-      ? await fastify.db.departamento.findUnique({ where: { id: usuario.id_departamento } })
+      ? await fastify.db.departamento.findUnique({
+          where: { id: usuario.id_departamento },
+          select: { id: true, nombre: true, slug: true, id_calendar_google: true }
+        })
       : null
 
     return {

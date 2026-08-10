@@ -93,7 +93,19 @@ export default function Calendario() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h2 style={{ margin: 0 }}>Agenda — {departamento.nombre}</h2>
+        <div>
+          <h2 style={{ margin: 0 }}>Agenda — {departamento.nombre}</h2>
+          {departamento.id_calendar_google && (
+            <a
+              href={`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(departamento.id_calendar_google)}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontSize: '0.8rem', color: 'var(--texto-tenue)' }}
+            >
+              Ver en Google Calendar ↗
+            </a>
+          )}
+        </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           {VISTAS.map((v) => (
             <button
