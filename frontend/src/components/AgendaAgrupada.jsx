@@ -1,43 +1,47 @@
-import { agruparPorLocal } from '../lib/agrupar.js'
+import { agruparPorDiaYLocal } from '../lib/agrupar.js'
 
-function estadoBadge(estado) {
-  if (estado === 'REALIZADA' || estado === 'APROBADA') return <span className="badge badge-verde">Realizada</span>
-  return <span className="badge badge-amarillo">Pendiente</span>
-}
+const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
-// Vista "Agenda": agrupa las tareas del rango visible por nombre de local,
-// cada tarea como un bullet -- pensado para escanear rapido que falta por
-// local, no para navegar dia por dia como un calendario en grilla.
+// Vista "Agenda": un dia por columna (mismo agrupamiento y estilo visual
+// que el kiosko -- ver kiosko/index.html:pintarSemana), cada dia agrupado
+// por local y sus tareas como bullets. A diferencia del kiosko (solo
+// lectura), el bullet es clickeable para marcar realizada.
 export default function AgendaAgrupada({ eventos, mapaLocales, onMarcar, marcando }) {
-  const grupos = agruparPorLocal(eventos, mapaLocales)
+  const dias = agruparPorDiaYLocal(eventos, mapaLocales)
 
-  if (grupos.size === 0) {
+  if (dias.length === 0) {
     return <p style={{ color: 'var(--texto-tenue)' }}>No hay tareas en este rango.</p>
   }
 
+  const hoyStr = new Date().toDateString()
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-      {[...grupos.entries()].map(([local, tareas]) => (
-        <div key={local} className="card">
-          <h3 style={{ margin: '0 0 0.75rem', color: 'var(--gold)' }}>{local}</h3>
-          <ul style={{ margin: 0, paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {tareas.map((t) => {
-              const hecha = t.estado === 'REALIZADA' || t.estado === 'APROBADA'
-              return (
-                <li key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
-                  <span>
-                    {t.titulo} <span style={{ color: 'var(--texto-tenue)', fontSize: '0.8rem' }}>{t.inicio?.slice(0, 10)}</span>{' '}
-                    {estadoBadge(t.estado)}
-                  </span>
-                  {!hecha && onMarcar && (
-                    <button className="btn btn-secondary" disabled={marcando === t.id} onClick={() => onMarcar(t.id)}>
-                      {marcando === t.id ? '...' : 'Marcar realizada'}
-                    </button>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
+    <div className="agenda-dias">
+      {dias.map((dia) => (
+        <div key={dia.fecha.toISOString()} className={'card dia-col' + (dia.fecha.toDateString() === hoyStr ? ' hoy' : '')}>
+          <div className="dia-nombre">{DIAS[dia.fecha.getDay()]}</div>
+          <div className="dia-fecha">{dia.fecha.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</div>
+          {[...dia.grupos.entries()].map(([local, tareas]) => (
+            <div key={local} className="local-grupo">
+              <div className="local-nombre">{local}</div>
+              <ul className="tarea-bullets">
+                {tareas.map((t) => {
+                  const accionable = t.estado !== 'realizada' && !!onMarcar
+                  return (
+                    <li
+                      key={t.id}
+                      className={t.estado + (accionable ? ' clickable' : '')}
+                      onClick={accionable ? () => onMarcar(t.id) : undefined}
+                      title={accionable ? 'Marcar realizada' : undefined}
+                    >
+                      {t.titulo}
+                      {marcando === t.id && ' (marcando…)'}
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          ))}
         </div>
       ))}
     </div>

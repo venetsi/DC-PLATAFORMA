@@ -150,3 +150,62 @@ th, td {
   cursor: pointer;
 }
 .fc-daygrid-event-dot { display: none; }
+
+/* Vista Agenda: dia -> local -> bullets, mismo lenguaje visual que el
+   kiosko (ver kiosko/index.html) para que ambas pantallas se sientan la
+   misma aplicacion -- a diferencia del kiosko, los bullets pendientes/
+   vencidos son clickeables para marcar realizada. */
+.agenda-dias {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+.dia-col.hoy {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 1px var(--teal) inset;
+}
+.dia-nombre {
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--gold);
+}
+.dia-fecha {
+  font-size: 0.75rem;
+  color: var(--texto-tenue);
+  margin-bottom: 0.75rem;
+  text-transform: capitalize;
+}
+.local-grupo { margin-bottom: 0.75rem; }
+.local-grupo:last-child { margin-bottom: 0; }
+.local-nombre {
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+.tarea-bullets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.tarea-bullets li {
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--texto-tenue);
+}
+.tarea-bullets li::before {
+  content: '●';
+  font-size: 0.5rem;
+}
+.tarea-bullets li.pendiente::before { color: var(--amarillo); }
+.tarea-bullets li.vencida::before { color: var(--rojo); }
+.tarea-bullets li.realizada::before { color: var(--verde); }
+.tarea-bullets li.realizada { color: var(--texto-tenue); text-decoration: line-through; }
+.tarea-bullets li.clickable { cursor: pointer; }
+.tarea-bullets li.clickable:hover { color: var(--texto); }
