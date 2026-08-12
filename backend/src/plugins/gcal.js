@@ -18,14 +18,20 @@ async function withBackoff(fn, { maxAttempts = 5 } = {}) {
   }
 }
 
+// Perezoso a proposito: crearAuthClient() (impersonation) puede tardar ~15s
+// en resolver, mas que el pluginTimeout default de Fastify/avvio (10s) --
+// si se espera en el registro del plugin, el arranque del server falla
+// intermitentemente. Se resuelve una sola vez, en el primer uso real.
+let calendarPromise
+function getCalendarClient() {
+  calendarPromise ??= crearAuthClient().then((auth) => google.calendar({ version: 'v3', auth }))
+  return calendarPromise
+}
+
 async function gcalPlugin(fastify) {
-  const auth = await crearAuthClient()
-  const calendar = google.calendar({ version: 'v3', auth })
-
   fastify.decorate('gcal', {
-    calendar,
-
     async crearCalendarioDepartamento(nombre) {
+      const calendar = await getCalendarClient()
       const { data } = await withBackoff(() =>
         calendar.calendars.insert({ requestBody: { summary: nombre } })
       )
@@ -33,6 +39,7 @@ async function gcalPlugin(fastify) {
     },
 
     async crearEventoRecurrente({ calendarId, summary, startDate, endDate, recurrence, extendedProperties }) {
+      const calendar = await getCalendarClient()
       const { data } = await withBackoff(() =>
         calendar.events.insert({
           calendarId,
@@ -50,6 +57,7 @@ async function gcalPlugin(fastify) {
 
     // Solo el maestro -- para reprogramar toda la serie hacia adelante.
     async editarRecurrencia({ calendarId, eventId, recurrence }) {
+      const calendar = await getCalendarClient()
       const { data } = await withBackoff(() =>
         calendar.events.patch({ calendarId, eventId, requestBody: { recurrence } })
       )
@@ -58,6 +66,7 @@ async function gcalPlugin(fastify) {
 
     // Cierra una serie sin borrar historial (usado al desactivar un local).
     async cerrarRecurrencia({ calendarId, eventId, untilDate }) {
+      const calendar = await getCalendarClient()
       const untilRule = `UNTIL=${untilDate.replace(/-/g, '')}T000000Z`
       const { data: current } = await withBackoff(() => calendar.events.get({ calendarId, eventId }))
       const recurrence = (current.recurrence || []).map((rule) =>
@@ -67,6 +76,7 @@ async function gcalPlugin(fastify) {
     },
 
     async listarInstancias({ calendarId, timeMin, timeMax, estado }) {
+      const calendar = await getCalendarClient()
       const { data } = await withBackoff(() =>
         calendar.events.list({
           calendarId,
@@ -84,6 +94,7 @@ async function gcalPlugin(fastify) {
     // afectar al resto de la serie. `nuevoEstado` + `logLine` van a
     // extendedProperties.estado y se agregan a description respectivamente.
     async marcarInstancia({ calendarId, instanceId, extendedProperties, logLine }) {
+      const calendar = await getCalendarClient()
       const { data: current } = await withBackoff(() => calendar.events.get({ calendarId, eventId: instanceId }))
       const description = [current.description, logLine].filter(Boolean).join('\n')
       const { data } = await withBackoff(() =>
@@ -100,6 +111,7 @@ async function gcalPlugin(fastify) {
     },
 
     async compartirConGroup({ calendarId, groupEmail, role = 'reader' }) {
+      const calendar = await getCalendarClient()
       await withBackoff(() =>
         calendar.acl.insert({ calendarId, requestBody: { role, scope: { type: 'group', value: groupEmail } } })
       )
