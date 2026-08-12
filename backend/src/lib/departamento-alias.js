@@ -1,16 +1,10 @@
-// dcsmart no tiene tabla de departamentos -- users.departamento es texto
-// libre, cargado a mano. Esto resuelve ese string a {slug, nombre} contra el
-// catalogo real de DC-PLATAFORMA: minuscula simple si ya coincide con un slug
-// existente, o el alias explicito para los casos donde el nombre usado en
-// dcsmart no es el mismo que el nombre visible acá (ej. "Finanzas" es como
-// se le sigue diciendo al departamento que este lado llama "tesoreria").
-const ALIAS_A_SLUG = {
-  finanzas: 'tesoreria'
-}
-
-// Para departamentos realmente nuevos (slug no visto todavia): nombre
-// legible simple a partir del texto crudo -- se puede corregir a mano
-// despues desde la base si hace falta un nombre mas prolijo.
+// dcsmart no tiene tabla de departamentos -- users.departamento se valida
+// contra una lista cerrada en codigo (backend/src/lib/datosUsuario.js de
+// dcsmart), no es realmente texto libre. El catalogo de departamentos de
+// DC-PLATAFORMA (prisma/seed.js) usa esas mismas 10 claves en minuscula como
+// slug, asi que resolver el string de dcsmart es un simple toLowerCase() --
+// sin tabla de alias. Si dcsmart suma un departamento nuevo a esa lista en
+// el futuro, esto lo crea acá tambien (sync perezoso, ver lib/departamentos.js).
 function nombreLegible(raw) {
   return raw.slice(0, 1).toUpperCase() + raw.slice(1).toLowerCase()
 }
@@ -19,6 +13,5 @@ function nombreLegible(raw) {
 export function resolverDepartamento(raw) {
   const limpio = String(raw || '').trim()
   if (!limpio) return null
-  const slug = ALIAS_A_SLUG[limpio.toLowerCase()] ?? limpio.toLowerCase()
-  return { slug, nombre: nombreLegible(limpio) }
+  return { slug: limpio.toLowerCase(), nombre: nombreLegible(limpio) }
 }

@@ -10,7 +10,23 @@ import { getDirectory, emailDeGroup } from '../src/lib/directory-auth.js'
 
 const prisma = new PrismaClient()
 
-const DEPARTAMENTOS = ['auditoria', 'reportes', 'costos', 'tesoreria', 'rrhh']
+// Calcado 1:1 de dcsmart/backend/src/lib/datosUsuario.js (DEPARTAMENTOS) --
+// mismas claves en minuscula como slug, para que resolverDepartamento()
+// (lib/departamento-alias.js) no necesite alias: users.departamento de
+// dcsmart siempre matchea un slug de acá con un simple toLowerCase().
+const NOMBRES_POR_SLUG = {
+  administracion: 'Administración',
+  operaciones: 'Operaciones',
+  compras: 'Compras',
+  finanzas: 'Finanzas',
+  rrhh: 'RRHH',
+  sistemas: 'Sistemas',
+  comercial: 'Comercial',
+  auditoria: 'Auditoría',
+  mantenimiento: 'Mantenimiento',
+  direccion: 'Dirección'
+}
+const DEPARTAMENTOS = Object.keys(NOMBRES_POR_SLUG)
 const CON_GROUPS = Boolean(process.env.GOOGLE_SA_KEY_PATH) // Fase 7 opcional -- sin la key, solo Calendar (Fase 3)
 
 async function main() {
@@ -19,7 +35,7 @@ async function main() {
   const deptosPorSlug = {}
   for (const slug of DEPARTAMENTOS) {
     const existente = await prisma.departamento.findUnique({ where: { slug } })
-    const nombre = slug[0].toUpperCase() + slug.slice(1)
+    const nombre = NOMBRES_POR_SLUG[slug]
     let calendarId = existente?.id_calendar_google
     if (!calendarId) {
       const { data } = await calendar.calendars.insert({ requestBody: { summary: `DC-PLATAFORMA — ${nombre}` } })
@@ -82,7 +98,7 @@ async function main() {
     }
   }
 
-  console.log('Seed listo. Login temporal: POST /api/auth/dev-login { "email": "tesoreria@dcsmart.app" }')
+  console.log('Seed listo. Login temporal: POST /api/auth/dev-login { "email": "finanzas@dcsmart.app" }')
 }
 
 main()
