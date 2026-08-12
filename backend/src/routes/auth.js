@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto'
 import jwt from 'jsonwebtoken'
 import { asegurarDepartamento, sincronizarMembresiaGroup } from '../lib/departamentos.js'
+import { resolverDepartamento } from '../lib/departamento-alias.js'
 
 // Email de dev que actua como admin global (equivalente a super_admin/dcsmart
 // una vez migrado al ticket real en Fase 8). Solo tiene efecto con
@@ -56,24 +58,25 @@ export default async function authRoutes(fastify) {
       return reply.code(401).send({ error: 'Ticket invalido o expirado' })
     }
 
-    const { email, nombre, id_departamento, departamento_slug, departamentos } = payload
+    const { email, nombre, departamento: departamentoRaw, es_super_admin } = payload
+
+    // dcsmart no tiene tabla de departamentos propia (es un texto libre en
+    // users.departamento) -- se resuelve contra el catalogo real de acá antes
+    // de guardar nada, para no heredar mayusculas/nombres sueltos de dcsmart.
+    // asegurarDepartamento devuelve la fila EXISTENTE si el slug ya existe
+    // (ignora el id/nombre pasados), y solo los usa si es un departamento
+    // nuevo que nunca se vio -- por eso da igual que acá no exista un id
+    // estable del lado de dcsmart, se genera uno nuevo solo si hace falta.
+    const resuelto = resolverDepartamento(departamentoRaw)
+    const departamento = resuelto
+      ? await asegurarDepartamento(fastify, { id: randomUUID(), nombre: resuelto.nombre, slug: resuelto.slug })
+      : null
 
     const usuario = await fastify.db.extUser.upsert({
       where: { email },
-      create: { id: payload.id_user ?? email, email, nombre, id_departamento },
-      update: { nombre, id_departamento }
+      create: { id: payload.id_user ?? email, email, nombre, id_departamento: departamento?.id ?? null, es_admin_global: !!es_super_admin },
+      update: { nombre, id_departamento: departamento?.id ?? null, es_admin_global: !!es_super_admin }
     })
-
-    // Admin global: el ticket trae el catalogo completo de departamentos --
-    // sync perezoso de cada uno que todavia no exista localmente (crea
-    // Calendar + Group la primera vez que se ve, ver lib/departamentos.js).
-    if (Array.isArray(departamentos)) {
-      for (const d of departamentos) {
-        await asegurarDepartamento(fastify, { id: d.id, nombre: d.nombre, slug: d.slug ?? d.nombre.toLowerCase() })
-      }
-    } else if (id_departamento && departamento_slug) {
-      await asegurarDepartamento(fastify, { id: id_departamento, nombre: departamento_slug, slug: departamento_slug })
-    }
 
     await sincronizarMembresiaGroup(fastify, usuario)
 
@@ -99,8 +102,9 @@ export default async function authRoutes(fastify) {
     return {
       usuario: { id: usuario.id, email: usuario.email, nombre: usuario.nombre },
       departamento,
-      // Dev-only: en Fase 8 esto se resuelve leyendo el rol super_admin/dcsmart del ticket.
-      esAdminGlobal: usuario.email === DEV_ADMIN_EMAIL
+      // es_admin_global viene del ticket SSO real (Fase 8); el email hardcodeado
+      // sigue andando para el login temporal de dev, que nunca lo setea.
+      esAdminGlobal: usuario.es_admin_global || usuario.email === DEV_ADMIN_EMAIL
     }
   })
 

@@ -10,12 +10,15 @@ datasource db {
 // --- Cache de identidad de dcsmart (nunca fuente de verdad) ---
 
 model ExtUser {
-  id              String   @id
-  email           String   @unique
-  nombre          String
-  id_departamento String?
-  activo          Boolean  @default(true)
-  synced_at       DateTime @default(now())
+  id               String   @id
+  email            String   @unique
+  nombre           String
+  id_departamento  String?
+  // Rol global super_admin/dcsmart, resuelto desde el ticket SSO (Fase 8).
+  // Reemplaza el hardcode por email que usaba el login temporal de dev.
+  es_admin_global  Boolean  @default(false)
+  activo           Boolean  @default(true)
+  synced_at        DateTime @default(now())
 
   @@map("ext_users")
 }
