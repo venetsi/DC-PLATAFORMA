@@ -1,3 +1,5 @@
+import { usuarioActual, puedeGestionarDepartamento } from '../lib/permisos.js'
+
 // Lee CumplimientoDiario (snapshot escrito por el job diario) -- nunca
 // recalcula agregando eventos de Calendar en vivo, ver docs/superpowers.
 export default async function reportesRoutes(fastify) {
@@ -5,9 +7,8 @@ export default async function reportesRoutes(fastify) {
     const { departamento: idDepartamento, local: idLocal, desde, hasta } = request.query
     if (!idDepartamento) return reply.code(400).send({ error: 'departamento requerido' })
 
-    const usuario = await fastify.db.extUser.findUnique({ where: { id: request.user.id } })
-    const esAdmin = usuario?.email === 'admin@dcsmart.app'
-    if (!esAdmin && usuario?.id_departamento !== idDepartamento) {
+    const usuario = await usuarioActual(fastify, request)
+    if (!puedeGestionarDepartamento(usuario, idDepartamento)) {
       return reply.code(403).send({ error: 'No tenes acceso a este departamento' })
     }
 

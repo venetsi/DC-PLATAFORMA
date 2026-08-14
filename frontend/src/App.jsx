@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { useAuthStore } from './store/authStore.js'
-import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute.jsx'
+import { ProtectedRoute, GestionRoute } from './components/ProtectedRoute.jsx'
 import Layout from './components/Layout.jsx'
 import Login from './pages/Login.jsx'
 import Calendario from './pages/Calendario.jsx'
@@ -20,7 +20,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<Calendario />} />
           <Route path="/reportes" element={<Reportes />} />
-          <Route element={<AdminRoute />}>
+          <Route element={<GestionRoute />}>
             <Route path="/admin/tareas" element={<AdminTareas />} />
             <Route path="/admin/agenda" element={<AdminAgenda />} />
           </Route>

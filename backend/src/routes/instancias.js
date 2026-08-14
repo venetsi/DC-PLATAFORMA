@@ -1,3 +1,5 @@
+import { usuarioActual, puedeGestionarDepartamento } from '../lib/permisos.js'
+
 function inicioDelDia(fecha = new Date()) {
   return new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate())).toISOString()
 }
@@ -6,9 +8,8 @@ function finDelDia(fecha = new Date()) {
 }
 
 async function resolverDepartamentoConAcceso(fastify, request, reply, idDepartamento) {
-  const usuario = await fastify.db.extUser.findUnique({ where: { id: request.user.id } })
-  const esAdmin = usuario?.email === 'admin@dcsmart.app' // TODO Fase 8: rol real via ticket
-  if (!esAdmin && usuario?.id_departamento !== idDepartamento) {
+  const usuario = await usuarioActual(fastify, request)
+  if (!puedeGestionarDepartamento(usuario, idDepartamento)) {
     reply.code(403).send({ error: 'No tenes acceso a este departamento' })
     return null
   }

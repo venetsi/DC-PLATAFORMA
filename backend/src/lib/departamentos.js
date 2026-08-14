@@ -1,6 +1,9 @@
+import { randomBytes } from 'node:crypto'
+
 // Provisioning de un Departamento: Calendar (Fase 3) + Group compartido en
-// modo lectura (Fase 7). Idempotente -- se puede llamar cada vez que se ve
-// el departamento (sync perezoso desde el ticket SSO o el seed de dev).
+// modo lectura (Fase 7) + clave de kiosko (Fase 6). Idempotente -- se puede
+// llamar cada vez que se ve el departamento (sync perezoso desde el ticket
+// SSO, el seed de dev, o /admin/departamentos).
 export async function asegurarDepartamento(fastify, { id, nombre, slug }) {
   let departamento = await fastify.db.departamento.findUnique({ where: { slug } })
 
@@ -8,7 +11,7 @@ export async function asegurarDepartamento(fastify, { id, nombre, slug }) {
     const calendarId = await fastify.gcal.crearCalendarioDepartamento(`DC-PLATAFORMA — ${nombre}`)
     departamento = await fastify.db.departamento.upsert({
       where: { slug },
-      create: { id, nombre, slug, id_calendar_google: calendarId },
+      create: { id, nombre, slug, id_calendar_google: calendarId, kiosko_key: randomBytes(16).toString('hex') },
       update: { id_calendar_google: calendarId }
     })
   }

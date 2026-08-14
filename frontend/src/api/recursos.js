@@ -1,7 +1,8 @@
 import { api } from './client.js'
 
 export const departamentosApi = {
-  listar: () => api.get('/departamentos').then((r) => r.data)
+  listar: () => api.get('/departamentos').then((r) => r.data),
+  crear: (nombre) => api.post('/departamentos', { nombre }).then((r) => r.data)
 }
 
 export const localesApi = {
@@ -10,7 +11,8 @@ export const localesApi = {
 
 export const tareasApi = {
   listar: (idDepartamento) => api.get('/tareas', { params: { departamento: idDepartamento } }).then((r) => r.data),
-  crear: (body) => api.post('/tareas', body).then((r) => r.data)
+  crear: (body) => api.post('/tareas', body).then((r) => r.data),
+  editar: (id, body) => api.patch(`/tareas/${id}`, body).then((r) => r.data)
 }
 
 export const asignacionesApi = {

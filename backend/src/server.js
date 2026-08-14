@@ -15,6 +15,7 @@ import asignacionesRoutes from './routes/asignaciones.js'
 import instanciasRoutes from './routes/instancias.js'
 import reportesRoutes from './routes/reportes.js'
 import tvRoutes from './routes/tv.js'
+import { esAdminGlobal } from './lib/permisos.js'
 
 const app = Fastify({ logger: true })
 
@@ -37,12 +38,11 @@ app.decorate('authenticate', async (request, reply) => {
 })
 
 // Admin global: es_admin_global viene del ticket SSO real (rol super_admin/
-// dcsmart, Fase 8); el email hardcodeado sigue andando para el login
-// temporal de dev, que nunca setea esa columna. Mismo criterio que /me.
+// dcsmart, Fase 8); el email hardcodeado (lib/permisos.js) sigue andando
+// para el login temporal de dev, que nunca setea esa columna.
 app.decorate('requireAdminGlobal', async (request, reply) => {
   const usuario = await app.db.extUser.findUnique({ where: { id: request.user.id } })
-  const esAdmin = usuario?.es_admin_global || usuario?.email === 'admin@dcsmart.app'
-  if (!esAdmin) reply.code(403).send({ error: 'Requiere admin global' })
+  if (!esAdminGlobal(usuario)) reply.code(403).send({ error: 'Requiere admin global' })
 })
 
 await app.register(authRoutes, { prefix: '/api/auth' })

@@ -7,14 +7,28 @@ function clavesCoinciden(a, b) {
   return timingSafeEqual(bufA, bufB)
 }
 
-// Semana de lunes a viernes que contiene "hoy" (en UTC -- alcanza para esta
-// escala, no hace falta manejo de zona horaria mas fino).
-function semanaLaboralActual() {
+// Cuantos dias hacia atras se buscan tareas vencidas sin hacer para la
+// columna "Atrasadas" -- una tarea que nunca se marca realizada no debe
+// desaparecer del kiosko, pero tampoco tiene sentido arrastrar backlog
+// indefinido: 30 dias alcanza para ver un mes de atraso real.
+const DIAS_ATRASADAS = 30
+
+function lunesDe(fecha) {
+  const diaIso = fecha.getUTCDay() === 0 ? 7 : fecha.getUTCDay()
+  return new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate() - (diaIso - 1)))
+}
+
+// Lunes-a-viernes de esta semana, la semana que viene, y el inicio del
+// rango de atrasadas -- todo en un solo query a Calendar (timeMin/timeMax
+// bien anchos) y despues se separa en baldes por fecha.
+function rangos() {
   const hoy = new Date()
-  const diaIso = hoy.getUTCDay() === 0 ? 7 : hoy.getUTCDay() // 1=lunes .. 7=domingo
-  const lunes = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate() - (diaIso - 1)))
-  const viernes = new Date(Date.UTC(lunes.getUTCFullYear(), lunes.getUTCMonth(), lunes.getUTCDate() + 4, 23, 59, 59))
-  return { desde: lunes, hasta: viernes }
+  const lunesEsta = lunesDe(hoy)
+  const viernesEsta = new Date(Date.UTC(lunesEsta.getUTCFullYear(), lunesEsta.getUTCMonth(), lunesEsta.getUTCDate() + 4, 23, 59, 59))
+  const lunesProxima = new Date(Date.UTC(lunesEsta.getUTCFullYear(), lunesEsta.getUTCMonth(), lunesEsta.getUTCDate() + 7))
+  const viernesProxima = new Date(Date.UTC(lunesProxima.getUTCFullYear(), lunesProxima.getUTCMonth(), lunesProxima.getUTCDate() + 4, 23, 59, 59))
+  const desdeAtrasadas = new Date(Date.UTC(lunesEsta.getUTCFullYear(), lunesEsta.getUTCMonth(), lunesEsta.getUTCDate() - DIAS_ATRASADAS))
+  return { desdeAtrasadas, lunesEsta, viernesEsta, lunesProxima, viernesProxima }
 }
 
 let cacheClima = null // { data, en } -- el clima cambia mucho mas lento que las tareas
@@ -40,14 +54,14 @@ export default async function tvRoutes(fastify) {
       return reply.code(403).send({ error: 'Clave invalida' })
     }
     if (!departamento.id_calendar_google) {
-      return { departamento: { nombre: departamento.nombre, slug }, estado_general: 'sin_datos', locales: [], eventos: [] }
+      return { departamento: { nombre: departamento.nombre, slug }, estado_general: 'sin_datos', locales: [], eventos: [], atrasadas: [], proximaSemana: [] }
     }
 
-    const { desde, hasta } = semanaLaboralActual()
+    const { desdeAtrasadas, lunesEsta, viernesEsta, lunesProxima, viernesProxima } = rangos()
     const items = await fastify.gcal.listarInstancias({
       calendarId: departamento.id_calendar_google,
-      timeMin: desde.toISOString(),
-      timeMax: hasta.toISOString()
+      timeMin: desdeAtrasadas.toISOString(),
+      timeMax: viernesProxima.toISOString()
     })
 
     const locales = await fastify.db.extLocal.findMany()
@@ -55,8 +69,13 @@ export default async function tvRoutes(fastify) {
 
     const porLocalHoy = {} // solo para el semaforo/KPIs, acotado al dia de hoy
     const eventos = []
+    const atrasadas = []
+    const proximaSemana = []
     const ahora = new Date()
     const hoyISO = ahora.toISOString().slice(0, 10)
+    const finEsta = viernesEsta.getTime()
+    const inicioProxima = lunesProxima.getTime()
+    const finProxima = viernesProxima.getTime()
 
     for (const evento of items) {
       const props = evento.extendedProperties?.private || {}
@@ -64,6 +83,7 @@ export default async function tvRoutes(fastify) {
       const hecha = props.estado === 'REALIZADA' || props.estado === 'APROBADA'
       const vencida = !hecha && ahora > new Date(evento.end?.date || evento.end?.dateTime)
       const fechaEvento = (evento.start?.date || evento.start?.dateTime || '').slice(0, 10)
+      const fechaMs = new Date(`${fechaEvento}T00:00:00Z`).getTime()
 
       if (fechaEvento === hoyISO) {
         porLocalHoy[idLocal || '_general'] ??= { pendientes: 0, realizadas: 0, vencidas: 0 }
@@ -71,7 +91,7 @@ export default async function tvRoutes(fastify) {
         else porLocalHoy[idLocal || '_general'][vencida ? 'vencidas' : 'pendientes']++
       }
 
-      eventos.push({
+      const item = {
         id: evento.id,
         titulo: evento.summary,
         id_local: idLocal,
@@ -80,7 +100,17 @@ export default async function tvRoutes(fastify) {
         realizada_por: props.realizada_por || null,
         inicio: evento.start?.dateTime || evento.start?.date,
         fin: evento.end?.dateTime || evento.end?.date
-      })
+      }
+
+      if (fechaMs < lunesEsta.getTime()) {
+        // Atrasadas: solo lo que sigue sin hacerse -- lo ya realizado en el
+        // pasado no aporta nada a "que falta resolver ya mismo".
+        if (vencida) atrasadas.push(item)
+      } else if (fechaMs <= finEsta) {
+        eventos.push(item)
+      } else if (fechaMs >= inicioProxima && fechaMs <= finProxima) {
+        proximaSemana.push(item)
+      }
     }
 
     const totalesHoy = Object.values(porLocalHoy).reduce(
@@ -98,8 +128,10 @@ export default async function tvRoutes(fastify) {
       departamento: { nombre: departamento.nombre, slug },
       estado_general,
       totales: totalesHoy,
-      semana: { desde: desde.toISOString().slice(0, 10), hasta: hasta.toISOString().slice(0, 10) },
-      eventos
+      semana: { desde: lunesEsta.toISOString().slice(0, 10), hasta: viernesEsta.toISOString().slice(0, 10) },
+      eventos,
+      atrasadas,
+      proximaSemana
     }
   })
 

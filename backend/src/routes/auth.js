@@ -2,11 +2,18 @@ import { randomUUID } from 'node:crypto'
 import jwt from 'jsonwebtoken'
 import { asegurarDepartamento, sincronizarMembresiaGroup } from '../lib/departamentos.js'
 import { resolverDepartamento } from '../lib/departamento-alias.js'
+import { esAdminGlobal } from '../lib/permisos.js'
 
-// Email de dev que actua como admin global (equivalente a super_admin/dcsmart
-// una vez migrado al ticket real en Fase 8). Solo tiene efecto con
-// ALLOW_DEV_LOGIN=true -- nunca usar este mecanismo en produccion.
-const DEV_ADMIN_EMAIL = 'admin@dcsmart.app'
+// Dominios habilitados para entrar via SSO real -- despues de esto, dcsmart
+// ya filtro con sus propias politicas de usuario (activo, rol, etc.); esto
+// es una segunda barrera para que ningun ticket con un dominio ajeno entre,
+// aunque el JWT este bien firmado.
+const DOMINIOS_PERMITIDOS = ['dcsmart.app', 'venetsi.com', 'dcmanagement.com.ar']
+
+function dominioPermitido(email) {
+  const dominio = String(email || '').split('@')[1]?.toLowerCase()
+  return DOMINIOS_PERMITIDOS.includes(dominio)
+}
 
 function signSession(fastify, { id, email, nombre }) {
   return fastify.jwt.sign({ id, email, nombre }, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' })
@@ -70,6 +77,10 @@ export default async function authRoutes(fastify) {
 
     const { email, nombre, departamento: departamentoRaw, es_super_admin } = payload
 
+    if (!dominioPermitido(email)) {
+      return reply.code(403).send({ error: 'Este dominio de email no tiene acceso a DC-PLATAFORMA' })
+    }
+
     // dcsmart no tiene tabla de departamentos propia (es un texto libre en
     // users.departamento) -- se resuelve contra el catalogo real de acá antes
     // de guardar nada, para no heredar mayusculas/nombres sueltos de dcsmart.
@@ -113,8 +124,8 @@ export default async function authRoutes(fastify) {
       usuario: { id: usuario.id, email: usuario.email, nombre: usuario.nombre },
       departamento,
       // es_admin_global viene del ticket SSO real (Fase 8); el email hardcodeado
-      // sigue andando para el login temporal de dev, que nunca lo setea.
-      esAdminGlobal: usuario.es_admin_global || usuario.email === DEV_ADMIN_EMAIL
+      // (lib/permisos.js) sigue andando para el login temporal de dev.
+      esAdminGlobal: esAdminGlobal(usuario)
     }
   })
 
