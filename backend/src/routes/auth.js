@@ -23,6 +23,16 @@ export default async function authRoutes(fastify) {
     const email = String(request.body?.email || '').toLowerCase().trim()
     if (!email) return reply.code(400).send({ error: 'email requerido' })
 
+    // Mientras el SSO real de dcsmart no esta activo, esta URL puede tener
+    // acceso publico -- sin este chequeo, saber CUALQUIER email de ExtUser
+    // (varios circularon en texto plano durante el desarrollo) alcanzaria
+    // para entrar sin contraseña. DEV_LOGIN_ALLOWLIST son los unicos emails
+    // habilitados; vacio/sin setear = nadie (fail-closed).
+    const permitidos = String(process.env.DEV_LOGIN_ALLOWLIST || '').toLowerCase().split(',').map((e) => e.trim()).filter(Boolean)
+    if (!permitidos.includes(email)) {
+      return reply.code(404).send({ error: 'No encontrado' })
+    }
+
     const usuario = await fastify.db.extUser.findUnique({ where: { email } })
     if (!usuario) {
       return reply.code(404).send({

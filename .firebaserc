@@ -1,0 +1,18 @@
+{
+  "projects": {
+    "default": "dc-smart-mvp"
+  },
+  "targets": {
+    "dc-smart-mvp": {
+      "hosting": {
+        "gestion": [
+          "dc-plataforma"
+        ],
+        "kiosko": [
+          "dc-plataforma-tv"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

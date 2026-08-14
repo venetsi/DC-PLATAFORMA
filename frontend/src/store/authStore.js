@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { api } from '../api/client.js'
+import { api, guardarToken, borrarToken } from '../api/client.js'
 
 export const useAuthStore = create((set) => ({
   usuario: null,
@@ -17,12 +17,14 @@ export const useAuthStore = create((set) => ({
   },
 
   async loginDev(email) {
-    await api.post('/auth/dev-login', { email })
+    const { data } = await api.post('/auth/dev-login', { email })
+    guardarToken(data.token)
     await useAuthStore.getState().cargarSesion()
   },
 
   async logout() {
     await api.post('/auth/logout')
+    borrarToken()
     set({ usuario: null, departamento: null, esAdminGlobal: false })
   }
 }))

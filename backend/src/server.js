@@ -36,10 +36,12 @@ app.decorate('authenticate', async (request, reply) => {
   }
 })
 
-// Admin global (super_admin/dcsmart via ticket en Fase 8; DEV_ADMIN_EMAIL en dev-login).
+// Admin global: es_admin_global viene del ticket SSO real (rol super_admin/
+// dcsmart, Fase 8); el email hardcodeado sigue andando para el login
+// temporal de dev, que nunca setea esa columna. Mismo criterio que /me.
 app.decorate('requireAdminGlobal', async (request, reply) => {
   const usuario = await app.db.extUser.findUnique({ where: { id: request.user.id } })
-  const esAdmin = usuario?.email === 'admin@dcsmart.app' // TODO Fase 8: leer rol real del ticket
+  const esAdmin = usuario?.es_admin_global || usuario?.email === 'admin@dcsmart.app'
   if (!esAdmin) reply.code(403).send({ error: 'Requiere admin global' })
 })
 
