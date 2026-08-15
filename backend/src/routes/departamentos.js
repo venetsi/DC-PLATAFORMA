@@ -1,17 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { asegurarDepartamento } from '../lib/departamentos.js'
-
-// Administracion -> administracion: NFD separa la letra de la tilde en dos
-// codepoints, y U+0300-U+036F son justamente las marcas diacriticas sueltas.
-const MARCAS_DIACRITICAS = /[̀-ͯ]/g
-
-function aSlug(nombre) {
-  return nombre
-    .normalize('NFD')
-    .replace(MARCAS_DIACRITICAS, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '')
-}
+import { aSlug } from '../lib/slug.js'
 
 export default async function departamentosRoutes(fastify) {
   // select acotado a proposito -- Departamento tambien guarda kiosko_key y

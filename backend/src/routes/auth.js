@@ -75,7 +75,7 @@ export default async function authRoutes(fastify) {
       return reply.code(401).send({ error: 'Ticket invalido o expirado' })
     }
 
-    const { email, nombre, departamento: departamentoRaw, es_super_admin } = payload
+    const { email, nombre, departamento: departamentoRaw, es_super_admin, locales } = payload
 
     if (!dominioPermitido(email)) {
       return reply.code(403).send({ error: 'Este dominio de email no tiene acceso a DC-PLATAFORMA' })
@@ -100,6 +100,27 @@ export default async function authRoutes(fastify) {
     })
 
     await sincronizarMembresiaGroup(fastify, usuario)
+
+    // El ticket manda el catalogo COMPLETO de locales activos de dcsmart (no
+    // acotado al departamento de quien pidio el ticket) -- por eso, ademas de
+    // upsertear cada uno, tratamos la ausencia de un id como "se desactivo del
+    // lado de dcsmart" y lo reflejamos aca. Si el ticket todavia no manda
+    // locales (version vieja del lado de dcsmart), no tocamos nada.
+    if (Array.isArray(locales) && locales.length) {
+      await Promise.all(
+        locales.map((local) =>
+          fastify.db.extLocal.upsert({
+            where: { id: local.id },
+            create: { id: local.id, nombre: local.nombre, grupo: local.grupo ?? null, activo: true },
+            update: { nombre: local.nombre, grupo: local.grupo ?? null, activo: true, synced_at: new Date() }
+          })
+        )
+      )
+      await fastify.db.extLocal.updateMany({
+        where: { activo: true, id: { notIn: locales.map((local) => local.id) } },
+        data: { activo: false }
+      })
+    }
 
     const token = signSession(fastify, usuario)
     reply.setCookie('dc_plataforma_token', token, { path: '/', httpOnly: true, sameSite: 'lax' })
