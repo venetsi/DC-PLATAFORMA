@@ -12,8 +12,8 @@ export default function AgendaDeTarea({ tarea, locales, grupos, departamentos, o
   const [idGrupo, setIdGrupo] = useState('')
   // Compartir la misma asignacion con otros departamentos ademas del dueño
   // de la tarea -- "un solo evento visible para ambos deptos" (ver
-  // asignaciones.js). Solo tiene sentido para empresa/local: "por grupo" ya
-  // crea N filas de una, compartir cada una ademas explotaria combinatorio.
+  // asignaciones.js). Vale tambien para "por grupo": se aplica a cada local
+  // del grupo (N locales x M departamentos compartidos).
   const [deptosCompartidos, setDeptosCompartidos] = useState([])
   const [asignaciones, setAsignaciones] = useState([])
   const [mensaje, setMensaje] = useState('')
@@ -47,10 +47,15 @@ export default function AgendaDeTarea({ tarea, locales, grupos, departamentos, o
     setMensaje('')
     try {
       if (alcance === 'grupo') {
-        const { creadas, ya_existian } = await asignacionesApi.crear({ id_tarea: tarea.id, id_grupo: idGrupo })
+        const { creadas, ya_existian } = await asignacionesApi.crear({
+          id_tarea: tarea.id,
+          id_grupo: idGrupo,
+          departamentos_compartidos: deptosCompartidos.length ? deptosCompartidos : undefined
+        })
         setMensaje(
           `Creadas ${creadas.length} asignaciones nuevas para el grupo "${idGrupo}"` +
-          (ya_existian.length ? ` (ya existían para: ${ya_existian.join(', ')})` : '')
+          (ya_existian.length ? ` (ya existían para: ${ya_existian.join(', ')})` : '') +
+          (deptosCompartidos.length ? ` -- compartidas con ${deptosCompartidos.length} departamento(s) más` : '')
         )
       } else {
         await asignacionesApi.crear({
@@ -105,7 +110,7 @@ export default function AgendaDeTarea({ tarea, locales, grupos, departamentos, o
           )}
         </div>
 
-        {alcance !== 'grupo' && otrosDepartamentos.length > 0 && (
+        {otrosDepartamentos.length > 0 && (
           <div>
             <div style={{ fontSize: '0.78rem', color: 'var(--texto-tenue)', marginBottom: '0.3rem' }}>
               Compartir con otros departamentos (un solo evento, visible para todos los elegidos):

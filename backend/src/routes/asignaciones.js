@@ -29,11 +29,13 @@ export default async function asignacionesRoutes(fastify) {
   // asignar de una a todos los locales de ese grupo (ExtLocal.grupo) --
   // crea una TareaAsignacion por local, no un scope nuevo en el modelo.
   //
-  // `departamentos_compartidos` (solo para el alcance simple, no "por
-  // grupo"): comparte esta misma asignacion con departamentos ademas del
-  // dueño de la tarea -- "un solo evento visible para ambos deptos". Crea
-  // las filas TareaAsignacionDepto sin evento de Calendar todavia (se
-  // materializa recien al definir la agenda, ver PUT /:id/agenda).
+  // `departamentos_compartidos`: comparte la(s) asignacion(es) creadas con
+  // departamentos ademas del dueño de la tarea -- "un solo evento visible
+  // para ambos deptos". Vale tambien para "por grupo": se aplica a cada
+  // local del grupo (N locales x M departamentos compartidos), no solo al
+  // alcance simple. Crea las filas TareaAsignacionDepto sin evento de
+  // Calendar todavia (se materializa recien al definir la agenda, ver
+  // PUT /:id/agenda).
   fastify.post('/', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { id_tarea, id_local_ext, id_grupo, departamentos_compartidos } = request.body || {}
     if (!id_tarea) return reply.code(400).send({ error: 'id_tarea requerido' })
@@ -46,6 +48,14 @@ export default async function asignacionesRoutes(fastify) {
       return reply.code(403).send({ error: 'Solo podés asignar tareas de tu propio departamento' })
     }
 
+    async function compartirCon(idAsignacion) {
+      if (!Array.isArray(departamentos_compartidos) || !departamentos_compartidos.length) return
+      await fastify.db.tareaAsignacionDepto.createMany({
+        data: departamentos_compartidos.map((idDepartamento) => ({ id_asignacion: idAsignacion, id_departamento: idDepartamento })),
+        skipDuplicates: true
+      })
+    }
+
     if (id_grupo) {
       const locales = await fastify.db.extLocal.findMany({ where: { grupo: id_grupo, activo: true } })
       if (locales.length === 0) return reply.code(404).send({ error: `Ningún local activo en el grupo "${id_grupo}"` })
@@ -54,7 +64,9 @@ export default async function asignacionesRoutes(fastify) {
       const yaExistian = []
       for (const local of locales) {
         try {
-          creadas.push(await fastify.db.tareaAsignacion.create({ data: { id_tarea, id_local_ext: local.id } }))
+          const asignacion = await fastify.db.tareaAsignacion.create({ data: { id_tarea, id_local_ext: local.id } })
+          await compartirCon(asignacion.id)
+          creadas.push(asignacion)
         } catch (err) {
           if (err.code === 'P2002') { yaExistian.push(local.nombre); continue }
           throw err
@@ -65,12 +77,7 @@ export default async function asignacionesRoutes(fastify) {
 
     try {
       const asignacion = await fastify.db.tareaAsignacion.create({ data: { id_tarea, id_local_ext: id_local_ext || null } })
-      if (Array.isArray(departamentos_compartidos) && departamentos_compartidos.length) {
-        await fastify.db.tareaAsignacionDepto.createMany({
-          data: departamentos_compartidos.map((idDepartamento) => ({ id_asignacion: asignacion.id, id_departamento: idDepartamento })),
-          skipDuplicates: true
-        })
-      }
+      await compartirCon(asignacion.id)
       return reply.code(201).send(asignacion)
     } catch (err) {
       if (err.code === 'P2002') {
