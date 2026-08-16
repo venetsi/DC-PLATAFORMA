@@ -6,7 +6,7 @@ import AgendaForm from './AgendaForm.jsx'
 // AdminTareas ("definir la tarea en el mismo renglon donde se crea"), asi
 // que a diferencia de la vieja pantalla /admin/agenda no necesita su propio
 // picker de tarea: la tarea ya viene fija desde la fila que lo abrio.
-export default function AgendaDeTarea({ tarea, locales, grupos, onCerrar }) {
+export default function AgendaDeTarea({ tarea, locales, grupos, onCerrar, onCambio }) {
   const [alcance, setAlcance] = useState('empresa') // empresa | grupo | local
   const [idLocal, setIdLocal] = useState('')
   const [idGrupo, setIdGrupo] = useState('')
@@ -26,6 +26,7 @@ export default function AgendaDeTarea({ tarea, locales, grupos, onCerrar }) {
 
   async function cargarAsignaciones() {
     setAsignaciones(await asignacionesApi.listar({ id_tarea: tarea.id }))
+    onCambio?.()
   }
 
   useEffect(() => { cargarAsignaciones() }, [tarea.id])

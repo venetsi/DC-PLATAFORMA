@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { departamentosApi, tareasApi, localesApi } from '../../api/recursos.js'
+import { departamentosApi, tareasApi, localesApi, asignacionesApi } from '../../api/recursos.js'
 import { useAuthStore } from '../../store/authStore.js'
 import AgendaDeTarea from './AgendaDeTarea.jsx'
 
@@ -10,6 +10,7 @@ export default function AdminTareas() {
   const [departamentos, setDepartamentos] = useState([])
   const [tareas, setTareas] = useState([])
   const [locales, setLocales] = useState([])
+  const [asignaciones, setAsignaciones] = useState([])
   const [nombre, setNombre] = useState('')
   // Un usuario de departamento crea solo para el suyo -- ni siquiera se le
   // ofrece elegir otro (el backend lo rechazaria igual, ver tareas.js).
@@ -38,10 +39,18 @@ export default function AdminTareas() {
   async function cargarDepartamentos() {
     setDepartamentos(await departamentosApi.listar())
   }
+  // Todas las asignaciones (no filtradas por tarea) -- solo para derivar a
+  // que grupo(s) esta asignada cada una en el renglon del catalogo, ver
+  // gruposPorTarea. Se refresca tambien cuando AgendaDeTarea crea/cierra
+  // asignaciones (ver onCambio en el panel inline).
+  async function cargarAsignaciones() {
+    setAsignaciones(await asignacionesApi.listar())
+  }
 
   useEffect(() => {
     cargarDepartamentos()
     cargarTareas()
+    cargarAsignaciones()
     localesApi.listar().then(setLocales)
   }, [])
 
@@ -120,6 +129,22 @@ export default function AdminTareas() {
 
   const nombreDepto = (id) => departamentos.find((d) => d.id === id)?.nombre || id
 
+  // A que grupo(s) esta asignada cada tarea, para mostrarlo de un vistazo en
+  // el catalogo sin tener que abrir "Definir agenda" -- sobre todo util
+  // despues de asignar "por grupo", donde no era obvio a simple vista si
+  // ya estaba cubierta o no. "Toda la empresa" cuando la asignacion no
+  // tiene local (alcance empresa); se omiten los locales sin grupo cargado.
+  const gruposPorTarea = useMemo(() => {
+    const mapa = new Map()
+    for (const a of asignaciones) {
+      const etiqueta = a.id_local_ext ? a.local?.grupo : 'Toda la empresa'
+      if (!etiqueta) continue
+      if (!mapa.has(a.id_tarea)) mapa.set(a.id_tarea, new Set())
+      mapa.get(a.id_tarea).add(etiqueta)
+    }
+    return mapa
+  }, [asignaciones])
+
   // Agrupado y ordenado por departamento -- antes quedaban todas mezcladas
   // en el orden que las devolvia el backend (solo por nombre de tarea), asi
   // que encontrar las de un departamento puntual era desplazarse a ojo.
@@ -166,7 +191,14 @@ export default function AdminTareas() {
             </>
           ) : (
             <>
-              <td>{t.nombre}</td>
+              <td>
+                {t.nombre}
+                {gruposPorTarea.get(t.id)?.size > 0 && (
+                  <div style={{ fontSize: '0.72rem', color: 'var(--texto-tenue)', marginTop: '0.15rem' }}>
+                    {[...gruposPorTarea.get(t.id)].sort().join(', ')}
+                  </div>
+                )}
+              </td>
               <td style={{ display: 'flex', gap: '0.4rem' }}>
                 {puedeGestionar(t.id_departamento) && (
                   <button className="btn btn-secondary" onClick={() => empezarEdicion(t)}>Editar</button>
@@ -189,7 +221,13 @@ export default function AdminTareas() {
         {agendaAbiertaId === t.id && (
           <tr>
             <td colSpan={2} style={{ background: 'var(--bg-1, rgba(255,255,255,0.02))', borderTop: 'none' }}>
-              <AgendaDeTarea tarea={t} locales={locales} grupos={grupos} onCerrar={() => setAgendaAbiertaId(null)} />
+              <AgendaDeTarea
+                tarea={t}
+                locales={locales}
+                grupos={grupos}
+                onCerrar={() => setAgendaAbiertaId(null)}
+                onCambio={cargarAsignaciones}
+              />
             </td>
           </tr>
         )}
