@@ -4,6 +4,7 @@ import { useAuthStore } from './store/authStore.js'
 import { ProtectedRoute, GestionRoute } from './components/ProtectedRoute.jsx'
 import Layout from './components/Layout.jsx'
 import Login from './pages/Login.jsx'
+import Sso from './pages/Sso.jsx'
 import Calendario from './pages/Calendario.jsx'
 import Reportes from './pages/Reportes.jsx'
 import AdminTareas from './pages/admin/AdminTareas.jsx'
@@ -15,6 +16,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/sso" element={<Sso />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>
           <Route index element={<Calendario />} />

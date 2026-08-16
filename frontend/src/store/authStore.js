@@ -22,6 +22,13 @@ export const useAuthStore = create((set) => ({
     await useAuthStore.getState().cargarSesion()
   },
 
+  // Canjea el ticket SSO real de dcsmart -- ver pages/Sso.jsx.
+  async loginSso(ticket) {
+    const { data } = await api.post('/auth/sso', { ticket })
+    guardarToken(data.token)
+    await useAuthStore.getState().cargarSesion()
+  },
+
   async logout() {
     await api.post('/auth/logout')
     borrarToken()
