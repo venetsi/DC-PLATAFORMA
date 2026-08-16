@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
-import { departamentosApi, tareasApi } from '../../api/recursos.js'
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import { departamentosApi, tareasApi, localesApi } from '../../api/recursos.js'
 import { useAuthStore } from '../../store/authStore.js'
+import AgendaDeTarea from './AgendaDeTarea.jsx'
 
 export default function AdminTareas() {
   const esAdminGlobal = useAuthStore((s) => s.esAdminGlobal)
@@ -8,6 +9,7 @@ export default function AdminTareas() {
 
   const [departamentos, setDepartamentos] = useState([])
   const [tareas, setTareas] = useState([])
+  const [locales, setLocales] = useState([])
   const [nombre, setNombre] = useState('')
   // Un usuario de departamento crea solo para el suyo -- ni siquiera se le
   // ofrece elegir otro (el backend lo rechazaria igual, ver tareas.js).
@@ -17,6 +19,10 @@ export default function AdminTareas() {
 
   const [editandoId, setEditandoId] = useState(null)
   const [edicion, setEdicion] = useState({ nombre: '', descripcion: '' })
+
+  // Agenda de una sola tarea a la vez, abierta inline en su propio renglon
+  // -- ver AgendaDeTarea.jsx. Reemplaza la vieja pantalla separada /admin/agenda.
+  const [agendaAbiertaId, setAgendaAbiertaId] = useState(null)
 
   const [nombreDepartamentoNuevo, setNombreDepartamentoNuevo] = useState('')
   const [creandoDepartamento, setCreandoDepartamento] = useState(false)
@@ -32,7 +38,15 @@ export default function AdminTareas() {
   useEffect(() => {
     cargarDepartamentos()
     cargarTareas()
+    localesApi.listar().then(setLocales)
   }, [])
+
+  // Grupos reales (ExtLocal.grupo, cacheado de dcsmart) -- no hay tabla de
+  // grupos propia, se derivan de los locales que ya llegaron.
+  const grupos = useMemo(
+    () => [...new Set(locales.map((l) => l.grupo).filter(Boolean))].sort(),
+    [locales]
+  )
 
   function puedeGestionar(idDepartamentoTarea) {
     return esAdminGlobal || departamentoPropio?.id === idDepartamentoTarea
@@ -125,37 +139,54 @@ export default function AdminTareas() {
         <thead><tr><th>Nombre</th><th>Departamento</th><th></th></tr></thead>
         <tbody>
           {tareas.map((t) => (
-            <tr key={t.id}>
-              {editandoId === t.id ? (
-                <>
-                  <td>
-                    <input
-                      value={edicion.nombre}
-                      onChange={(e) => setEdicion({ ...edicion, nombre: e.target.value })}
-                      style={{ padding: '0.3rem' }}
-                    />
+            <Fragment key={t.id}>
+              <tr>
+                {editandoId === t.id ? (
+                  <>
+                    <td>
+                      <input
+                        value={edicion.nombre}
+                        onChange={(e) => setEdicion({ ...edicion, nombre: e.target.value })}
+                        style={{ padding: '0.3rem' }}
+                      />
+                    </td>
+                    <td>{nombreDepto(t.id_departamento)}</td>
+                    <td style={{ display: 'flex', gap: '0.4rem' }}>
+                      <button className="btn" onClick={() => guardarEdicion(t.id)}>Guardar</button>
+                      <button className="btn btn-secondary" onClick={() => setEditandoId(null)}>Cancelar</button>
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td>{t.nombre}</td>
+                    <td>{nombreDepto(t.id_departamento)}</td>
+                    <td style={{ display: 'flex', gap: '0.4rem' }}>
+                      {puedeGestionar(t.id_departamento) && (
+                        <button className="btn btn-secondary" onClick={() => empezarEdicion(t)}>Editar</button>
+                      )}
+                      {puedeGestionar(t.id_departamento) && (
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => setAgendaAbiertaId(agendaAbiertaId === t.id ? null : t.id)}
+                        >
+                          {agendaAbiertaId === t.id ? 'Cerrar agenda' : 'Definir agenda'}
+                        </button>
+                      )}
+                      {esAdminGlobal && (
+                        <button className="btn btn-secondary" onClick={() => desactivar(t.id)}>Desactivar</button>
+                      )}
+                    </td>
+                  </>
+                )}
+              </tr>
+              {agendaAbiertaId === t.id && (
+                <tr>
+                  <td colSpan={3} style={{ background: 'var(--bg-1, rgba(255,255,255,0.02))', borderTop: 'none' }}>
+                    <AgendaDeTarea tarea={t} locales={locales} grupos={grupos} />
                   </td>
-                  <td>{nombreDepto(t.id_departamento)}</td>
-                  <td style={{ display: 'flex', gap: '0.4rem' }}>
-                    <button className="btn" onClick={() => guardarEdicion(t.id)}>Guardar</button>
-                    <button className="btn btn-secondary" onClick={() => setEditandoId(null)}>Cancelar</button>
-                  </td>
-                </>
-              ) : (
-                <>
-                  <td>{t.nombre}</td>
-                  <td>{nombreDepto(t.id_departamento)}</td>
-                  <td style={{ display: 'flex', gap: '0.4rem' }}>
-                    {puedeGestionar(t.id_departamento) && (
-                      <button className="btn btn-secondary" onClick={() => empezarEdicion(t)}>Editar</button>
-                    )}
-                    {esAdminGlobal && (
-                      <button className="btn btn-secondary" onClick={() => desactivar(t.id)}>Desactivar</button>
-                    )}
-                  </td>
-                </>
+                </tr>
               )}
-            </tr>
+            </Fragment>
           ))}
         </tbody>
       </table>
