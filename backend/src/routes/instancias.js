@@ -62,12 +62,47 @@ export default async function instanciasRoutes(fastify) {
 
     const usuario = await fastify.db.extUser.findUnique({ where: { id: request.user.id } })
     const ahora = new Date().toISOString()
+    const extendedProperties = { estado: 'REALIZADA', realizada_por: usuario.email, realizada_en: ahora }
+    const logLine = `${ahora} - REALIZADA por ${usuario.email}`
     const evento = await fastify.gcal.marcarInstancia({
       calendarId: departamento.id_calendar_google,
       instanceId: request.params.instanceId,
-      extendedProperties: { estado: 'REALIZADA', realizada_por: usuario.email, realizada_en: ahora },
-      logLine: `${ahora} - REALIZADA por ${usuario.email}`
+      extendedProperties,
+      logLine
     })
+
+    // "Un solo evento visible para ambos deptos": si esta asignacion esta
+    // compartida (TareaAsignacionDepto), la misma marca se propaga a la
+    // copia de cada otro departamento -- cada una vive en su propio
+    // Calendar con su propio eventId de instancia, asi que hay que
+    // encontrar la instancia correspondiente por fecha en cada uno.
+    const idAsignacion = evento.extendedProperties?.private?.id_asignacion
+    const fechaISO = evento.start?.date
+    if (idAsignacion && fechaISO) {
+      const asignacion = await fastify.db.tareaAsignacion.findUnique({
+        where: { id: idAsignacion },
+        include: { tarea: { include: { departamento: true } }, compartidas: { include: { departamento: true } } }
+      })
+      const otrosCalendarios = [asignacion?.tarea?.departamento, ...(asignacion?.compartidas.map((c) => c.departamento) ?? [])]
+        .filter((d) => d?.id_calendar_google && d.id_calendar_google !== departamento.id_calendar_google)
+
+      for (const otroDepartamento of otrosCalendarios) {
+        const instancia = await fastify.gcal.buscarInstanciaPorFecha({
+          calendarId: otroDepartamento.id_calendar_google,
+          idAsignacion,
+          fechaISO
+        })
+        if (instancia) {
+          await fastify.gcal.marcarInstancia({
+            calendarId: otroDepartamento.id_calendar_google,
+            instanceId: instancia.id,
+            extendedProperties,
+            logLine
+          })
+        }
+      }
+    }
+
     return evento
   })
 

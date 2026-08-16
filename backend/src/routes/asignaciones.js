@@ -20,7 +20,7 @@ export default async function asignacionesRoutes(fastify) {
         ...(id_tarea ? { id_tarea } : {}),
         ...(id_local_ext ? { id_local_ext } : {})
       },
-      include: { tarea: true, local: true }
+      include: { tarea: true, local: true, compartidas: { include: { departamento: true } } }
     })
   })
 
@@ -28,8 +28,14 @@ export default async function asignacionesRoutes(fastify) {
   // solo el puntero, sin evento de Calendar. `id_grupo` es un atajo para
   // asignar de una a todos los locales de ese grupo (ExtLocal.grupo) --
   // crea una TareaAsignacion por local, no un scope nuevo en el modelo.
+  //
+  // `departamentos_compartidos` (solo para el alcance simple, no "por
+  // grupo"): comparte esta misma asignacion con departamentos ademas del
+  // dueño de la tarea -- "un solo evento visible para ambos deptos". Crea
+  // las filas TareaAsignacionDepto sin evento de Calendar todavia (se
+  // materializa recien al definir la agenda, ver PUT /:id/agenda).
   fastify.post('/', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { id_tarea, id_local_ext, id_grupo } = request.body || {}
+    const { id_tarea, id_local_ext, id_grupo, departamentos_compartidos } = request.body || {}
     if (!id_tarea) return reply.code(400).send({ error: 'id_tarea requerido' })
 
     const tarea = await fastify.db.tarea.findUnique({ where: { id: id_tarea } })
@@ -59,6 +65,12 @@ export default async function asignacionesRoutes(fastify) {
 
     try {
       const asignacion = await fastify.db.tareaAsignacion.create({ data: { id_tarea, id_local_ext: id_local_ext || null } })
+      if (Array.isArray(departamentos_compartidos) && departamentos_compartidos.length) {
+        await fastify.db.tareaAsignacionDepto.createMany({
+          data: departamentos_compartidos.map((idDepartamento) => ({ id_asignacion: asignacion.id, id_departamento: idDepartamento })),
+          skipDuplicates: true
+        })
+      }
       return reply.code(201).send(asignacion)
     } catch (err) {
       if (err.code === 'P2002') {
@@ -69,11 +81,18 @@ export default async function asignacionesRoutes(fastify) {
   })
 
   // Define/edita la agenda de una asignacion existente -- crea el evento de
-  // Calendar si todavia no tiene, o edita el recurrence del maestro si ya lo tiene.
+  // Calendar si todavia no tiene, o edita el recurrence del maestro si ya lo
+  // tiene. Si la asignacion esta compartida con otros departamentos
+  // (TareaAsignacionDepto), replica la misma escritura en el calendario de
+  // cada uno: mismo id_asignacion en extendedProperties (lo que los une),
+  // pero cada Calendar necesita su propia copia fisica del evento.
   fastify.put('/:id/agenda', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const asignacion = await fastify.db.tareaAsignacion.findUnique({
       where: { id: request.params.id },
-      include: { tarea: { include: { departamento: true } } }
+      include: {
+        tarea: { include: { departamento: true } },
+        compartidas: { include: { departamento: true } }
+      }
     })
     if (!asignacion) return reply.code(404).send({ error: 'Asignacion no encontrada' })
 
@@ -94,27 +113,45 @@ export default async function asignacionesRoutes(fastify) {
     const startDate = primeraFecha(recurrencia_tipo, recurrencia_config, vigencia_desde)
     const endDate = sumarUnDia(startDate)
 
-    const extendedProperties = {
-      id_asignacion: asignacion.id,
-      id_departamento: asignacion.tarea.id_departamento,
-      id_local_ext: asignacion.id_local_ext ?? '',
-      asignado_a: asignado_a ?? '',
-      estado: 'PENDIENTE'
-    }
-
-    let eventId = asignacion.id_calendar_event
-    if (eventId) {
-      await fastify.gcal.editarRecurrencia({ calendarId, eventId, recurrence: recurrence ?? [] })
-    } else {
+    async function escribirEvento({ calendarId: calId, eventIdActual, idDepartamentoEvento }) {
+      if (eventIdActual) {
+        await fastify.gcal.editarRecurrencia({ calendarId: calId, eventId: eventIdActual, recurrence: recurrence ?? [] })
+        return eventIdActual
+      }
       const evento = await fastify.gcal.crearEventoRecurrente({
-        calendarId,
+        calendarId: calId,
         summary: asignacion.tarea.nombre,
         startDate,
         endDate,
         recurrence: recurrence ?? undefined,
-        extendedProperties
+        extendedProperties: {
+          id_asignacion: asignacion.id,
+          id_departamento: idDepartamentoEvento,
+          id_local_ext: asignacion.id_local_ext ?? '',
+          asignado_a: asignado_a ?? '',
+          estado: 'PENDIENTE'
+        }
       })
-      eventId = evento.id
+      return evento.id
+    }
+
+    const eventId = await escribirEvento({
+      calendarId,
+      eventIdActual: asignacion.id_calendar_event,
+      idDepartamentoEvento: asignacion.tarea.id_departamento
+    })
+
+    for (const compartida of asignacion.compartidas) {
+      const calIdCompartida = compartida.departamento.id_calendar_google
+      if (!calIdCompartida) continue
+      const eventIdCompartida = await escribirEvento({
+        calendarId: calIdCompartida,
+        eventIdActual: compartida.id_calendar_event,
+        idDepartamentoEvento: compartida.id_departamento
+      })
+      if (eventIdCompartida !== compartida.id_calendar_event) {
+        await fastify.db.tareaAsignacionDepto.update({ where: { id: compartida.id }, data: { id_calendar_event: eventIdCompartida } })
+      }
     }
 
     const actualizada = await fastify.db.tareaAsignacion.update({

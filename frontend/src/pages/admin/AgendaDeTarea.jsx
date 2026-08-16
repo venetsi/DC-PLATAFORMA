@@ -6,10 +6,15 @@ import AgendaForm from './AgendaForm.jsx'
 // AdminTareas ("definir la tarea en el mismo renglon donde se crea"), asi
 // que a diferencia de la vieja pantalla /admin/agenda no necesita su propio
 // picker de tarea: la tarea ya viene fija desde la fila que lo abrio.
-export default function AgendaDeTarea({ tarea, locales, grupos, onCerrar, onCambio }) {
+export default function AgendaDeTarea({ tarea, locales, grupos, departamentos, onCerrar, onCambio }) {
   const [alcance, setAlcance] = useState('empresa') // empresa | grupo | local
   const [idLocal, setIdLocal] = useState('')
   const [idGrupo, setIdGrupo] = useState('')
+  // Compartir la misma asignacion con otros departamentos ademas del dueño
+  // de la tarea -- "un solo evento visible para ambos deptos" (ver
+  // asignaciones.js). Solo tiene sentido para empresa/local: "por grupo" ya
+  // crea N filas de una, compartir cada una ademas explotaria combinatorio.
+  const [deptosCompartidos, setDeptosCompartidos] = useState([])
   const [asignaciones, setAsignaciones] = useState([])
   const [mensaje, setMensaje] = useState('')
   const [error, setError] = useState('')
@@ -21,7 +26,12 @@ export default function AgendaDeTarea({ tarea, locales, grupos, onCerrar, onCamb
     setAlcance('empresa')
     setIdLocal('')
     setIdGrupo('')
+    setDeptosCompartidos([])
     setError('')
+  }
+
+  function toggleDeptoCompartido(id) {
+    setDeptosCompartidos((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
   }
 
   async function cargarAsignaciones() {
@@ -43,10 +53,15 @@ export default function AgendaDeTarea({ tarea, locales, grupos, onCerrar, onCamb
           (ya_existian.length ? ` (ya existían para: ${ya_existian.join(', ')})` : '')
         )
       } else {
-        await asignacionesApi.crear({ id_tarea: tarea.id, id_local_ext: alcance === 'local' ? idLocal : undefined })
+        await asignacionesApi.crear({
+          id_tarea: tarea.id,
+          id_local_ext: alcance === 'local' ? idLocal : undefined,
+          departamentos_compartidos: deptosCompartidos.length ? deptosCompartidos : undefined
+        })
       }
       setIdLocal('')
       setIdGrupo('')
+      setDeptosCompartidos([])
       await cargarAsignaciones()
     } catch (err) {
       setError(err.response?.data?.error || 'No se pudo crear la asignación')
@@ -54,6 +69,7 @@ export default function AgendaDeTarea({ tarea, locales, grupos, onCerrar, onCamb
   }
 
   const nombreLocal = (id) => locales.find((l) => l.id === id)?.nombre
+  const otrosDepartamentos = (departamentos || []).filter((d) => d.id !== tarea.id_departamento)
 
   return (
     <div style={{ padding: '0.75rem 0 1rem' }}>
@@ -62,29 +78,51 @@ export default function AgendaDeTarea({ tarea, locales, grupos, onCerrar, onCamb
         <button type="button" className="btn btn-secondary" onClick={onCerrar}>Cerrar</button>
       </div>
 
-      <form onSubmit={agregarAsignacion} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
-        <select value={alcance} onChange={(e) => setAlcance(e.target.value)}>
-          <option value="empresa">Toda la empresa</option>
-          <option value="grupo">Por grupo</option>
-          <option value="local">Local específico</option>
-        </select>
-
-        {alcance === 'grupo' && (
-          <select value={idGrupo} onChange={(e) => setIdGrupo(e.target.value)} required style={{ flex: 1, minWidth: 160 }}>
-            <option value="">Elegir grupo...</option>
-            {grupos.map((g) => <option key={g} value={g}>{g}</option>)}
+      <form onSubmit={agregarAsignacion} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <select value={alcance} onChange={(e) => setAlcance(e.target.value)}>
+            <option value="empresa">Toda la empresa</option>
+            <option value="grupo">Por grupo</option>
+            <option value="local">Local específico</option>
           </select>
-        )}
-        {alcance === 'local' && (
-          <select value={idLocal} onChange={(e) => setIdLocal(e.target.value)} required style={{ flex: 1, minWidth: 160 }}>
-            <option value="">Elegir local...</option>
-            {locales.map((l) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-          </select>
-        )}
 
-        <button className="btn">Agregar</button>
-        {alcance !== 'empresa' && (
-          <button type="button" className="btn btn-secondary" onClick={cancelarSeleccion}>Cancelar</button>
+          {alcance === 'grupo' && (
+            <select value={idGrupo} onChange={(e) => setIdGrupo(e.target.value)} required style={{ flex: 1, minWidth: 160 }}>
+              <option value="">Elegir grupo...</option>
+              {grupos.map((g) => <option key={g} value={g}>{g}</option>)}
+            </select>
+          )}
+          {alcance === 'local' && (
+            <select value={idLocal} onChange={(e) => setIdLocal(e.target.value)} required style={{ flex: 1, minWidth: 160 }}>
+              <option value="">Elegir local...</option>
+              {locales.map((l) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+            </select>
+          )}
+
+          <button className="btn">Agregar</button>
+          {alcance !== 'empresa' && (
+            <button type="button" className="btn btn-secondary" onClick={cancelarSeleccion}>Cancelar</button>
+          )}
+        </div>
+
+        {alcance !== 'grupo' && otrosDepartamentos.length > 0 && (
+          <div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--texto-tenue)', marginBottom: '0.3rem' }}>
+              Compartir con otros departamentos (un solo evento, visible para todos los elegidos):
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              {otrosDepartamentos.map((d) => (
+                <label key={d.id} style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', fontSize: '0.82rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={deptosCompartidos.includes(d.id)}
+                    onChange={() => toggleDeptoCompartido(d.id)}
+                  />
+                  {d.nombre}
+                </label>
+              ))}
+            </div>
+          </div>
         )}
       </form>
       {mensaje && <p style={{ color: 'var(--verde)', fontSize: '0.85rem' }}>{mensaje}</p>}
@@ -99,6 +137,11 @@ export default function AgendaDeTarea({ tarea, locales, grupos, onCerrar, onCamb
                 {a.id_calendar_event ? 'Agendada' : 'Sin agenda definida'}
               </span>
             </div>
+            {a.compartidas?.length > 0 && (
+              <div style={{ fontSize: '0.78rem', color: 'var(--texto-tenue)', marginBottom: '0.5rem' }}>
+                Compartida con: {a.compartidas.map((c) => c.departamento.nombre).join(', ')}
+              </div>
+            )}
             <AgendaForm asignacion={a} onGuardado={cargarAsignaciones} />
           </div>
         ))}

@@ -10,15 +10,15 @@ datasource db {
 // --- Cache de identidad de dcsmart (nunca fuente de verdad) ---
 
 model ExtUser {
-  id               String   @id
-  email            String   @unique
-  nombre           String
-  id_departamento  String?
+  id              String   @id
+  email           String   @unique
+  nombre          String
+  id_departamento String?
   // Rol global super_admin/dcsmart, resuelto desde el ticket SSO (Fase 8).
   // Reemplaza el hardcode por email que usaba el login temporal de dev.
-  es_admin_global  Boolean  @default(false)
-  activo           Boolean  @default(true)
-  synced_at        DateTime @default(now())
+  es_admin_global Boolean  @default(false)
+  activo          Boolean  @default(true)
+  synced_at       DateTime @default(now())
 
   @@map("ext_users")
 }
@@ -49,8 +49,9 @@ model Departamento {
   activo             Boolean  @default(true)
   synced_at          DateTime @default(now())
 
-  tareas       Tarea[]
-  cumplimiento CumplimientoDiario[]
+  tareas                   Tarea[]
+  cumplimiento             CumplimientoDiario[]
+  asignaciones_compartidas TareaAsignacionDepto[]
 
   @@map("departamentos")
 }
@@ -87,8 +88,9 @@ model TareaAsignacion {
   created_at        DateTime @default(now())
   updated_at        DateTime @updatedAt
 
-  tarea Tarea     @relation(fields: [id_tarea], references: [id])
-  local ExtLocal? @relation(fields: [id_local_ext], references: [id])
+  tarea       Tarea                  @relation(fields: [id_tarea], references: [id])
+  local       ExtLocal?              @relation(fields: [id_local_ext], references: [id])
+  compartidas TareaAsignacionDepto[]
 
   // OJO: @@unique de abajo NO alcanza para alcance EMPRESA (id_local_ext
   // NULL) -- Postgres no trata dos NULL como iguales, asi que dos filas con
@@ -104,6 +106,28 @@ model TareaAsignacion {
   @@unique([id_tarea, id_local_ext])
   @@index([id_local_ext])
   @@map("tarea_asignaciones")
+}
+
+// --- Comparte una TareaAsignacion con departamento(s) adicionales, ademas
+// del dueño de la Tarea (tarea.id_departamento). "Un solo evento visible
+// para ambos deptos": mismo id_asignacion (el extendedProperty que ya
+// enlaza estado en Calendar), pero cada Calendar necesita su propia copia
+// fisica del evento porque un evento vive en un unico calendario -- por eso
+// cada fila guarda su propio id_calendar_event. Marcar realizada/editar
+// agenda/desactivar/eliminar se propaga a todas las filas de esta tabla
+// ademas de la TareaAsignacion original, ver asignaciones.js. ---
+model TareaAsignacionDepto {
+  id                String   @id @default(uuid())
+  id_asignacion     String
+  id_departamento   String
+  id_calendar_event String?
+  created_at        DateTime @default(now())
+
+  asignacion   TareaAsignacion @relation(fields: [id_asignacion], references: [id])
+  departamento Departamento    @relation(fields: [id_departamento], references: [id])
+
+  @@unique([id_asignacion, id_departamento])
+  @@map("tarea_asignacion_deptos")
 }
 
 model CumplimientoDiario {

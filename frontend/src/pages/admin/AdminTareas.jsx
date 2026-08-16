@@ -225,6 +225,7 @@ export default function AdminTareas() {
                 tarea={t}
                 locales={locales}
                 grupos={grupos}
+                departamentos={departamentos}
                 onCerrar={() => setAgendaAbiertaId(null)}
                 onCambio={cargarAsignaciones}
               />

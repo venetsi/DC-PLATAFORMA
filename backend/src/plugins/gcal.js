@@ -89,6 +89,25 @@ async function gcalPlugin(fastify) {
       }
     },
 
+    // Encuentra la instancia de un dia puntual que corresponde al mismo
+    // id_asignacion pero en OTRO calendario -- usado para propagar "marcar
+    // realizada" entre las copias de una asignacion compartida (ver
+    // TareaAsignacionDepto): cada copia vive en su propio Calendar con su
+    // propio eventId de instancia, asi que no alcanza con reusar el mismo id.
+    async buscarInstanciaPorFecha({ calendarId, idAsignacion, fechaISO }) {
+      const calendar = await getCalendarClient()
+      const { data } = await withBackoff(() =>
+        calendar.events.list({
+          calendarId,
+          timeMin: `${fechaISO}T00:00:00Z`,
+          timeMax: `${fechaISO}T23:59:59Z`,
+          singleEvents: true,
+          privateExtendedProperty: [`id_asignacion=${idAsignacion}`]
+        })
+      )
+      return data.items?.[0] ?? null
+    },
+
     async listarInstancias({ calendarId, timeMin, timeMax, estado }) {
       const calendar = await getCalendarClient()
       const { data } = await withBackoff(() =>

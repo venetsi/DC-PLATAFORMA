@@ -56,16 +56,26 @@ export default async function tareasRoutes(fastify) {
     // recurrencia de cada asignacion activa con evento propio -- mismo
     // patron que reconciliar.js ya usa al desactivarse un local. Sin esto,
     // el evento seguia apareciendo en el checklist/kiosko para siempre: la
-    // tarea solo desaparecia del catalogo de admin, nada mas.
+    // tarea solo desaparecia del catalogo de admin, nada mas. Si alguna
+    // asignacion esta compartida con otros departamentos (TareaAsignacionDepto),
+    // tambien se cierra la copia de cada uno -- son el mismo evento
+    // conceptualmente, tienen que dejar de repetirse juntas.
     if (activa === false && existente.activa !== false) {
       const asignaciones = await fastify.db.tareaAsignacion.findMany({
-        where: { id_tarea: existente.id, activa: true, id_calendar_event: { not: null } }
+        where: { id_tarea: existente.id, activa: true },
+        include: { compartidas: { include: { departamento: true } } }
       })
       const calendarId = existente.departamento.id_calendar_google
       const hoy = new Date().toISOString().slice(0, 10)
       for (const asignacion of asignaciones) {
-        if (calendarId) {
+        if (calendarId && asignacion.id_calendar_event) {
           await fastify.gcal.cerrarRecurrencia({ calendarId, eventId: asignacion.id_calendar_event, untilDate: hoy })
+        }
+        for (const compartida of asignacion.compartidas) {
+          const calIdCompartida = compartida.departamento.id_calendar_google
+          if (calIdCompartida && compartida.id_calendar_event) {
+            await fastify.gcal.cerrarRecurrencia({ calendarId: calIdCompartida, eventId: compartida.id_calendar_event, untilDate: hoy })
+          }
         }
         await fastify.db.tareaAsignacion.update({ where: { id: asignacion.id }, data: { activa: false } })
       }
@@ -98,14 +108,24 @@ export default async function tareasRoutes(fastify) {
       return reply.code(409).send({ error: 'Desactivá la tarea primero' })
     }
 
-    const asignaciones = await fastify.db.tareaAsignacion.findMany({ where: { id_tarea: existente.id } })
+    const asignaciones = await fastify.db.tareaAsignacion.findMany({
+      where: { id_tarea: existente.id },
+      include: { compartidas: { include: { departamento: true } } }
+    })
     const calendarId = existente.departamento.id_calendar_google
-    if (calendarId) {
-      for (const asignacion of asignaciones) {
-        if (asignacion.id_calendar_event) {
-          await fastify.gcal.eliminarEvento({ calendarId, eventId: asignacion.id_calendar_event })
+    for (const asignacion of asignaciones) {
+      if (calendarId && asignacion.id_calendar_event) {
+        await fastify.gcal.eliminarEvento({ calendarId, eventId: asignacion.id_calendar_event })
+      }
+      // Las copias compartidas hay que borrarlas de la base antes que la
+      // asignacion original -- la FK de TareaAsignacionDepto es RESTRICT.
+      for (const compartida of asignacion.compartidas) {
+        const calIdCompartida = compartida.departamento.id_calendar_google
+        if (calIdCompartida && compartida.id_calendar_event) {
+          await fastify.gcal.eliminarEvento({ calendarId: calIdCompartida, eventId: compartida.id_calendar_event })
         }
       }
+      await fastify.db.tareaAsignacionDepto.deleteMany({ where: { id_asignacion: asignacion.id } })
     }
 
     await fastify.db.tareaAsignacion.deleteMany({ where: { id_tarea: existente.id } })
