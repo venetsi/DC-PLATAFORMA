@@ -37,6 +37,43 @@ input, select, textarea {
   font-family: inherit;
 }
 
+/* Antes el <select> quedaba con el chrome nativo del navegador (blanco,
+   desentona con el resto de la app oscura) -- reskin con la misma paleta
+   que .btn/.card, flecha propia porque appearance:none saca la nativa. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--bg-1);
+  color: var(--texto);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  padding: 0.5rem 2rem 0.5rem 0.7rem;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239aa5b4' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+  background-size: 11px 7px;
+  transition: border-color 0.15s ease;
+}
+select:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+select:focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 2px rgba(63, 182, 189, 0.22);
+}
+select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+select option {
+  background: var(--bg-1);
+  color: var(--texto);
+}
+
 .card {
   background: var(--bg-1);
   border-radius: 10px;

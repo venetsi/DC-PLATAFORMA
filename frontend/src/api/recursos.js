@@ -10,9 +10,11 @@ export const localesApi = {
 }
 
 export const tareasApi = {
-  listar: (idDepartamento) => api.get('/tareas', { params: { departamento: idDepartamento } }).then((r) => r.data),
+  listar: (idDepartamento, incluirInactivas) =>
+    api.get('/tareas', { params: { departamento: idDepartamento, incluirInactivas } }).then((r) => r.data),
   crear: (body) => api.post('/tareas', body).then((r) => r.data),
-  editar: (id, body) => api.patch(`/tareas/${id}`, body).then((r) => r.data)
+  editar: (id, body) => api.patch(`/tareas/${id}`, body).then((r) => r.data),
+  eliminar: (id) => api.delete(`/tareas/${id}`).then((r) => r.data)
 }
 
 export const asignacionesApi = {

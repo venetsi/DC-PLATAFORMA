@@ -75,6 +75,20 @@ async function gcalPlugin(fastify) {
       return this.editarRecurrencia({ calendarId, eventId, recurrence })
     },
 
+    // Borrado real, no reversible (a diferencia de cerrarRecurrencia) --
+    // usado solo en el paso 2 de "eliminar definitivamente" una tarea, nunca
+    // en la desactivacion normal. Tolera el evento ya borrado (404/410): el
+    // resultado que importa (que no exista mas) ya se cumplio.
+    async eliminarEvento({ calendarId, eventId }) {
+      const calendar = await getCalendarClient()
+      try {
+        await withBackoff(() => calendar.events.delete({ calendarId, eventId }))
+      } catch (err) {
+        const status = err?.code || err?.response?.status
+        if (status !== 404 && status !== 410) throw err
+      }
+    },
+
     async listarInstancias({ calendarId, timeMin, timeMax, estado }) {
       const calendar = await getCalendarClient()
       const { data } = await withBackoff(() =>
@@ -93,15 +107,24 @@ async function gcalPlugin(fastify) {
     // Marca una instancia puntual (no el maestro) -- crea una excepcion sin
     // afectar al resto de la serie. `nuevoEstado` + `logLine` van a
     // extendedProperties.estado y se agregan a description respectivamente.
+    // Al quedar REALIZADA, ademas se distingue a simple vista en el propio
+    // Google Calendar (para quien la mira desde ahi via el Group compartido,
+    // no solo en el checklist/kiosko de la app): gris (colorId 8=Graphite) +
+    // check antepuesto al titulo. No se oculta -- events.delete/cancelar
+    // la sacaria tambien de los events.list que usa la propia app.
     async marcarInstancia({ calendarId, instanceId, extendedProperties, logLine }) {
       const calendar = await getCalendarClient()
       const { data: current } = await withBackoff(() => calendar.events.get({ calendarId, eventId: instanceId }))
       const description = [current.description, logLine].filter(Boolean).join('\n')
+      const esRealizada = extendedProperties?.estado === 'REALIZADA'
+      const summary = esRealizada && !current.summary?.startsWith('✓ ') ? `✓ ${current.summary}` : current.summary
       const { data } = await withBackoff(() =>
         calendar.events.patch({
           calendarId,
           eventId: instanceId,
           requestBody: {
+            summary,
+            ...(esRealizada ? { colorId: '8' } : {}),
             description,
             extendedProperties: { private: { ...current.extendedProperties?.private, ...extendedProperties } }
           }

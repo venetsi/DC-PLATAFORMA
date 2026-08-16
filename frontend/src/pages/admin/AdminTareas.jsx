@@ -28,8 +28,12 @@ export default function AdminTareas() {
   const [creandoDepartamento, setCreandoDepartamento] = useState(false)
   const [errorDepartamento, setErrorDepartamento] = useState('')
 
-  async function cargarTareas() {
-    setTareas(await tareasApi.listar())
+  // Solo admin puede pedir las desactivadas -- son las candidatas a
+  // "Eliminar definitivamente" (ver DELETE /tareas/:id).
+  const [mostrarInactivas, setMostrarInactivas] = useState(false)
+
+  async function cargarTareas(incluirInactivas = mostrarInactivas) {
+    setTareas(await tareasApi.listar(undefined, incluirInactivas))
   }
   async function cargarDepartamentos() {
     setDepartamentos(await departamentosApi.listar())
@@ -40,6 +44,12 @@ export default function AdminTareas() {
     cargarTareas()
     localesApi.listar().then(setLocales)
   }, [])
+
+  function toggleMostrarInactivas() {
+    const nuevo = !mostrarInactivas
+    setMostrarInactivas(nuevo)
+    cargarTareas(nuevo)
+  }
 
   // Grupos reales (ExtLocal.grupo, cacheado de dcsmart) -- no hay tabla de
   // grupos propia, se derivan de los locales que ya llegaron.
@@ -79,8 +89,17 @@ export default function AdminTareas() {
   }
 
   async function desactivar(id) {
-    if (!confirm('¿Desactivar esta tarea? Deja de aparecer en el catálogo.')) return
+    if (!confirm('¿Desactivar esta tarea? Deja de aparecer en el catálogo y se cierra la agenda de todos sus locales (sin borrar el historial).')) return
     await tareasApi.editar(id, { activa: false })
+    await cargarTareas()
+  }
+
+  async function eliminarDefinitivo(id, nombreTarea) {
+    const confirmacion = prompt(
+      `Esto borra "${nombreTarea}" Y sus eventos de Google Calendar de forma DEFINITIVA -- se pierde el historial, no se puede deshacer.\n\nEscribí ELIMINAR para confirmar:`
+    )
+    if (confirmacion !== 'ELIMINAR') return
+    await tareasApi.eliminar(id)
     await cargarTareas()
   }
 
@@ -100,6 +119,83 @@ export default function AdminTareas() {
   }
 
   const nombreDepto = (id) => departamentos.find((d) => d.id === id)?.nombre || id
+
+  // Agrupado y ordenado por departamento -- antes quedaban todas mezcladas
+  // en el orden que las devolvia el backend (solo por nombre de tarea), asi
+  // que encontrar las de un departamento puntual era desplazarse a ojo.
+  const gruposPorDepto = useMemo(() => {
+    const grupos = new Map()
+    for (const t of tareas) {
+      const clave = t.id_departamento
+      if (!grupos.has(clave)) grupos.set(clave, [])
+      grupos.get(clave).push(t)
+    }
+    return [...grupos.entries()]
+      .map(([idDepto, lista]) => ({ idDepto, nombre: nombreDepto(idDepto), lista }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre))
+  }, [tareas, departamentos])
+
+  function renderFila(t) {
+    return (
+      <Fragment key={t.id}>
+        <tr style={t.activa ? undefined : { opacity: 0.55 }}>
+          {editandoId === t.id ? (
+            <>
+              <td>
+                <input
+                  value={edicion.nombre}
+                  onChange={(e) => setEdicion({ ...edicion, nombre: e.target.value })}
+                  style={{ padding: '0.3rem' }}
+                />
+              </td>
+              <td style={{ display: 'flex', gap: '0.4rem' }}>
+                <button className="btn" onClick={() => guardarEdicion(t.id)}>Guardar</button>
+                <button className="btn btn-secondary" onClick={() => setEditandoId(null)}>Cancelar</button>
+              </td>
+            </>
+          ) : !t.activa ? (
+            <>
+              <td>{t.nombre} <span style={{ fontSize: '0.75rem' }}>(desactivada)</span></td>
+              <td>
+                {esAdminGlobal && (
+                  <button className="btn btn-secondary" onClick={() => eliminarDefinitivo(t.id, t.nombre)}>
+                    Eliminar definitivamente
+                  </button>
+                )}
+              </td>
+            </>
+          ) : (
+            <>
+              <td>{t.nombre}</td>
+              <td style={{ display: 'flex', gap: '0.4rem' }}>
+                {puedeGestionar(t.id_departamento) && (
+                  <button className="btn btn-secondary" onClick={() => empezarEdicion(t)}>Editar</button>
+                )}
+                {puedeGestionar(t.id_departamento) && (
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => setAgendaAbiertaId(agendaAbiertaId === t.id ? null : t.id)}
+                  >
+                    {agendaAbiertaId === t.id ? 'Cerrar agenda' : 'Definir agenda'}
+                  </button>
+                )}
+                {esAdminGlobal && (
+                  <button className="btn btn-secondary" onClick={() => desactivar(t.id)}>Desactivar</button>
+                )}
+              </td>
+            </>
+          )}
+        </tr>
+        {agendaAbiertaId === t.id && (
+          <tr>
+            <td colSpan={2} style={{ background: 'var(--bg-1, rgba(255,255,255,0.02))', borderTop: 'none' }}>
+              <AgendaDeTarea tarea={t} locales={locales} grupos={grupos} />
+            </td>
+          </tr>
+        )}
+      </Fragment>
+    )
+  }
 
   return (
     <div>
@@ -121,6 +217,12 @@ export default function AdminTareas() {
       )}
 
       <h2>Catálogo de tareas</h2>
+      {esAdminGlobal && (
+        <label style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', fontSize: '0.85rem', color: 'var(--texto-tenue)', marginBottom: '0.75rem' }}>
+          <input type="checkbox" checked={mostrarInactivas} onChange={toggleMostrarInactivas} />
+          Mostrar desactivadas (para eliminarlas definitivamente)
+        </label>
+      )}
       <form onSubmit={onSubmit} className="card" style={{ display: 'flex', gap: '0.75rem', maxWidth: 520, marginBottom: '1.5rem' }}>
         <input placeholder="Nombre (ej. CMV)" value={nombre} onChange={(e) => setNombre(e.target.value)} required style={{ flex: 1, padding: '0.4rem' }} />
         {esAdminGlobal ? (
@@ -136,56 +238,16 @@ export default function AdminTareas() {
       {error && <p style={{ color: 'var(--rojo)', fontSize: '0.85rem' }}>{error}</p>}
 
       <table>
-        <thead><tr><th>Nombre</th><th>Departamento</th><th></th></tr></thead>
+        <thead><tr><th>Nombre</th><th></th></tr></thead>
         <tbody>
-          {tareas.map((t) => (
-            <Fragment key={t.id}>
+          {gruposPorDepto.map((grupo) => (
+            <Fragment key={grupo.idDepto}>
               <tr>
-                {editandoId === t.id ? (
-                  <>
-                    <td>
-                      <input
-                        value={edicion.nombre}
-                        onChange={(e) => setEdicion({ ...edicion, nombre: e.target.value })}
-                        style={{ padding: '0.3rem' }}
-                      />
-                    </td>
-                    <td>{nombreDepto(t.id_departamento)}</td>
-                    <td style={{ display: 'flex', gap: '0.4rem' }}>
-                      <button className="btn" onClick={() => guardarEdicion(t.id)}>Guardar</button>
-                      <button className="btn btn-secondary" onClick={() => setEditandoId(null)}>Cancelar</button>
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td>{t.nombre}</td>
-                    <td>{nombreDepto(t.id_departamento)}</td>
-                    <td style={{ display: 'flex', gap: '0.4rem' }}>
-                      {puedeGestionar(t.id_departamento) && (
-                        <button className="btn btn-secondary" onClick={() => empezarEdicion(t)}>Editar</button>
-                      )}
-                      {puedeGestionar(t.id_departamento) && (
-                        <button
-                          className="btn btn-secondary"
-                          onClick={() => setAgendaAbiertaId(agendaAbiertaId === t.id ? null : t.id)}
-                        >
-                          {agendaAbiertaId === t.id ? 'Cerrar agenda' : 'Definir agenda'}
-                        </button>
-                      )}
-                      {esAdminGlobal && (
-                        <button className="btn btn-secondary" onClick={() => desactivar(t.id)}>Desactivar</button>
-                      )}
-                    </td>
-                  </>
-                )}
+                <td colSpan={2} style={{ background: 'var(--bg-1)', fontWeight: 700, color: 'var(--gold)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                  {grupo.nombre}
+                </td>
               </tr>
-              {agendaAbiertaId === t.id && (
-                <tr>
-                  <td colSpan={3} style={{ background: 'var(--bg-1, rgba(255,255,255,0.02))', borderTop: 'none' }}>
-                    <AgendaDeTarea tarea={t} locales={locales} grupos={grupos} />
-                  </td>
-                </tr>
-              )}
+              {grupo.lista.map((t) => renderFila(t))}
             </Fragment>
           ))}
         </tbody>
