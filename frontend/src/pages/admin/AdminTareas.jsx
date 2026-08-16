@@ -189,7 +189,7 @@ export default function AdminTareas() {
         {agendaAbiertaId === t.id && (
           <tr>
             <td colSpan={2} style={{ background: 'var(--bg-1, rgba(255,255,255,0.02))', borderTop: 'none' }}>
-              <AgendaDeTarea tarea={t} locales={locales} grupos={grupos} />
+              <AgendaDeTarea tarea={t} locales={locales} grupos={grupos} onCerrar={() => setAgendaAbiertaId(null)} />
             </td>
           </tr>
         )}
