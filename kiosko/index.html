@@ -22,13 +22,17 @@
   * { box-sizing: border-box; }
   html, body {
     margin: 0; padding: 0;
-    width: 1920px; height: 1080px;
+    width: 100vw; height: 100vh;
     overflow: hidden;
     background: radial-gradient(circle at 20% 0%, var(--bg-1), var(--bg-0) 60%);
     color: var(--texto);
     font-family: 'Montserrat', system-ui, sans-serif;
   }
-  #app { width: 1920px; height: 1080px; display: flex; flex-direction: column; padding: 32px 48px; }
+  /* Diseño pensado en px para 1920x1080 (16:9 Full HD, la resolucion real de
+     los monitores de oficina) -- pero el contenedor ocupa 100% del viewport
+     en vez de un tamaño fijo, para no depender de que el navegador reporte
+     exactamente esos pixeles (zoom, barra de tareas, escalado de DPI). */
+  #app { width: 100%; height: 100%; display: flex; flex-direction: column; padding: 32px 48px; }
 
   header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
   .titulo { display: flex; flex-direction: column; }
