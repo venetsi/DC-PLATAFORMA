@@ -1,5 +1,6 @@
 import { construirRecurrence, primeraFecha } from '../lib/recurrencia.js'
 import { usuarioActual, puedeGestionarDepartamento } from '../lib/permisos.js'
+import { componerTitulo } from '../lib/titulo.js'
 
 function sumarUnDia(fechaISO) {
   const d = new Date(`${fechaISO}T00:00:00Z`)
@@ -98,6 +99,7 @@ export default async function asignacionesRoutes(fastify) {
       where: { id: request.params.id },
       include: {
         tarea: { include: { departamento: true } },
+        local: true,
         compartidas: { include: { departamento: true } }
       }
     })
@@ -120,24 +122,41 @@ export default async function asignacionesRoutes(fastify) {
     const startDate = primeraFecha(recurrencia_tipo, recurrencia_config, vigencia_desde)
     const endDate = sumarUnDia(startDate)
 
+    // Titulo con el local/grupo al que aplica -- ver lib/titulo.js. El nombre
+    // limpio ademas viaja en extendedProperties.nombre_tarea para que el
+    // kiosko/app no repitan el local en cada bullet (ya agrupan por local).
+    const titulo = componerTitulo(asignacion.tarea.nombre, asignacion.local)
+    const responsable = (asignado_a ?? asignacion.asignado_a) || ''
+
     async function escribirEvento({ calendarId: calId, eventIdActual, idDepartamentoEvento }) {
+      const props = {
+        id_asignacion: asignacion.id,
+        id_departamento: idDepartamentoEvento,
+        id_local_ext: asignacion.id_local_ext ?? '',
+        nombre_tarea: asignacion.tarea.nombre,
+        asignado_a: responsable
+      }
       if (eventIdActual) {
-        await fastify.gcal.editarRecurrencia({ calendarId: calId, eventId: eventIdActual, recurrence: recurrence ?? [] })
+        // Tambien se actualizan titulo y responsable, no solo la recurrencia:
+        // sin esto, cambiar el responsable de una tarea ya agendada no tenia
+        // ningun efecto sobre el evento. `estado` queda afuera a proposito --
+        // lo maneja marcarInstancia por instancia, no el maestro.
+        await fastify.gcal.editarRecurrencia({
+          calendarId: calId,
+          eventId: eventIdActual,
+          recurrence: recurrence ?? [],
+          summary: titulo,
+          extendedProperties: props
+        })
         return eventIdActual
       }
       const evento = await fastify.gcal.crearEventoRecurrente({
         calendarId: calId,
-        summary: asignacion.tarea.nombre,
+        summary: titulo,
         startDate,
         endDate,
         recurrence: recurrence ?? undefined,
-        extendedProperties: {
-          id_asignacion: asignacion.id,
-          id_departamento: idDepartamentoEvento,
-          id_local_ext: asignacion.id_local_ext ?? '',
-          asignado_a: asignado_a ?? '',
-          estado: 'PENDIENTE'
-        }
+        extendedProperties: { ...props, estado: 'PENDIENTE' }
       })
       return evento.id
     }
@@ -163,7 +182,7 @@ export default async function asignacionesRoutes(fastify) {
 
     const actualizada = await fastify.db.tareaAsignacion.update({
       where: { id: asignacion.id },
-      data: { id_calendar_event: eventId }
+      data: { id_calendar_event: eventId, asignado_a: responsable || null }
     })
     return actualizada
   })

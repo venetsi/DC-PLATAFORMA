@@ -84,6 +84,13 @@ model TareaAsignacion {
   id_tarea          String
   id_local_ext      String?
   id_calendar_event String?
+  // Responsable nominal opcional (la columna USUARIO del Excel real): null =
+  // la hace cualquiera del departamento, que es el caso por defecto. Se
+  // guarda acá ademas de en extendedProperties.asignado_a del evento porque
+  // el formulario de agenda necesita precargarlo -- leerlo de Calendar seria
+  // una llamada por asignacion, y sin precargar, editar la recurrencia
+  // borraria el responsable ya cargado.
+  asignado_a        String?
   activa            Boolean  @default(true)
   created_at        DateTime @default(now())
   updated_at        DateTime @updatedAt

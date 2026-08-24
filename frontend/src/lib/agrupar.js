@@ -24,8 +24,14 @@ export function agruparPorDiaYLocal(eventos, mapaLocales) {
     if (!dia.grupos.has(nombreLocal)) dia.grupos.set(nombreLocal, [])
     dia.grupos.get(nombreLocal).push({
       id: ev.id,
-      titulo: ev.summary,
-      estado: hecha ? 'realizada' : vencida ? 'vencida' : 'pendiente'
+      // El summary lleva el local/grupo (ver backend lib/titulo.js) para que
+      // se entienda en Google Calendar; acá se usa el nombre limpio porque
+      // esta vista ya agrupa por local. Fallback para eventos previos.
+      titulo: props.nombre_tarea || ev.summary,
+      estado: hecha ? 'realizada' : vencida ? 'vencida' : 'pendiente',
+      asignadoA: props.asignado_a || null,
+      realizadaPor: props.realizada_por || null,
+      realizadaEn: props.realizada_en || null
     })
   }
 

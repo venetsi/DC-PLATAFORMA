@@ -78,6 +78,11 @@
   .tarea-bullets li.realizada::before { color: var(--verde); }
   .tarea-bullets li.vencida::before { color: var(--rojo); }
   .tarea-bullets li.realizada { color: var(--texto-tenue); text-decoration: line-through; }
+  /* Responsable / quien la marco realizada -- segunda linea mas chica, no
+     compite con el nombre de la tarea pero se lee de un vistazo. */
+  .tarea-texto { display: flex; flex-direction: column; min-width: 0; }
+  .tarea-persona { font-size: 10px; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none; }
+  .tarea-bullets li.realizada .tarea-persona { color: var(--verde); }
   .dia-vacio { font-size: 12px; color: var(--texto-tenue); font-style: italic; }
 
   /* Columna de atrasadas: mismo lenguaje visual que un dia-col, pero con
@@ -201,10 +206,22 @@
     return grupos;
   }
 
+  // Solo la parte antes del @ -- en una pantalla de oficina el dominio ocupa
+  // lugar y no distingue nada (son todos del mismo Workspace).
+  function nombreCorto(email) {
+    return String(email || '').split('@')[0];
+  }
+
   function bulletsHtml(grupos) {
     return Object.keys(grupos).sort().map(function (local) {
       var itemsHtml = grupos[local].map(function (ev) {
-        return '<li class="' + ev.estado + '">' + ev.titulo + '</li>';
+        // Quien la hizo (si esta hecha) o quien la tiene a cargo (si no).
+        var persona = ev.estado === 'realizada'
+          ? (ev.realizada_por ? '✓ ' + nombreCorto(ev.realizada_por) : '')
+          : (ev.asignado_a ? '→ ' + nombreCorto(ev.asignado_a) : '');
+        return '<li class="' + ev.estado + '"><span class="tarea-texto">' + ev.titulo
+          + (persona ? '<span class="tarea-persona">' + persona + '</span>' : '')
+          + '</span></li>';
       }).join('');
       return '<div class="local-grupo"><div class="local-nombre">' + local + '</div><ul class="tarea-bullets">' + itemsHtml + '</ul></div>';
     }).join('');

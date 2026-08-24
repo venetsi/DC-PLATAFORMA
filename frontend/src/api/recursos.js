@@ -9,6 +9,10 @@ export const localesApi = {
   listar: () => api.get('/locales').then((r) => r.data)
 }
 
+export const usuariosApi = {
+  listar: (idDepartamento) => api.get('/usuarios', { params: { departamento: idDepartamento } }).then((r) => r.data)
+}
+
 export const tareasApi = {
   listar: (idDepartamento, incluirInactivas) =>
     api.get('/tareas', { params: { departamento: idDepartamento, incluirInactivas } }).then((r) => r.data),

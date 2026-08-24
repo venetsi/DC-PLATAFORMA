@@ -252,3 +252,14 @@ th, td {
 .tarea-bullets li.realizada { color: var(--texto-tenue); text-decoration: line-through; }
 .tarea-bullets li.clickable { cursor: pointer; }
 .tarea-bullets li.clickable:hover { color: var(--texto); }
+
+/* Responsable / quien la marco realizada: segunda linea mas chica, para
+   que no compita con el nombre de la tarea pero se vea de un vistazo. */
+.tarea-texto { display: flex; flex-direction: column; min-width: 0; }
+.tarea-persona {
+  font-size: 0.7rem;
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

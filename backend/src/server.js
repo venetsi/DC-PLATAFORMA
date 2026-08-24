@@ -10,6 +10,7 @@ import groupsPlugin from './plugins/groups.js'
 import authRoutes from './routes/auth.js'
 import departamentosRoutes from './routes/departamentos.js'
 import localesRoutes from './routes/locales.js'
+import usuariosRoutes from './routes/usuarios.js'
 import tareasRoutes from './routes/tareas.js'
 import asignacionesRoutes from './routes/asignaciones.js'
 import instanciasRoutes from './routes/instancias.js'
@@ -48,6 +49,7 @@ app.decorate('requireAdminGlobal', async (request, reply) => {
 await app.register(authRoutes, { prefix: '/api/auth' })
 await app.register(departamentosRoutes, { prefix: '/api/departamentos' })
 await app.register(localesRoutes, { prefix: '/api/locales' })
+await app.register(usuariosRoutes, { prefix: '/api/usuarios' })
 await app.register(tareasRoutes, { prefix: '/api/tareas' })
 await app.register(asignacionesRoutes, { prefix: '/api/asignaciones' })
 await app.register(instanciasRoutes, { prefix: '/api/instancias' })

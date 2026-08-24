@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { departamentosApi, tareasApi, localesApi, asignacionesApi } from '../../api/recursos.js'
+import { departamentosApi, tareasApi, localesApi, asignacionesApi, usuariosApi } from '../../api/recursos.js'
 import { useAuthStore } from '../../store/authStore.js'
 import AgendaDeTarea from './AgendaDeTarea.jsx'
 
@@ -10,6 +10,7 @@ export default function AdminTareas() {
   const [departamentos, setDepartamentos] = useState([])
   const [tareas, setTareas] = useState([])
   const [locales, setLocales] = useState([])
+  const [usuarios, setUsuarios] = useState([])
   const [asignaciones, setAsignaciones] = useState([])
   const [nombre, setNombre] = useState('')
   // Un usuario de departamento crea solo para el suyo -- ni siquiera se le
@@ -52,6 +53,7 @@ export default function AdminTareas() {
     cargarTareas()
     cargarAsignaciones()
     localesApi.listar().then(setLocales)
+    usuariosApi.listar().then(setUsuarios)
   }, [])
 
   function toggleMostrarInactivas() {
@@ -226,6 +228,7 @@ export default function AdminTareas() {
                 locales={locales}
                 grupos={grupos}
                 departamentos={departamentos}
+                usuarios={usuarios.filter((u) => u.id_departamento === t.id_departamento)}
                 onCerrar={() => setAgendaAbiertaId(null)}
                 onCambio={cargarAsignaciones}
               />

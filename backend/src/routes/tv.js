@@ -93,10 +93,15 @@ export default async function tvRoutes(fastify) {
 
       const item = {
         id: evento.id,
-        titulo: evento.summary,
+        // El summary del evento lleva el local/grupo (ver lib/titulo.js) para
+        // que se entienda en el propio Google Calendar; acá se usa el nombre
+        // limpio porque el kiosko ya agrupa por local. Fallback al summary
+        // para eventos creados antes de que existiera nombre_tarea.
+        titulo: props.nombre_tarea || evento.summary,
         id_local: idLocal,
         nombre_local: idLocal ? nombreLocal.get(idLocal) || 'Local sin nombre' : 'Toda la empresa',
         estado: hecha ? 'realizada' : vencida ? 'vencida' : 'pendiente',
+        asignado_a: props.asignado_a || null,
         realizada_por: props.realizada_por || null,
         inicio: evento.start?.dateTime || evento.start?.date,
         fin: evento.end?.dateTime || evento.end?.date

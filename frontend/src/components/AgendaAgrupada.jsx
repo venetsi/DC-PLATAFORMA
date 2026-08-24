@@ -27,6 +27,12 @@ export default function AgendaAgrupada({ eventos, mapaLocales, onMarcar, marcand
               <ul className="tarea-bullets">
                 {tareas.map((t) => {
                   const accionable = t.estado !== 'realizada' && !!onMarcar
+                  // Quien la hizo (o quien la tiene a cargo) es la mitad del
+                  // seguimiento entre equipos -- el dato ya viajaba en el
+                  // evento pero no se mostraba en ningun lado.
+                  const pie = t.estado === 'realizada'
+                    ? (t.realizadaPor ? `✓ ${t.realizadaPor}` : null)
+                    : (t.asignadoA ? `→ ${t.asignadoA}` : null)
                   return (
                     <li
                       key={t.id}
@@ -34,8 +40,11 @@ export default function AgendaAgrupada({ eventos, mapaLocales, onMarcar, marcand
                       onClick={accionable ? () => onMarcar(t.id) : undefined}
                       title={accionable ? 'Marcar realizada' : undefined}
                     >
-                      {t.titulo}
-                      {marcando === t.id && ' (marcando…)'}
+                      <span className="tarea-texto">
+                        {t.titulo}
+                        {marcando === t.id && ' (marcando…)'}
+                        {pie && <span className="tarea-persona">{pie}</span>}
+                      </span>
                     </li>
                   )
                 })}

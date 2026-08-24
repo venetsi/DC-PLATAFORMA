@@ -56,10 +56,32 @@ async function gcalPlugin(fastify) {
     },
 
     // Solo el maestro -- para reprogramar toda la serie hacia adelante.
-    async editarRecurrencia({ calendarId, eventId, recurrence }) {
+    // `summary`/`extendedProperties` son opcionales: se usan cuando ademas de
+    // la recurrencia cambio el titulo o el responsable de la asignacion.
+    // Las instancias ya modificadas (una marcada REALIZADA es una excepcion
+    // puntual) conservan lo suyo -- Calendar no las pisa al patchear el maestro.
+    async editarRecurrencia({ calendarId, eventId, recurrence, summary, extendedProperties }) {
       const calendar = await getCalendarClient()
+
+      // Merge en vez de reemplazo: un patch con extendedProperties.private
+      // completo pisa el objeto entero, y ahi se perderian las claves que
+      // esta llamada no controla (estado, realizada_por, realizada_en...).
+      let privateProps
+      if (extendedProperties) {
+        const { data: current } = await withBackoff(() => calendar.events.get({ calendarId, eventId }))
+        privateProps = { ...current.extendedProperties?.private, ...extendedProperties }
+      }
+
       const { data } = await withBackoff(() =>
-        calendar.events.patch({ calendarId, eventId, requestBody: { recurrence } })
+        calendar.events.patch({
+          calendarId,
+          eventId,
+          requestBody: {
+            ...(recurrence ? { recurrence } : {}),
+            ...(summary ? { summary } : {}),
+            ...(privateProps ? { extendedProperties: { private: privateProps } } : {})
+          }
+        })
       )
       return data
     },
