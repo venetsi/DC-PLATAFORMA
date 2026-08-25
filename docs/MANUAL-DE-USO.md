@@ -138,7 +138,7 @@ Todas las mañanas (8 hs) cada departamento recibe en su Space un recordatorio c
 - **Pendientes de hoy** — lo que vence hoy.
 
 Cada línea muestra el local, el responsable si tiene uno, y hace cuántos **días
-hábiles** está atrasada. Se cuentan días hábiles y no de calendario a propósito: una
+hábiles** está atrasada, con un botón para marcarla hecha ahí mismo. Se cuentan días hábiles y no de calendario a propósito: una
 tarea del viernes no debe escalar sola el lunes solo porque pasó el fin de semana.
 
 El recordatorio se repite todos los días mientras la tarea siga sin hacerse.
@@ -152,21 +152,40 @@ antigüedad. No reemplaza al aviso del departamento: se le suma.
 Los umbrales por defecto son **2 días hábiles** para el departamento y **5** para
 Dirección, y se pueden ajustar por departamento.
 
-### Configurar el Space de un departamento (administrador)
+### Marcar una tarea desde Chat
 
-1. Creá el Space en Google Chat y agregá el grupo `depto-<slug>@dcsmart.app`.
-2. Configurá un webhook entrante en ese Space y copiá su URL.
-3. Cargala con `PATCH /api/departamentos/:id/notificaciones`, junto con los umbrales
-   si querés cambiarlos:
+Si el departamento tiene su Space vinculado, el recordatorio llega como una tarjeta con
+un botón **Marcar hecha** al lado de cada tarea. Un click la cierra sin salir de Chat:
+queda registrada en Google Calendar con tu nombre, igual que si la marcaras desde la
+plataforma.
 
-   ```json
-   { "chat_webhook_url": "https://chat.googleapis.com/v1/spaces/…",
-     "dias_aviso_departamento": 2,
-     "dias_aviso_direccion": 5 }
-   ```
+- Solo pueden marcar los del departamento (y los administradores). Si no, llega un
+  aviso privado que solo ve quien tocó el botón.
+- Si alguien ya la marcó, el segundo click avisa quién fue y no duplica nada.
+- Si la tarea espera a otra que todavía no está hecha, se marca igual y la respuesta lo
+  aclara.
+- Una tarjeta muestra hasta 20 tareas; si hay más, lo dice y ofrece abrir la plataforma.
 
-Un departamento **sin** webhook se sigue evaluando igual — sus tareas atrasadas llegan
-a Dirección — pero no recibe su propio recordatorio hasta que se le cargue uno.
+### Vincular el Space de un departamento (administrador)
+
+1. Creá el Space en Google Chat y agregá el grupo `depto-<slug>@dcsmart.app` — con eso
+   entran todos los del departamento de una.
+2. Agregá la app **DC-PLATAFORMA** al Space.
+3. La app responde con una tarjeta preguntando a qué departamento vincularlo. Elegí el
+   que corresponda y listo.
+
+No hace falta cargar nada a mano. Si sacás la app del Space, la vinculación se limpia
+sola.
+
+Para cambiar los umbrales de escalamiento de un departamento:
+
+```json
+PATCH /api/departamentos/:id/notificaciones
+{ "dias_aviso_departamento": 2, "dias_aviso_direccion": 5 }
+```
+
+Un departamento **sin** Space se sigue evaluando igual — sus tareas atrasadas llegan a
+Dirección — pero no recibe su propio recordatorio hasta que se le vincule uno.
 
 ## Preguntas frecuentes
 
@@ -182,8 +201,8 @@ hasta que alguien la complete.
 Sí, esa es la idea — cada asignación (tarea + local) tiene su propia agenda.
 
 **Mi departamento no recibe los avisos de Chat.**
-Le falta el webhook del Space. Sus tareas atrasadas igual escalan a Dirección; pedile
-al administrador que lo configure.
+Le falta vincular el Space. Sus tareas atrasadas igual escalan a Dirección; pedile al
+administrador que agregue la app DC-PLATAFORMA al Space del departamento.
 
 **No veo el menú de "Tareas" ni "Agenda".**
 Son solo para administradores. Pedí acceso a quien administra la plataforma.

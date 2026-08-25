@@ -17,6 +17,11 @@ model ExtUser {
   // Rol global super_admin/dcsmart, resuelto desde el ticket SSO (Fase 8).
   // Reemplaza el hardcode por email que usaba el login temporal de dev.
   es_admin_global Boolean  @default(false)
+  // Identidad de Chat ("users/12345"), cacheada la primera vez que la persona
+  // toca un boton: el payload de interaccion trae el email, pero el recurso
+  // REST User de Chat no lo expone, asi que sin este cache habria que ir a
+  // Directory API en cada click.
+  chat_user_name  String?  @unique
   activo          Boolean  @default(true)
   synced_at       DateTime @default(now())
 
@@ -45,6 +50,11 @@ model Departamento {
   id_calendar_google String? @unique
   email_group_google String? @unique
   chat_webhook_url   String?
+  // Space de Google Chat vinculado (formato "spaces/AAAA1234"). Se descubre
+  // solo cuando agregan la app al Space (evento ADDED_TO_SPACE), no se carga a
+  // mano. Si hay Space GANA el Space: chat_webhook_url queda como rollback si
+  // la app falla, pero no se usa en paralelo -- si no, doble aviso.
+  chat_space_name    String? @unique
   kiosko_key         String? @unique
 
   // Escalamiento (Fase A): dias HABILES de atraso a partir de los cuales se

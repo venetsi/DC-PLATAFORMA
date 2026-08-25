@@ -17,6 +17,7 @@ import dependenciasRoutes from './routes/dependencias.js'
 import instanciasRoutes from './routes/instancias.js'
 import reportesRoutes from './routes/reportes.js'
 import tvRoutes from './routes/tv.js'
+import chatRoutes from './routes/chat.js'
 import { esAdminGlobal } from './lib/permisos.js'
 
 const app = Fastify({ logger: true })
@@ -57,6 +58,7 @@ await app.register(dependenciasRoutes, { prefix: '/api/dependencias' })
 await app.register(instanciasRoutes, { prefix: '/api/instancias' })
 await app.register(reportesRoutes, { prefix: '/api/reportes' })
 await app.register(tvRoutes, { prefix: '/api/tv' })
+await app.register(chatRoutes, { prefix: '/api/chat' })
 
 try {
   await app.listen({ port: process.env.PORT || 3100, host: '0.0.0.0' })

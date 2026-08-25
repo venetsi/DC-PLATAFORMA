@@ -9,14 +9,19 @@
 // departamento. Los umbrales salen de la columna del departamento, del
 // entorno, o del default (ver lib/escalamiento.js).
 //
-// Una via: no procesa respuestas (eso es la Fase C). Y no escribe NADA en el
-// evento -- se repite todos los dias mientras la tarea siga sin hacerse, que
-// es lo que lo vuelve un reporte de aging en vez de una alerta unica.
+// Si el departamento tiene un Space vinculado, el aviso sale como card con
+// botones para marcar sin salir de Chat (los clicks los recibe
+// routes/chat.js); si no, cae al webhook viejo en texto plano.
+//
+// El job no escribe NADA en el evento, a proposito -- se repite todos los dias
+// mientras la tarea siga sin hacerse, que es lo que lo vuelve un reporte de
+// aging en vez de una alerta unica.
 import { prisma, listarInstancias } from './lib.js'
 import { hoyEnArgentina } from '../lib/vencimiento.js'
 import { clasificarParaAviso, resolverUmbrales } from '../lib/escalamiento.js'
-import { crearTransporteConsola, crearTransporteWebhook, enviarEnSerie } from '../lib/notificaciones.js'
+import { crearTransporteChat, crearTransporteConsola, enviarEnSerie } from '../lib/notificaciones.js'
 import { mensajeDepartamento, mensajeDireccion } from '../lib/mensajes-chat.js'
+import { cardDepartamento } from '../lib/chat-cards.js'
 
 const SLUG_DIRECCION = process.env.AVISO_SLUG_DIRECCION || 'direccion'
 const DIAS_MINIMOS = 14 // piso historico de la ventana, aunque los umbrales sean chicos
@@ -87,10 +92,13 @@ async function correr() {
     }
     if (!baldes.vencidas.length && !baldes.pendientes_hoy.length) continue
 
+    // Se arman las DOS representaciones: la card va al Space vinculado (con
+    // botones para marcar sin salir de Chat) y el texto al webhook viejo.
     mensajes.push({
       etiqueta: depto.slug,
       destino: depto,
-      texto: mensajeDepartamento(depto, baldes, nombreLocal, { umbrales })
+      texto: mensajeDepartamento(depto, baldes, nombreLocal, { umbrales }),
+      card: cardDepartamento(depto, baldes, nombreLocal, { umbrales, urlApp: process.env.FRONTEND_URL })
     })
   }
 
@@ -112,9 +120,10 @@ async function correr() {
   // AVISO_DRY_RUN=1 arma y muestra los mensajes sin postear nada: sirve para
   // revisar contra datos reales antes de soltarlo en el horario real.
   const simulacion = process.env.AVISO_DRY_RUN === '1'
-  const envio = await enviarEnSerie(simulacion ? crearTransporteConsola() : crearTransporteWebhook(), mensajes, {
-    pausaMs: simulacion ? 0 : 1100
-  })
+  const transporte = simulacion
+    ? crearTransporteConsola()
+    : crearTransporteChat({ db: prisma, log: console })
+  const envio = await enviarEnSerie(transporte, mensajes, { pausaMs: simulacion ? 0 : 1100 })
 
   // Contadores explicitos para que "avisos_enviados: 0" deje de ser un
   // misterio: ahora se ve si no habia vencidas, si no habia webhooks, o si
@@ -122,11 +131,12 @@ async function correr() {
   return {
     ...(simulacion ? { simulacion: true } : {}),
     departamentos_evaluados: departamentos.length,
+    departamentos_con_space: departamentos.filter((d) => d.chat_space_name).length,
     departamentos_con_webhook: departamentos.filter((d) => d.chat_webhook_url).length,
     vencidas_totales: vencidasTotales,
     avisos_departamento: avisosDepartamento,
     escaladas_a_direccion: paraDireccion.reduce((n, d) => n + d.items.length, 0),
-    direccion_sin_webhook: !direccion?.chat_webhook_url,
+    direccion_sin_destino: !direccion?.chat_space_name && !direccion?.chat_webhook_url,
     umbral_direccion: umbralDireccion,
     configuracion_ajustada: configuracionAjustada,
     ...envio
