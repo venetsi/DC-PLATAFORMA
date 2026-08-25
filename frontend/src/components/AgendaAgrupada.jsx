@@ -37,11 +37,20 @@ export default function AgendaAgrupada({ eventos, mapaLocales, onMarcar, marcand
                     <li
                       key={t.id}
                       className={t.estado + (accionable ? ' clickable' : '')}
-                      onClick={accionable ? () => onMarcar(t.id) : undefined}
+                      // Se pasa el departamento del evento (no el del store):
+                      // desde "Mis tareas" puede no ser el mismo.
+                      onClick={accionable ? () => onMarcar(t.id, t.idDepartamento) : undefined}
                       title={accionable ? 'Marcar realizada' : undefined}
                     >
                       <span className="tarea-texto">
-                        {t.titulo}
+                        <span>
+                          {t.titulo}
+                          {t.diasVencida > 0 && (
+                            <span className="tarea-atraso">
+                              hace {t.diasVencida} {t.diasVencida === 1 ? 'día' : 'días'}
+                            </span>
+                          )}
+                        </span>
                         {marcando === t.id && ' (marcando…)'}
                         {pie && <span className="tarea-persona">{pie}</span>}
                       </span>

@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore.js'
 import { instanciasApi, localesApi } from '../api/recursos.js'
 import AgendaAgrupada from '../components/AgendaAgrupada.jsx'
 import SinAsignacion from './SinAsignacion.jsx'
+import { clasificarInstancia } from '../lib/vencimiento.js'
 
 const VISTAS = [
   { id: 'agenda', etiqueta: 'Agenda' },
@@ -55,10 +56,13 @@ export default function Calendario() {
     setRango((actual) => (actual?.desde === desde && actual?.hasta === hasta ? actual : { desde, hasta }))
   }
 
-  async function marcar(instanceId) {
+  // `idDepto` viene del propio evento (extendedProperties.id_departamento).
+  // Acá siempre coincide con el del store, pero dejarlo explícito es lo que
+  // permite reusar AgendaAgrupada desde "Mis tareas".
+  async function marcar(instanceId, idDepto) {
     setMarcando(instanceId)
     try {
-      await instanciasApi.marcar(instanceId, departamento.id)
+      await instanciasApi.marcar(instanceId, idDepto || departamento.id)
       await cargar(rango.desde, rango.hasta)
     } finally {
       setMarcando(null)
@@ -71,11 +75,8 @@ export default function Calendario() {
   const fcEventos = useMemo(
     () =>
       eventos.map((ev) => {
-        const props = ev.extendedProperties?.private || {}
-        const hecha = props.estado === 'REALIZADA' || props.estado === 'APROBADA'
-        const fin = ev.end?.dateTime || ev.end?.date
-        const vencida = !hecha && fin && new Date() > new Date(fin)
-        const color = COLOR_ESTADO[hecha ? 'realizada' : vencida ? 'vencida' : 'pendiente']
+        // Mismo criterio (y misma zona horaria) que el resto de la app.
+        const color = COLOR_ESTADO[clasificarInstancia(ev).estado]
         return {
           id: ev.id,
           title: ev.summary,

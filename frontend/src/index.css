@@ -263,3 +263,16 @@ th, td {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Antigüedad de una vencida: pastilla chica al lado del nombre. Es el dato
+   que convierte "está vencida" en algo accionable. */
+.tarea-atraso {
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  background: rgba(224, 92, 63, 0.18);
+  color: var(--rojo);
+  white-space: nowrap;
+}

@@ -58,6 +58,23 @@ Pantalla principal al entrar — muestra las tareas de tu departamento que vence
 
 Por ahora no hay paso de aprobación: marcar "realizada" ya cierra la tarea.
 
+## Mis tareas (cualquier usuario)
+
+Como "Mi agenda", pero acotada a lo que te toca a vos: las que tenés asignadas a tu
+nombre **más** las de tu departamento que no tienen responsable fijo (esas las puede
+hacer cualquiera del equipo, vos incluido).
+
+1. Andá a **Mis tareas**.
+2. Arriba ves cuántas tenés vencidas, pendientes y realizadas.
+3. Las vencidas muestran hace cuántos días lo están.
+4. Click en una tarea para marcarla realizada, igual que en Mi agenda.
+
+Con **Solo las que tengo asignadas** dejás afuera las del equipo y ves únicamente las
+que están a tu nombre.
+
+Muestra los últimos 30 días y las próximas 2 semanas: mira más hacia atrás que Mi
+agenda porque lo que importa acá es lo que quedó pendiente.
+
 ## La pantalla de agenda — kiosko (todos)
 
 Pensada para quedar fija en una TV/monitor de oficina, sin login, actualizándose

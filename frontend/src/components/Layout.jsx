@@ -23,6 +23,7 @@ export default function Layout() {
           <strong style={{ color: 'var(--gold)' }}>DC-PLATAFORMA</strong>
           <nav style={{ display: 'flex', gap: '1rem' }}>
             <NavLink to="/" style={linkStyle} end>Mi agenda</NavLink>
+            {departamento && <NavLink to="/mis-tareas" style={linkStyle}>Mis tareas</NavLink>}
             <NavLink to="/reportes" style={linkStyle}>Reportes</NavLink>
             {(esAdminGlobal || departamento) && <NavLink to="/admin/tareas" style={linkStyle}>Tareas</NavLink>}
           </nav>
