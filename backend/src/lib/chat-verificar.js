@@ -11,8 +11,18 @@
 // nota hasta que lo usan.
 import { OAuth2Client } from 'google-auth-library'
 
-// Google firma estos tokens con la cuenta de sistema de Chat.
-const EMISOR_CHAT = 'chat@system.gserviceaccount.com'
+// Google firma estos tokens con una de dos identidades, segun como quedo
+// publicada la app: las apps de Chat "clasicas" firman con la cuenta de
+// sistema generica de Chat; las publicadas via Google Workspace Marketplace
+// SDK / Add-ons (el camino que este proyecto tuvo que usar para que la app
+// apareciera al buscarla) firman con un service agent PROPIO del proyecto
+// (numero 288069746644 = dc-smart-mvp). Confirmado con un ADDED_TO_SPACE real
+// en produccion -- verifyIdToken ya habia validado firma y audiencia antes de
+// llegar a este chequeo, asi que el email es autentico.
+const EMISORES_CHAT_VALIDOS = [
+  'chat@system.gserviceaccount.com',
+  'service-288069746644@gcp-sa-gsuiteaddons.iam.gserviceaccount.com'
+]
 
 const cliente = new OAuth2Client()
 
@@ -42,7 +52,7 @@ export async function verificarPeticionDeChat(request) {
   // verifyIdToken ya valida firma, expiracion y audiencia. Falta el emisor:
   // sin este chequeo, un token de CUALQUIER service account de Google emitido
   // para esta misma audiencia pasaria.
-  if (payload?.email !== EMISOR_CHAT) {
+  if (!EMISORES_CHAT_VALIDOS.includes(payload?.email)) {
     throw new ChatTokenInvalido(`Emisor inesperado: ${payload?.email || '(ninguno)'}`)
   }
 
