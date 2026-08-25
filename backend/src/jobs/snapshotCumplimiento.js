@@ -4,23 +4,42 @@
 // esta tabla, nunca recalcula agregando eventos de Calendar en vivo.
 //
 // Uso: node src/jobs/snapshotCumplimiento.js [YYYY-MM-DD]
-// Sin argumento, usa el dia de ayer (UTC).
+// Sin argumento, usa el dia de ayer en Argentina.
 import { prisma, listarInstancias } from './lib.js'
+import { clasificarInstancia, hoyEnArgentina } from '../lib/vencimiento.js'
 
 function rangoDelDia(fechaISO) {
+  // `inicio` se usa ademas como la clave `fecha` (columna DATE) de
+  // CumplimientoDiario, asi que se mantiene a medianoche UTC: cambiarlo
+  // duplicaria las filas historicas ya escritas.
   const inicio = new Date(`${fechaISO}T00:00:00.000Z`)
-  const fin = new Date(`${fechaISO}T23:59:59.999Z`)
-  return { inicio, fin }
+
+  // OJO: dos fechas distintas que es facil confundir (lo confundi al escribirlo).
+  //
+  // `finQuery` acota el events.list y tiene que quedarse DENTRO del dia UTC:
+  // los eventos son all-day, asi que uno del dia siguiente arranca a las
+  // 00:00Z y se colaria en el rango si estiraramos el timeMax hasta las
+  // 03:00Z -- contando el doble de tareas.
+  const finQuery = new Date(`${fechaISO}T23:59:59.999Z`)
+
+  // `referencia` es contra que instante se decide si algo quedo vencido, y
+  // ESA si es hora argentina: el dia termina a la medianoche ART (03:00 UTC
+  // del dia siguiente). El +1ms es para que una tarea del propio dia cuente
+  // como vencida al cierre (clasificarInstancia compara con > estricto).
+  const [a, m, d] = fechaISO.split('-').map(Number)
+  const referencia = new Date(Date.UTC(a, m - 1, d + 1, 3, 0, 0) + 1)
+
+  return { inicio, finQuery, referencia }
 }
 
 function fechaDeAyer() {
-  const d = new Date()
-  d.setUTCDate(d.getUTCDate() - 1)
-  return d.toISOString().slice(0, 10)
+  const hoy = hoyEnArgentina()
+  const [a, m, d] = hoy.split('-').map(Number)
+  return new Date(Date.UTC(a, m - 1, d - 1)).toISOString().slice(0, 10)
 }
 
 async function correr(fechaISO) {
-  const { inicio, fin } = rangoDelDia(fechaISO)
+  const { inicio, finQuery, referencia } = rangoDelDia(fechaISO)
   const departamentos = await prisma.departamento.findMany({ where: { activo: true, id_calendar_google: { not: null } } })
 
   let escritos = 0
@@ -28,7 +47,7 @@ async function correr(fechaISO) {
     const items = await listarInstancias({
       calendarId: depto.id_calendar_google,
       timeMin: inicio.toISOString(),
-      timeMax: fin.toISOString()
+      timeMax: finQuery.toISOString()
     })
 
     const porLocal = new Map() // id_local_ext (o '' para agregado) -> contadores
@@ -41,16 +60,16 @@ async function correr(fechaISO) {
 
       bucket.total_tareas++
       total.total_tareas++
-      const hecha = props.estado === 'REALIZADA' || props.estado === 'APROBADA'
+      // Mismo criterio que tv.js y avisosChat -- pero la referencia es el
+      // cierre del dia snapshoteado, no `now`: el snapshot cierra un dia
+      // del pasado y tiene que juzgarlo con el reloj de ese dia.
+      const { hecha, vencida } = clasificarInstancia(evento, { referencia })
       if (hecha) {
         bucket.realizadas++
         total.realizadas++
-      } else {
-        const finEvento = new Date(evento.end?.date || evento.end?.dateTime)
-        if (fin > finEvento) {
-          bucket.vencidas_sin_hacer++
-          total.vencidas_sin_hacer++
-        }
+      } else if (vencida) {
+        bucket.vencidas_sin_hacer++
+        total.vencidas_sin_hacer++
       }
       porLocal.set(idLocal, bucket)
     }

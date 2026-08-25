@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto'
+import { clasificarInstancia, hoyEnArgentina } from '../lib/vencimiento.js'
 
 function clavesCoinciden(a, b) {
   const bufA = Buffer.from(String(a || ''))
@@ -72,7 +73,9 @@ export default async function tvRoutes(fastify) {
     const atrasadas = []
     const proximaSemana = []
     const ahora = new Date()
-    const hoyISO = ahora.toISOString().slice(0, 10)
+    // Dia en curso en Argentina, no en UTC: con toISOString() el "hoy" del
+    // kiosko cambiaba a las 21:00 hora local (ver lib/vencimiento.js).
+    const hoyISO = hoyEnArgentina(ahora)
     const finEsta = viernesEsta.getTime()
     const inicioProxima = lunesProxima.getTime()
     const finProxima = viernesProxima.getTime()
@@ -80,9 +83,7 @@ export default async function tvRoutes(fastify) {
     for (const evento of items) {
       const props = evento.extendedProperties?.private || {}
       const idLocal = props.id_local_ext || null
-      const hecha = props.estado === 'REALIZADA' || props.estado === 'APROBADA'
-      const vencida = !hecha && ahora > new Date(evento.end?.date || evento.end?.dateTime)
-      const fechaEvento = (evento.start?.date || evento.start?.dateTime || '').slice(0, 10)
+      const { hecha, vencida, estado, fechaISO: fechaEvento } = clasificarInstancia(evento, { referencia: ahora })
       const fechaMs = new Date(`${fechaEvento}T00:00:00Z`).getTime()
 
       if (fechaEvento === hoyISO) {
@@ -100,7 +101,7 @@ export default async function tvRoutes(fastify) {
         titulo: props.nombre_tarea || evento.summary,
         id_local: idLocal,
         nombre_local: idLocal ? nombreLocal.get(idLocal) || 'Local sin nombre' : 'Toda la empresa',
-        estado: hecha ? 'realizada' : vencida ? 'vencida' : 'pendiente',
+        estado,
         asignado_a: props.asignado_a || null,
         realizada_por: props.realizada_por || null,
         inicio: evento.start?.dateTime || evento.start?.date,

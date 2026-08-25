@@ -118,7 +118,9 @@ export default async function asignacionesRoutes(fastify) {
     const calendarId = asignacion.tarea.departamento.id_calendar_google
     if (!calendarId) return reply.code(409).send({ error: 'El departamento todavia no tiene calendario propio' })
 
-    const recurrence = construirRecurrence(recurrencia_tipo, recurrencia_config, vigencia_hasta)
+    // Sin vigencia_hasta explicita, la serie se acota a 12 meses y la renueva
+    // reconciliar.js -- nunca infinita (ver lib/recurrencia.js).
+    const recurrence = construirRecurrence(recurrencia_tipo, recurrencia_config, vigencia_hasta, vigencia_desde)
     const startDate = primeraFecha(recurrencia_tipo, recurrencia_config, vigencia_desde)
     const endDate = sumarUnDia(startDate)
 

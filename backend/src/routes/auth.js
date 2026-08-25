@@ -75,7 +75,12 @@ export default async function authRoutes(fastify) {
       return reply.code(401).send({ error: 'Ticket invalido o expirado' })
     }
 
-    const { email, nombre, departamento: departamentoRaw, es_super_admin, locales } = payload
+    const { email: emailRaw, nombre, departamento: departamentoRaw, es_super_admin, locales } = payload
+    // Normalizado igual que en dev-login: ExtUser.email es @unique, asi que
+    // sin esto dos variantes de mayusculas del mismo email crearian dos
+    // usuarios distintos -- y las comparaciones por responsable (asignado_a)
+    // fallarian justo para quien entra por SSO real.
+    const email = String(emailRaw || '').toLowerCase().trim()
 
     if (!dominioPermitido(email)) {
       return reply.code(403).send({ error: 'Este dominio de email no tiene acceso a DC-PLATAFORMA' })

@@ -9,14 +9,29 @@
 
 const DIAS_ISO_A_RRULE = { 1: 'MO', 2: 'TU', 3: 'WE', 4: 'TH', 5: 'FR', 6: 'SA', 7: 'SU' }
 
+// Ninguna serie se crea infinita. Antes, si no se pasaba vigencia_hasta la
+// RRULE salia sin UNTIL y el evento se repetia para siempre -- y como el
+// formulario de agenda no ofrece fecha de fin, en la practica TODAS lo eran.
+// El horizonte se renueva solo desde jobs/reconciliar.js mientras la
+// asignacion siga activa, asi que acotarlo no apaga nada por sorpresa.
+export const MESES_DE_HORIZONTE = 12
+
+export function horizontePorDefecto(desdeISO, meses = MESES_DE_HORIZONTE) {
+  const [a, m, d] = String(desdeISO).split('-').map(Number)
+  return new Date(Date.UTC(a, m - 1 + meses, d)).toISOString().slice(0, 10)
+}
+
 function untilSuffix(vigenciaHasta) {
   if (!vigenciaHasta) return ''
   const yyyymmdd = vigenciaHasta.replaceAll('-', '')
   return `;UNTIL=${yyyymmdd}T000000Z`
 }
 
-export function construirRecurrence(tipo, config, vigenciaHasta) {
-  const until = untilSuffix(vigenciaHasta)
+// `vigenciaDesde` es opcional y solo se usa para calcular el horizonte por
+// defecto cuando no vino un `vigenciaHasta` explicito.
+export function construirRecurrence(tipo, config, vigenciaHasta, vigenciaDesde) {
+  const hasta = vigenciaHasta || (vigenciaDesde ? horizontePorDefecto(vigenciaDesde) : null)
+  const until = untilSuffix(hasta)
   switch (tipo) {
     case 'UNICA':
       return null // evento sin recurrence, una sola fecha (config.fecha)

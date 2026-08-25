@@ -1,10 +1,14 @@
 import { usuarioActual, puedeGestionarDepartamento } from '../lib/permisos.js'
+import { hoyEnArgentina } from '../lib/vencimiento.js'
 
+// El "hoy" del checklist es el dia en curso en Argentina, no en UTC: antes
+// cambiaba a las 21:00 hora local (ver lib/vencimiento.js). Los eventos son
+// all-day, asi que el rango cubre el dia entero mas el corrimiento de zona.
 function inicioDelDia(fecha = new Date()) {
-  return new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate())).toISOString()
+  return `${hoyEnArgentina(fecha)}T00:00:00Z`
 }
 function finDelDia(fecha = new Date()) {
-  return new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate(), 23, 59, 59)).toISOString()
+  return `${hoyEnArgentina(fecha)}T23:59:59Z`
 }
 
 async function resolverDepartamentoConAcceso(fastify, request, reply, idDepartamento) {

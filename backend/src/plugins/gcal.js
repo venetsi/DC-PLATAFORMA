@@ -130,19 +130,47 @@ async function gcalPlugin(fastify) {
       return data.items?.[0] ?? null
     },
 
-    async listarInstancias({ calendarId, timeMin, timeMax, estado }) {
+    // Pagina de verdad: events.list devuelve 250 por defecto y corta en
+    // SILENCIO. Con 59 locales, una sola tarea diaria asignada por grupo son
+    // ~1770 instancias en la ventana de 30 dias que ya usa tv.js -- sin
+    // paginar, al kiosko y a los reportes simplemente les faltarian tareas
+    // sin ningun error a la vista. `propiedades` generaliza el filtro por
+    // extendedProperty que buscarInstanciaPorFecha ya usaba solo para
+    // id_asignacion (ojo: multiples valores se combinan con AND, no OR).
+    async listarInstancias({ calendarId, timeMin, timeMax, estado, propiedades, maxPaginas = 10 }) {
       const calendar = await getCalendarClient()
-      const { data } = await withBackoff(() =>
-        calendar.events.list({
-          calendarId,
-          timeMin,
-          timeMax,
-          singleEvents: true,
-          orderBy: 'startTime',
-          ...(estado ? { privateExtendedProperty: [`estado=${estado}`] } : {})
-        })
-      )
-      return data.items || []
+      const filtros = { ...(estado ? { estado } : {}), ...propiedades }
+      const privateExtendedProperty = Object.entries(filtros).map(([k, v]) => `${k}=${v}`)
+
+      const items = []
+      let pageToken
+      let paginas = 0
+      do {
+        const { data } = await withBackoff(() =>
+          calendar.events.list({
+            calendarId,
+            timeMin,
+            timeMax,
+            singleEvents: true,
+            orderBy: 'startTime',
+            maxResults: 2500,
+            ...(pageToken ? { pageToken } : {}),
+            ...(privateExtendedProperty.length ? { privateExtendedProperty } : {})
+          })
+        )
+        items.push(...(data.items || []))
+        pageToken = data.nextPageToken
+        paginas++
+      } while (pageToken && paginas < maxPaginas)
+
+      // Nunca truncar callado: si se llego al tope, que quede en los logs.
+      if (pageToken) {
+        fastify.log.warn(
+          { calendarId, paginas, items: items.length },
+          'listarInstancias corto en maxPaginas -- hay mas eventos sin traer'
+        )
+      }
+      return items
     },
 
     // Marca una instancia puntual (no el maestro) -- crea una excepcion sin
