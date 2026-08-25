@@ -48,6 +48,29 @@ en un local y el día 15 en otro).
 4. Click en **Agendar**. Para editar, volvé a esta pantalla con la misma tarea — el
    botón pasa a decir **Actualizar**; los días ya marcados como hechos no se tocan.
 
+Cada agenda se crea por **12 meses** a partir de la fecha "desde", y se renueva sola
+antes de vencerse: no hay que volver a cargarla cada año.
+
+### Tareas que dependen de otra
+
+Debajo de la agenda podés indicar que esa tarea **espera** a otra — por ejemplo, que
+el reporte de Auditoría espere al CMV de Finanzas del mismo día.
+
+1. Click en **Depende de otra tarea**.
+2. Elegí el departamento, la tarea y el local del prerrequisito.
+3. Queda listado en **Espera a:**, con la × al lado para sacarlo.
+
+La dependencia puede cruzar departamentos, y el sistema rechaza los círculos (si A
+espera a B, B no puede esperar a A).
+
+**Avisa, no bloquea.** Nadie queda trabado esperando a otro equipo:
+
+- En la agenda, la tarea muestra **⏳ espera a <tarea> — <departamento>** mientras el
+  prerrequisito de ese día siga sin hacerse.
+- Si la marcás igual, **se marca** y aparece un aviso de qué quedó sin hacer. Eso
+  también queda anotado en el historial del evento en Google Calendar.
+- Si el prerrequisito no tiene tarea ese día, la dependencia simplemente no aplica.
+
 ## Mi checklist de hoy (cualquier usuario)
 
 Pantalla principal al entrar — muestra las tareas de tu departamento que vencen hoy.
@@ -68,6 +91,7 @@ hacer cualquiera del equipo, vos incluido).
 2. Arriba ves cuántas tenés vencidas, pendientes y realizadas.
 3. Las vencidas muestran hace cuántos días lo están.
 4. Click en una tarea para marcarla realizada, igual que en Mi agenda.
+5. Si alguna espera a otra tarea, lo vas a ver con **⏳ espera a…** debajo del nombre.
 
 Con **Solo las que tengo asignadas** dejás afuera las del equipo y ves únicamente las
 que están a tu nombre.

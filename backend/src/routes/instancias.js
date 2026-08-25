@@ -1,5 +1,7 @@
 import { usuarioActual, puedeGestionarDepartamento } from '../lib/permisos.js'
 import { hoyEnArgentina, clasificarInstancia } from '../lib/vencimiento.js'
+import { marcarInstanciaYPropagar } from '../lib/marcar-instancia.js'
+import { prerrequisitosPendientes, mapaPrerrequisitos } from '../lib/dependencias.js'
 
 // El "hoy" del checklist es el dia en curso en Argentina, no en UTC: antes
 // cambiaba a las 21:00 hora local (ver lib/vencimiento.js). Los eventos son
@@ -22,6 +24,22 @@ function correrDias(fechaISO, dias) {
 // SSO real.
 function normalizarEmail(email) {
   return String(email || '').trim().toLowerCase()
+}
+
+// Agrega `espera_a` a cada instancia que tenga prerrequisitos sin cumplir.
+// Detras de un flag porque el kiosko refresca cada 2 minutos y no tiene por
+// que pagar la evaluacion (que igual sale gratis si no hay dependencias
+// cargadas -- ver mapaPrerrequisitos).
+async function conDependencias(fastify, items, activar) {
+  if (!activar) return items
+  const mapa = await mapaPrerrequisitos(fastify, { instancias: items })
+  if (!mapa.size) return items
+  return items.map((evento) => {
+    const props = evento.extendedProperties?.private || {}
+    const fechaISO = evento.start?.date || String(evento.start?.dateTime || '').slice(0, 10)
+    const avisos = mapa.get(`${props.id_asignacion}|${fechaISO}`)
+    return avisos?.length ? { ...evento, espera_a: avisos } : evento
+  })
 }
 
 async function resolverDepartamentoConAcceso(fastify, request, reply, idDepartamento) {
@@ -109,7 +127,7 @@ export default async function instanciasRoutes(fastify) {
 
     return {
       departamento: { id: departamento.id, nombre: departamento.nombre },
-      items,
+      items: await conDependencias(fastify, items, request.query.con_dependencias !== 'false'),
       resumen
     }
   })
@@ -127,7 +145,7 @@ export default async function instanciasRoutes(fastify) {
       timeMax: hasta ? new Date(hasta).toISOString() : undefined,
       estado
     })
-    return { items }
+    return { items: await conDependencias(fastify, items, request.query.con_dependencias !== 'false') }
   })
 
   fastify.post('/:instanceId/marcar', { preHandler: [fastify.authenticate] }, async (request, reply) => {
@@ -137,49 +155,19 @@ export default async function instanciasRoutes(fastify) {
     if (!departamento) return
 
     const usuario = await fastify.db.extUser.findUnique({ where: { id: request.user.id } })
-    const ahora = new Date().toISOString()
-    const extendedProperties = { estado: 'REALIZADA', realizada_por: usuario.email, realizada_en: ahora }
-    const logLine = `${ahora} - REALIZADA por ${usuario.email}`
-    const evento = await fastify.gcal.marcarInstancia({
+
+    // El marcado + la propagacion a los departamentos compartidos viven en
+    // lib/marcar-instancia.js (lo comparten esta ruta y, mas adelante, la
+    // Chat App). Los prerrequisitos AVISAN: la marca se aplica igual.
+    const { evento, avisos } = await marcarInstanciaYPropagar(fastify, {
       calendarId: departamento.id_calendar_google,
       instanceId: request.params.instanceId,
-      extendedProperties,
-      logLine
+      emailUsuario: usuario.email,
+      evaluarAvisos: ({ idAsignacion, fechaISO }) =>
+        prerrequisitosPendientes(fastify, { idAsignacion, fechaISO })
     })
 
-    // "Un solo evento visible para ambos deptos": si esta asignacion esta
-    // compartida (TareaAsignacionDepto), la misma marca se propaga a la
-    // copia de cada otro departamento -- cada una vive en su propio
-    // Calendar con su propio eventId de instancia, asi que hay que
-    // encontrar la instancia correspondiente por fecha en cada uno.
-    const idAsignacion = evento.extendedProperties?.private?.id_asignacion
-    const fechaISO = evento.start?.date
-    if (idAsignacion && fechaISO) {
-      const asignacion = await fastify.db.tareaAsignacion.findUnique({
-        where: { id: idAsignacion },
-        include: { tarea: { include: { departamento: true } }, compartidas: { include: { departamento: true } } }
-      })
-      const otrosCalendarios = [asignacion?.tarea?.departamento, ...(asignacion?.compartidas.map((c) => c.departamento) ?? [])]
-        .filter((d) => d?.id_calendar_google && d.id_calendar_google !== departamento.id_calendar_google)
-
-      for (const otroDepartamento of otrosCalendarios) {
-        const instancia = await fastify.gcal.buscarInstanciaPorFecha({
-          calendarId: otroDepartamento.id_calendar_google,
-          idAsignacion,
-          fechaISO
-        })
-        if (instancia) {
-          await fastify.gcal.marcarInstancia({
-            calendarId: otroDepartamento.id_calendar_google,
-            instanceId: instancia.id,
-            extendedProperties,
-            logLine
-          })
-        }
-      }
-    }
-
-    return evento
+    return { evento, avisos }
   })
 
   // Preparados para Fase 9 (aprobacion real) -- no expuestos en la UI de v1.

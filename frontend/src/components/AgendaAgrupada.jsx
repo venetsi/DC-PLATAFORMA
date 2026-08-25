@@ -53,6 +53,11 @@ export default function AgendaAgrupada({ eventos, mapaLocales, onMarcar, marcand
                         </span>
                         {marcando === t.id && ' (marcando…)'}
                         {pie && <span className="tarea-persona">{pie}</span>}
+                        {t.esperaA?.length > 0 && (
+                          <span className="tarea-espera">
+                            ⏳ espera a {t.esperaA.map((p) => `${p.nombre_tarea} — ${p.departamento}`).join('; ')}
+                          </span>
+                        )}
                       </span>
                     </li>
                   )

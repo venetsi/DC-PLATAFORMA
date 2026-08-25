@@ -33,7 +33,10 @@ export function agruparPorDiaYLocal(eventos, mapaLocales) {
       // sea la del departamento propio. Se escribe desde siempre en
       // asignaciones.js pero hasta ahora no se leía.
       idDepartamento: props.id_departamento || null,
-      diasVencida: estado === 'vencida' ? diasVencida(ev, { hoyISO }) : 0
+      diasVencida: estado === 'vencida' ? diasVencida(ev, { hoyISO }) : 0,
+      // Prerrequisitos sin cumplir, resueltos en el backend: evaluarlos acá
+      // exigiría leer calendarios de otros departamentos (ver dependencias.js).
+      esperaA: ev.espera_a || null
     })
   }
 

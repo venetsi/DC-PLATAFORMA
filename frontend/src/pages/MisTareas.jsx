@@ -15,6 +15,7 @@ export default function MisTareas() {
   const [soloMias, setSoloMias] = useState(false)
   const [marcando, setMarcando] = useState(null)
   const [cargando, setCargando] = useState(true)
+  const [aviso, setAviso] = useState(null)
 
   useEffect(() => {
     localesApi.listar().then((locales) => setMapaLocales(new Map(locales.map((l) => [l.id, l.nombre]))))
@@ -42,7 +43,10 @@ export default function MisTareas() {
   async function marcar(instanceId, idDepto) {
     setMarcando(instanceId)
     try {
-      await instanciasApi.marcar(instanceId, idDepto || departamento.id)
+      const r = await instanciasApi.marcar(instanceId, idDepto || departamento.id)
+      // El aviso va DESPUÉS de marcar, no un confirm() antes: la decisión fue
+      // avisar sin bloquear, y un modal de confirmación es bloqueo con otro nombre.
+      setAviso(r?.avisos?.length ? r.avisos : null)
       await cargar()
     } finally {
       setMarcando(null)
@@ -77,6 +81,8 @@ export default function MisTareas() {
         </div>
       )}
 
+      {aviso && <AvisoPrerrequisitos avisos={aviso} onCerrar={() => setAviso(null)} />}
+
       {cargando && !data && <p style={{ color: 'var(--texto-tenue)' }}>Cargando…</p>}
 
       {data && data.items.length === 0 && (
@@ -90,6 +96,31 @@ export default function MisTareas() {
       {data && data.items.length > 0 && (
         <AgendaAgrupada eventos={data.items} mapaLocales={mapaLocales} onMarcar={marcar} marcando={marcando} />
       )}
+    </div>
+  )
+}
+
+// La marca YA se aplicó cuando esto aparece: es informativo, no una pregunta.
+export function AvisoPrerrequisitos({ avisos, onCerrar }) {
+  return (
+    <div
+      className="card"
+      style={{ borderColor: 'var(--amarillo)', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'flex-start' }}
+    >
+      <div style={{ fontSize: '0.85rem' }}>
+        <strong style={{ color: 'var(--amarillo)' }}>Marcada, pero ojo:</strong>{' '}
+        {avisos.length === 1 ? 'todavía no está hecha' : 'todavía no están hechas'}{' '}
+        {avisos.map((a, i) => (
+          <span key={a.id_asignacion}>
+            {i > 0 && ', '}
+            <strong>{a.nombre_tarea}</strong> — {a.departamento} ({a.local})
+          </span>
+        ))}
+        .
+      </div>
+      <button type="button" className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem' }} onClick={onCerrar}>
+        Entendido
+      </button>
     </div>
   )
 }

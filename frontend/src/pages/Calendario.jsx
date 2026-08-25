@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore.js'
 import { instanciasApi, localesApi } from '../api/recursos.js'
 import AgendaAgrupada from '../components/AgendaAgrupada.jsx'
 import SinAsignacion from './SinAsignacion.jsx'
+import { AvisoPrerrequisitos } from './MisTareas.jsx'
 import { clasificarInstancia } from '../lib/vencimiento.js'
 
 const VISTAS = [
@@ -32,6 +33,7 @@ export default function Calendario() {
   const [mapaLocales, setMapaLocales] = useState(new Map())
   const [rango, setRango] = useState(semanaActualLunesAViernes())
   const [marcando, setMarcando] = useState(null)
+  const [aviso, setAviso] = useState(null)
 
   useEffect(() => {
     localesApi.listar().then((locales) => setMapaLocales(new Map(locales.map((l) => [l.id, l.nombre]))))
@@ -62,7 +64,8 @@ export default function Calendario() {
   async function marcar(instanceId, idDepto) {
     setMarcando(instanceId)
     try {
-      await instanciasApi.marcar(instanceId, idDepto || departamento.id)
+      const r = await instanciasApi.marcar(instanceId, idDepto || departamento.id)
+      setAviso(r?.avisos?.length ? r.avisos : null)
       await cargar(rango.desde, rango.hasta)
     } finally {
       setMarcando(null)
@@ -119,6 +122,8 @@ export default function Calendario() {
           ))}
         </div>
       </div>
+
+      {aviso && <AvisoPrerrequisitos avisos={aviso} onCerrar={() => setAviso(null)} />}
 
       {vista === 'agenda' && (
         <AgendaAgrupada eventos={eventos} mapaLocales={mapaLocales} onMarcar={marcar} marcando={marcando} />

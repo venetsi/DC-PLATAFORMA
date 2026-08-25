@@ -126,6 +126,14 @@ export default async function tareasRoutes(fastify) {
         }
       }
       await fastify.db.tareaAsignacionDepto.deleteMany({ where: { id_asignacion: asignacion.id } })
+      // Las dependencias hay que borrarlas por LOS DOS lados: esta asignacion
+      // puede ser el prerrequisito de una tarea de otro departamento, y la FK
+      // es RESTRICT -- sin esto el borrado definitivo falla.
+      await fastify.db.tareaAsignacionDependencia.deleteMany({
+        where: {
+          OR: [{ id_asignacion: asignacion.id }, { id_asignacion_prerequisito: asignacion.id }]
+        }
+      })
     }
 
     await fastify.db.tareaAsignacion.deleteMany({ where: { id_tarea: existente.id } })

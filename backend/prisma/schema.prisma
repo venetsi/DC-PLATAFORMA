@@ -95,9 +95,11 @@ model TareaAsignacion {
   created_at        DateTime @default(now())
   updated_at        DateTime @updatedAt
 
-  tarea       Tarea                  @relation(fields: [id_tarea], references: [id])
-  local       ExtLocal?              @relation(fields: [id_local_ext], references: [id])
-  compartidas TareaAsignacionDepto[]
+  tarea        Tarea                        @relation(fields: [id_tarea], references: [id])
+  local        ExtLocal?                    @relation(fields: [id_local_ext], references: [id])
+  compartidas  TareaAsignacionDepto[]
+  dependencias TareaAsignacionDependencia[] @relation("dependencias")
+  dependientes TareaAsignacionDependencia[] @relation("dependientes")
 
   // OJO: @@unique de abajo NO alcanza para alcance EMPRESA (id_local_ext
   // NULL) -- Postgres no trata dos NULL como iguales, asi que dos filas con
@@ -135,6 +137,37 @@ model TareaAsignacionDepto {
 
   @@unique([id_asignacion, id_departamento])
   @@map("tarea_asignacion_deptos")
+}
+
+// --- Dependencia BLANDA entre asignaciones: avisa, NO bloquea (decision
+// explicita del usuario). La instancia que espera muestra "espera a <X>"
+// mientras el prerrequisito de la MISMA FECHA siga sin hacerse, y al marcar
+// se devuelve un aviso -- pero la marca se aplica igual y queda asentada en
+// el historial append-only de description.
+//
+// Es entre TareaAsignacion y no entre Tarea (el catalogo) porque Tarea.nombre
+// es unico GLOBAL: "CMV" es una sola Tarea pero se asigna por local, asi que
+// "cargar ventas de TIAMO espera al CMV de TIAMO" no se podria expresar a
+// nivel catalogo -- se cumpliria con el CMV de cualquier local. Ademas,
+// evaluar el prerrequisito exige resolver un calendario y un evento
+// concretos, y eso solo lo da la asignacion.
+//
+// Lo tedioso de cargar pares se resuelve en la UI (un atajo que las crea para
+// todas las asignaciones de una tarea, haciendo match por local), no en el
+// modelo -- mismo criterio que id_grupo en POST /asignaciones. ---
+model TareaAsignacionDependencia {
+  id                         String   @id @default(uuid())
+  id_asignacion              String // la que ESPERA
+  id_asignacion_prerequisito String // la que tiene que estar hecha antes
+  activa                     Boolean  @default(true)
+  created_at                 DateTime @default(now())
+
+  asignacion   TareaAsignacion @relation("dependencias", fields: [id_asignacion], references: [id])
+  prerequisito TareaAsignacion @relation("dependientes", fields: [id_asignacion_prerequisito], references: [id])
+
+  @@unique([id_asignacion, id_asignacion_prerequisito])
+  @@index([id_asignacion_prerequisito])
+  @@map("tarea_asignacion_dependencias")
 }
 
 model CumplimientoDiario {

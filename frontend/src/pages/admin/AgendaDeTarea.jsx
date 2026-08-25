@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { asignacionesApi } from '../../api/recursos.js'
 import AgendaForm from './AgendaForm.jsx'
+import DependenciasAsignacion from '../../components/DependenciasAsignacion.jsx'
 
 // Panel de agenda de una tarea puntual -- se abre inline en el renglon de
 // AdminTareas ("definir la tarea en el mismo renglon donde se crea"), asi
@@ -148,6 +149,7 @@ export default function AgendaDeTarea({ tarea, locales, grupos, departamentos, u
               </div>
             )}
             <AgendaForm asignacion={a} usuarios={usuarios} onGuardado={cargarAsignaciones} />
+            <DependenciasAsignacion asignacion={a} departamentos={departamentos} />
           </div>
         ))}
         {asignaciones.length === 0 && <p style={{ color: 'var(--texto-tenue)' }}>Sin asignaciones todavía para esta tarea.</p>}

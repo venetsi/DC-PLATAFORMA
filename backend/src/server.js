@@ -13,6 +13,7 @@ import localesRoutes from './routes/locales.js'
 import usuariosRoutes from './routes/usuarios.js'
 import tareasRoutes from './routes/tareas.js'
 import asignacionesRoutes from './routes/asignaciones.js'
+import dependenciasRoutes from './routes/dependencias.js'
 import instanciasRoutes from './routes/instancias.js'
 import reportesRoutes from './routes/reportes.js'
 import tvRoutes from './routes/tv.js'
@@ -52,6 +53,7 @@ await app.register(localesRoutes, { prefix: '/api/locales' })
 await app.register(usuariosRoutes, { prefix: '/api/usuarios' })
 await app.register(tareasRoutes, { prefix: '/api/tareas' })
 await app.register(asignacionesRoutes, { prefix: '/api/asignaciones' })
+await app.register(dependenciasRoutes, { prefix: '/api/dependencias' })
 await app.register(instanciasRoutes, { prefix: '/api/instancias' })
 await app.register(reportesRoutes, { prefix: '/api/reportes' })
 await app.register(tvRoutes, { prefix: '/api/tv' })

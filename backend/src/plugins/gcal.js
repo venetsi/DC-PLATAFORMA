@@ -111,6 +111,21 @@ async function gcalPlugin(fastify) {
       }
     },
 
+    // Lee una instancia puntual. Se usa antes de marcar, para saber si ya
+    // estaba realizada y para sacar id_asignacion/fecha sin re-parsear el
+    // instanceId (ver lib/marcar-instancia.js). Devuelve null si no existe.
+    async leerInstancia({ calendarId, instanceId }) {
+      const calendar = await getCalendarClient()
+      try {
+        const { data } = await withBackoff(() => calendar.events.get({ calendarId, eventId: instanceId }))
+        return data
+      } catch (err) {
+        const status = err?.code || err?.response?.status
+        if (status === 404 || status === 410) return null
+        throw err
+      }
+    },
+
     // Encuentra la instancia de un dia puntual que corresponde al mismo
     // id_asignacion pero en OTRO calendario -- usado para propagar "marcar
     // realizada" entre las copias de una asignacion compartida (ver

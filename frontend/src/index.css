@@ -264,6 +264,17 @@ th, td {
   text-overflow: ellipsis;
 }
 
+/* Prerrequisito sin cumplir. Avisa, no bloquea: por eso es una línea
+   informativa y no un estado que cambie el color del bullet. */
+.tarea-espera {
+  font-size: 0.68rem;
+  color: var(--amarillo);
+  opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Antigüedad de una vencida: pastilla chica al lado del nombre. Es el dato
    que convierte "está vencida" en algo accionable. */
 .tarea-atraso {

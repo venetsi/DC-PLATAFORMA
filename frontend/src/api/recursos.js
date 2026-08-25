@@ -21,6 +21,12 @@ export const tareasApi = {
   eliminar: (id) => api.delete(`/tareas/${id}`).then((r) => r.data)
 }
 
+export const dependenciasApi = {
+  listar: (idAsignacion) => api.get('/dependencias', { params: { asignacion: idAsignacion } }).then((r) => r.data),
+  crear: (body) => api.post('/dependencias', body).then((r) => r.data),
+  borrar: (id) => api.delete(`/dependencias/${id}`).then((r) => r.data)
+}
+
 export const asignacionesApi = {
   listar: (params) => api.get('/asignaciones', { params }).then((r) => r.data),
   crear: (body) => api.post('/asignaciones', body).then((r) => r.data),
