@@ -39,15 +39,22 @@ model ExtLocal {
 // (Calendar/Group/Chat/kiosko) que no tiene sentido guardar en dcsmart. ---
 
 model Departamento {
-  id                 String   @id
+  id                 String  @id
   nombre             String
-  slug               String   @unique
-  id_calendar_google String?  @unique
-  email_group_google String?  @unique
+  slug               String  @unique
+  id_calendar_google String? @unique
+  email_group_google String? @unique
   chat_webhook_url   String?
-  kiosko_key         String?  @unique
-  activo             Boolean  @default(true)
-  synced_at          DateTime @default(now())
+  kiosko_key         String? @unique
+
+  // Escalamiento (Fase A): dias HABILES de atraso a partir de los cuales se
+  // avisa. NULL = usar el default global de entorno (AVISO_DIAS_DEPARTAMENTO /
+  // AVISO_DIAS_DIRECCION). Nullable a proposito: la base es compartida con
+  // produccion y db push no debe backfillear nada.
+  dias_aviso_departamento Int?
+  dias_aviso_direccion    Int?
+  activo                  Boolean  @default(true)
+  synced_at               DateTime @default(now())
 
   tareas                   Tarea[]
   cumplimiento             CumplimientoDiario[]

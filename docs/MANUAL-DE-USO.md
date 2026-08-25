@@ -129,6 +129,45 @@ conexión" y hace cuánto) y se reconecta sola.
 El número del día se calcula una vez que el día termina — el de hoy aparece recién
 mañana. Para el estado de hoy mismo, mirá el checklist o la pantalla de oficina.
 
+## Avisos por Google Chat
+
+Todas las mañanas (8 hs) cada departamento recibe en su Space un recordatorio con:
+
+- **Atrasadas** — las que ya pasaron el umbral de días hábiles del departamento.
+- **Vencidas** — el resto de lo que quedó sin hacer.
+- **Pendientes de hoy** — lo que vence hoy.
+
+Cada línea muestra el local, el responsable si tiene uno, y hace cuántos **días
+hábiles** está atrasada. Se cuentan días hábiles y no de calendario a propósito: una
+tarea del viernes no debe escalar sola el lunes solo porque pasó el fin de semana.
+
+El recordatorio se repite todos los días mientras la tarea siga sin hacerse.
+
+### Escalamiento a Dirección
+
+Cuando una tarea supera un segundo umbral, más alto, entra además en **un único
+mensaje consolidado a Dirección**, agrupado por departamento y ordenado por
+antigüedad. No reemplaza al aviso del departamento: se le suma.
+
+Los umbrales por defecto son **2 días hábiles** para el departamento y **5** para
+Dirección, y se pueden ajustar por departamento.
+
+### Configurar el Space de un departamento (administrador)
+
+1. Creá el Space en Google Chat y agregá el grupo `depto-<slug>@dcsmart.app`.
+2. Configurá un webhook entrante en ese Space y copiá su URL.
+3. Cargala con `PATCH /api/departamentos/:id/notificaciones`, junto con los umbrales
+   si querés cambiarlos:
+
+   ```json
+   { "chat_webhook_url": "https://chat.googleapis.com/v1/spaces/…",
+     "dias_aviso_departamento": 2,
+     "dias_aviso_direccion": 5 }
+   ```
+
+Un departamento **sin** webhook se sigue evaluando igual — sus tareas atrasadas llegan
+a Dirección — pero no recibe su propio recordatorio hasta que se le cargue uno.
+
 ## Preguntas frecuentes
 
 **Marqué una tarea por error, ¿la puedo destildar?**
@@ -141,6 +180,10 @@ hasta que alguien la complete.
 
 **¿Un local puede tener una fecha distinta a otro para la misma tarea?**
 Sí, esa es la idea — cada asignación (tarea + local) tiene su propia agenda.
+
+**Mi departamento no recibe los avisos de Chat.**
+Le falta el webhook del Space. Sus tareas atrasadas igual escalan a Dirección; pedile
+al administrador que lo configure.
 
 **No veo el menú de "Tareas" ni "Agenda".**
 Son solo para administradores. Pedí acceso a quien administra la plataforma.

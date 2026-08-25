@@ -1,88 +1,136 @@
-// Job diario (8am via Cloud Scheduler): por cada Departamento con
-// chat_webhook_url configurado, arma UN mensaje con sus tareas vencidas y
-// las pendientes de hoy, agrupadas por local, y lo postea por Chat. Una
-// via -- no procesa respuestas (ver docs/superpowers). No marca nada en el
-// evento: es un recordatorio que se repite todos los dias mientras la
-// tarea siga sin hacerse, no una alerta de "una sola vez".
+// Job diario (8am via Cloud Scheduler): recordatorio por departamento y
+// escalamiento en dos niveles.
+//
+//   nivel 1 -- a los N dias habiles de atraso la tarea se destaca en el
+//              mensaje del propio departamento;
+//   nivel 2 -- a los M (mas) se le suma un mensaje consolidado a Direccion.
+//
+// Direccion SUMA, no reemplaza: el item sigue apareciendo en el aviso del
+// departamento. Los umbrales salen de la columna del departamento, del
+// entorno, o del default (ver lib/escalamiento.js).
+//
+// Una via: no procesa respuestas (eso es la Fase C). Y no escribe NADA en el
+// evento -- se repite todos los dias mientras la tarea siga sin hacerse, que
+// es lo que lo vuelve un reporte de aging en vez de una alerta unica.
 import { prisma, listarInstancias } from './lib.js'
+import { hoyEnArgentina } from '../lib/vencimiento.js'
+import { clasificarParaAviso, resolverUmbrales } from '../lib/escalamiento.js'
+import { crearTransporteConsola, crearTransporteWebhook, enviarEnSerie } from '../lib/notificaciones.js'
+import { mensajeDepartamento, mensajeDireccion } from '../lib/mensajes-chat.js'
 
-const DIAS_HACIA_ATRAS = 14 // suficiente para no perder de vista una vencida vieja
+const SLUG_DIRECCION = process.env.AVISO_SLUG_DIRECCION || 'direccion'
+const DIAS_MINIMOS = 14 // piso historico de la ventana, aunque los umbrales sean chicos
 
-function haceNDias(n) {
+// La ventana se deriva de los umbrales en vez de estar hardcodeada: si alguien
+// configura "escalar a los 20 dias", una ventana fija de 14 nunca llegaria a
+// verlo. El +7 da margen para que la tarea siga apareciendo despues de escalar.
+function diasDeVentana(departamentos) {
+  const mayor = Math.max(...departamentos.map((d) => resolverUmbrales(d).direccion), 0)
+  return Math.max(DIAS_MINIMOS, mayor + 7)
+}
+
+function desdeHaceNDias(n) {
   const d = new Date()
   d.setUTCDate(d.getUTCDate() - n)
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString()
 }
 
-function finDeHoy() {
-  const d = new Date()
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59)).toISOString()
-}
-
-async function postearWebhook(url, texto) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json; charset=UTF-8' },
-    body: JSON.stringify({ text: texto })
-  })
-  if (!res.ok) throw new Error(`Webhook respondio ${res.status}`)
-}
-
-function armarMensaje(departamento, vencidas, pendientesHoy, nombreLocal) {
-  const linea = (ev) => {
-    const props = ev.extendedProperties?.private || {}
-    const local = props.id_local_ext ? nombreLocal.get(props.id_local_ext) || 'Local sin nombre' : 'Toda la empresa'
-    return `• ${ev.summary} (${local})`
-  }
-
-  const bloques = [`📋 *Recordatorio diario — ${departamento.nombre}*`]
-  if (vencidas.length) bloques.push(`\n⚠️ *Vencidas:*\n${vencidas.map(linea).join('\n')}`)
-  if (pendientesHoy.length) bloques.push(`\n🕒 *Pendientes de hoy:*\n${pendientesHoy.map(linea).join('\n')}`)
-  return bloques.join('\n')
-}
-
-async function esperar(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+// Fin del dia de hoy en Argentina = 03:00 UTC del dia siguiente (UTC-3 todo el
+// año). Con el fin del dia UTC se perdian las tareas de hoy entre las 21:00 y
+// la medianoche local.
+function finDeHoyArgentina(hoyISO) {
+  const [a, m, d] = hoyISO.split('-').map(Number)
+  return new Date(Date.UTC(a, m - 1, d + 1, 3, 0, 0)).toISOString()
 }
 
 async function correr() {
+  // TODOS los activos con calendario, no solo los que tienen webhook: el
+  // webhook condiciona el ENVIO, no la evaluacion. Sin esto, un departamento
+  // sin Space propio seria invisible tambien para Direccion.
   const [departamentos, locales] = await Promise.all([
     prisma.departamento.findMany({
-      where: { activo: true, id_calendar_google: { not: null }, chat_webhook_url: { not: null } }
+      where: { activo: true, id_calendar_google: { not: null } },
+      orderBy: { nombre: 'asc' }
     }),
     prisma.extLocal.findMany()
   ])
   const nombreLocal = new Map(locales.map((l) => [l.id, l.nombre]))
 
   const ahora = new Date()
-  const hoyISO = ahora.toISOString().slice(0, 10)
-  let avisosEnviados = 0
+  const hoyISO = hoyEnArgentina(ahora)
+  const timeMin = desdeHaceNDias(diasDeVentana(departamentos))
+  const timeMax = finDeHoyArgentina(hoyISO)
+
+  const direccion = departamentos.find((d) => d.slug === SLUG_DIRECCION) || null
+  const umbralDireccion = resolverUmbrales(direccion).direccion
+
+  const mensajes = []
+  const paraDireccion = []
+  const configuracionAjustada = []
+  let vencidasTotales = 0
 
   for (const depto of departamentos) {
-    const items = await listarInstancias({
-      calendarId: depto.id_calendar_google,
-      timeMin: haceNDias(DIAS_HACIA_ATRAS),
-      timeMax: finDeHoy(),
-      estado: 'PENDIENTE'
-    })
+    const umbrales = resolverUmbrales(depto)
+    if (umbrales.ajustado) configuracionAjustada.push(depto.slug)
 
-    const vencidas = []
-    const pendientesHoy = []
-    for (const ev of items) {
-      const fin = new Date(ev.end?.date || ev.end?.dateTime)
-      const fechaEvento = (ev.start?.date || ev.start?.dateTime || '').slice(0, 10)
-      if (ahora > fin) vencidas.push(ev)
-      else if (fechaEvento === hoyISO) pendientesHoy.push(ev)
+    // Sin filtro server-side por estado=PENDIENTE: era la definicion divergente
+    // que dejaba fuera del query a los eventos SIN la property `estado`, que
+    // el kiosko en cambio si contaba como vencidos.
+    const items = await listarInstancias({ calendarId: depto.id_calendar_google, timeMin, timeMax })
+    const baldes = clasificarParaAviso(items, { umbrales, hoyISO, referencia: ahora })
+    vencidasTotales += baldes.vencidas.length
+
+    if (baldes.escala_direccion.length) {
+      // Se guarda el umbral CON EL QUE escaló cada departamento: con overrides
+      // por departamento no hay un solo numero que describa el consolidado.
+      paraDireccion.push({ departamento: depto, items: baldes.escala_direccion, umbral: umbrales.direccion })
     }
+    if (!baldes.vencidas.length && !baldes.pendientes_hoy.length) continue
 
-    if (!vencidas.length && !pendientesHoy.length) continue
-
-    await postearWebhook(depto.chat_webhook_url, armarMensaje(depto, vencidas, pendientesHoy, nombreLocal))
-    avisosEnviados++
-    await esperar(1100) // limite de la API de Chat: 1 req/seg por Space
+    mensajes.push({
+      etiqueta: depto.slug,
+      destino: depto,
+      texto: mensajeDepartamento(depto, baldes, nombreLocal, { umbrales })
+    })
   }
 
-  return { departamentos_con_webhook: departamentos.length, avisos_enviados: avisosEnviados }
+  const avisosDepartamento = mensajes.length
+  if (paraDireccion.length && direccion) {
+    // El encabezado cita el umbral solo si TODOS los departamentos escalados
+    // usan el mismo; con overrides mezclados seria un numero falso, y la
+    // antiguedad de cada linea ya dice lo que importa.
+    const umbrales = new Set(paraDireccion.map((d) => d.umbral))
+    mensajes.push({
+      etiqueta: `${direccion.slug} (escalamiento)`,
+      destino: direccion,
+      texto: mensajeDireccion(paraDireccion, nombreLocal, {
+        umbral: umbrales.size === 1 ? [...umbrales][0] : null
+      })
+    })
+  }
+
+  // AVISO_DRY_RUN=1 arma y muestra los mensajes sin postear nada: sirve para
+  // revisar contra datos reales antes de soltarlo en el horario real.
+  const simulacion = process.env.AVISO_DRY_RUN === '1'
+  const envio = await enviarEnSerie(simulacion ? crearTransporteConsola() : crearTransporteWebhook(), mensajes, {
+    pausaMs: simulacion ? 0 : 1100
+  })
+
+  // Contadores explicitos para que "avisos_enviados: 0" deje de ser un
+  // misterio: ahora se ve si no habia vencidas, si no habia webhooks, o si
+  // los envios fallaron.
+  return {
+    ...(simulacion ? { simulacion: true } : {}),
+    departamentos_evaluados: departamentos.length,
+    departamentos_con_webhook: departamentos.filter((d) => d.chat_webhook_url).length,
+    vencidas_totales: vencidasTotales,
+    avisos_departamento: avisosDepartamento,
+    escaladas_a_direccion: paraDireccion.reduce((n, d) => n + d.items.length, 0),
+    direccion_sin_webhook: !direccion?.chat_webhook_url,
+    umbral_direccion: umbralDireccion,
+    configuracion_ajustada: configuracionAjustada,
+    ...envio
+  }
 }
 
 correr()
