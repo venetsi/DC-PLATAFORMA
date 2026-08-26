@@ -138,7 +138,7 @@ Todas las mañanas (8 hs) cada departamento recibe en su Space un recordatorio c
 - **Pendientes de hoy** — lo que vence hoy.
 
 Cada línea muestra el local, el responsable si tiene uno, y hace cuántos **días
-hábiles** está atrasada, con un botón para marcarla hecha ahí mismo. Se cuentan días hábiles y no de calendario a propósito: una
+hábiles** está atrasada, con un botón para abrirla en la plataforma. Se cuentan días hábiles y no de calendario a propósito: una
 tarea del viernes no debe escalar sola el lunes solo porque pasó el fin de semana.
 
 El recordatorio se repite todos los días mientras la tarea siga sin hacerse.
@@ -152,30 +152,58 @@ antigüedad. No reemplaza al aviso del departamento: se le suma.
 Los umbrales por defecto son **2 días hábiles** para el departamento y **5** para
 Dirección, y se pueden ajustar por departamento.
 
-### Marcar una tarea desde Chat
+### Operar desde el Chat
 
-Si el departamento tiene su Space vinculado, el recordatorio llega como una tarjeta con
-un botón **Marcar hecha** al lado de cada tarea. Un click la cierra sin salir de Chat:
-queda registrada en Google Calendar con tu nombre, igual que si la marcaras desde la
-plataforma.
+Podés consultar y coordinar tareas escribiendo comandos en el Space del
+departamento, sin abrir la plataforma.
 
-- Solo pueden marcar los del departamento (y los administradores). Si no, llega un
-  aviso privado que solo ve quien tocó el botón.
-- Si alguien ya la marcó, el segundo click avisa quién fue y no duplica nada.
-- Si la tarea espera a otra que todavía no está hecha, se marca igual y la respuesta lo
-  aclara.
-- Una tarjeta muestra hasta 20 tareas; si hay más, lo dice y ofrece abrir la plataforma.
+**Para mirar:**
+
+| Comando | Qué hace |
+|---|---|
+| `/hoy` | Las tareas que vencen hoy en el departamento |
+| `/atrasadas` | Lo que quedó sin hacer, de más viejo a más nuevo |
+| `/mias` | Las que están a tu nombre, más las del equipo sin responsable fijo |
+| `/ayuda` | La lista de comandos |
+
+**Para coordinar entre el equipo:**
+
+| Comando | Qué hace |
+|---|---|
+| `/tomar cierre` | Esa tarea queda a tu nombre |
+| `/pasar cierre: juan@dcsmart.app` | Se la pasás a otra persona |
+| `/nota cierre: hablé con el proveedor` | Dejás un comentario en el historial de la tarea |
+
+No hace falta escribir el nombre completo de la tarea: con una parte alcanza. Si hay
+más de una que coincida, la app te pregunta cuál. Todo queda registrado en el historial
+del evento en Google Calendar, con tu nombre y la fecha.
+
+Un par de detalles:
+
+- `/tomar` y `/pasar` **no** marcan la tarea como hecha, solo cambian quién se encarga.
+- Si le pasás una tarea a alguien de otro departamento, la app te avisa: esa persona no
+  la va a ver en su `/mias`, así que conviene avisarle aparte.
+- Si escribís un comando en un Space que no está vinculado a ningún departamento, la app
+  te muestra las de tu propio departamento y te lo aclara.
+
+El botón **Abrir** de las tarjetas del recordatorio lleva a la plataforma, donde se
+marcan las tareas como hechas.
 
 ### Vincular el Space de un departamento (administrador)
 
-1. Creá el Space en Google Chat y agregá el grupo `depto-<slug>@dcsmart.app` — con eso
-   entran todos los del departamento de una.
-2. Agregá la app **DC-PLATAFORMA** al Space.
-3. La app responde con una tarjeta preguntando a qué departamento vincularlo. Elegí el
-   que corresponda y listo.
+1. Creá el Space en Google Chat y agregá el grupo `depto-` + el slug del departamento
+   + `@dcsmart.app` (por ejemplo `depto-finanzas@dcsmart.app`) — con eso entran todos
+   los del departamento de una.
+2. Agregá la app **DC-PLATAFORMA** al Space. Te va a saludar y listar los
+   departamentos disponibles.
+3. Escribí `/vincular` y el nombre del departamento. Por ejemplo:
 
-No hace falta cargar nada a mano. Si sacás la app del Space, la vinculación se limpia
-sola.
+   ```
+   /vincular finanzas
+   ```
+
+Desde ese momento el recordatorio diario llega a ese Space. Para que deje de llegar,
+`/desvincular` (o sacar la app del Space, que también limpia la vinculación).
 
 Para cambiar los umbrales de escalamiento de un departamento:
 
@@ -201,8 +229,8 @@ hasta que alguien la complete.
 Sí, esa es la idea — cada asignación (tarea + local) tiene su propia agenda.
 
 **Mi departamento no recibe los avisos de Chat.**
-Le falta vincular el Space. Sus tareas atrasadas igual escalan a Dirección; pedile al
-administrador que agregue la app DC-PLATAFORMA al Space del departamento.
+Le falta vincular el Space. Sus tareas atrasadas igual escalan a Dirección; pedile a un
+administrador que escriba `/vincular` y el nombre del departamento en ese Space.
 
 **No veo el menú de "Tareas" ni "Agenda".**
 Son solo para administradores. Pedí acceso a quien administra la plataforma.
