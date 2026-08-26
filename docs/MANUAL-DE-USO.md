@@ -65,8 +65,8 @@ espera a B, B no puede esperar a A).
 
 **Avisa, no bloquea.** Nadie queda trabado esperando a otro equipo:
 
-- En la agenda, la tarea muestra **⏳ espera a <tarea> — <departamento>** mientras el
-  prerrequisito de ese día siga sin hacerse.
+- En la agenda, la tarea muestra el nombre del prerrequisito y su departamento
+  (por ejemplo **⏳ espera a CMV — Finanzas**) mientras ese día siga sin hacerse.
 - Si la marcás igual, **se marca** y aparece un aviso de qué quedó sin hacer. Eso
   también queda anotado en el historial del evento en Google Calendar.
 - Si el prerrequisito no tiene tarea ese día, la dependencia simplemente no aplica.
