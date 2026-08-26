@@ -183,6 +183,7 @@ qué y cuándo.
 
 | Comando | Qué hace |
 |---|---|
+| `/marcar cierre` | La das por hecha |
 | `/tomar cierre` | Esa tarea queda a tu nombre |
 | `/pasar cierre: juan@dcsmart.app` | Se la pasás a otra persona |
 | `/nota cierre: hablé con el proveedor` | Dejás un comentario en el historial de la tarea |
@@ -197,7 +198,11 @@ lo mismo, solo cambia cómo elegís la tarea (y, en el caso de `/derivar`, la pe
 
 Un par de detalles:
 
-- `/tomar` y `/pasar` **no** marcan la tarea como hecha, solo cambian quién se encarga.
+- `/marcar` es el único de estos cuatro que da la tarea por hecha. `/tomar` y `/pasar`
+  **no** la marcan, solo cambian quién se encarga.
+- Si la tarea espera a otra que todavía no está hecha, `/marcar` la marca igual y te
+  avisa qué quedó pendiente — mismo criterio que el botón de la tarjeta.
+- Si alguien ya la había marcado, `/marcar` te avisa quién fue en vez de duplicar nada.
 - Si le pasás una tarea a alguien de otro departamento, la app te avisa: esa persona no
   la va a ver en su `/mias`, así que conviene avisarle aparte.
 - Si escribís un comando en un Space que no está vinculado a ningún departamento, la app
@@ -252,8 +257,9 @@ comandos dejan de estar acotados a un solo departamento.
 - `/hoy`, `/atrasadas`, `/mias`, `/tarea`, `/local`, `/resumen` y `/equipo` traen la
   información de **los 11 departamentos mezclada**, y cada línea aclara de cuál es
   (`[Costos]`, `[RRHH]`, etc.).
-- `/tomar`, `/pasar` y `/nota` — y sus versiones en formulario `/asignar`, `/derivar` y
-  `/apuntar` — actúan sobre la tarea que encuentren, sea de qué departamento sea.
+- `/marcar`, `/tomar`, `/pasar` y `/nota` — y sus versiones en formulario `/asignar`,
+  `/derivar` y `/apuntar` — actúan sobre la tarea que encuentren, sea de qué
+  departamento sea.
 
 Quien escribe desde ese Space obtiene esta visión completa **sin importar su propio
 departamento** — el control es formar parte del Space, no la ficha de la persona. Por

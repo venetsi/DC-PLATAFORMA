@@ -118,6 +118,7 @@ En **Google Chat API → Configuration → sección "Comandos"**, agregar uno po
 | `15` | `departamentos` | **rápido** | Panorama de los 11 (solo admin) |
 | `5` | `vincular` | barra | Vincular este Space a un departamento |
 | `6` | `desvincular` | barra | Dejar de recibir los recordatorios acá |
+| `18` | `marcar` | barra | Dar una tarea por hecha |
 | `7` | `tomar` | barra | Poner una tarea a mi nombre |
 | `8` | `pasar` | barra | Pasarle una tarea a otra persona |
 | `9` | `nota` | barra | Dejar un comentario en una tarea |
@@ -135,8 +136,15 @@ En **Google Chat API → Configuration → sección "Comandos"**, agregar uno po
 
 También hay alias, por si alguien escribe otra palabra: `/tareas` = `/hoy`,
 `/vencidas` = `/atrasadas`, `/estado` = `/resumen`, `/detalle` = `/tarea`,
-`/grupo` = `/local`, `/comentar` = `/nota`, `/help` = `/ayuda`. No hace falta darlos
-de alta: funcionan si alguien los escribe.
+`/grupo` = `/local`, `/comentar` = `/nota`, `/hecha` = `/marcar`, `/help` = `/ayuda`.
+No hace falta darlos de alta: funcionan si alguien los escribe.
+
+> **`/marcar` es el único de los cuatro comandos de "coordinar" que SI da la tarea por
+> hecha** (`/tomar`, `/pasar` y `/nota` deliberadamente no lo hacen). Por eso, a
+> diferencia de esos tres, reusa `marcarInstanciaYPropagar` — el mismo helper del click
+> del botón de la tarjeta — en vez de llamar a `gcal.marcarInstancia` directo: da gratis
+> el chequeo de "ya estaba marcada", la propagación a departamentos compartidos, y el
+> aviso de prerrequisito pendiente.
 
 > **`/derivar` y `/apuntar` son comandos NUEVOS, no una reconfiguración de `/pasar` y
 > `/nota`.** Hacen lo mismo, pero con un diálogo en vez de texto ("tarea: destino" /

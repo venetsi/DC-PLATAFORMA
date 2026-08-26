@@ -13,6 +13,8 @@ import { hoyEnArgentina, clasificarInstancia, diasHabilesVencida, estaHecha } fr
 import { lineaDeTarea } from './mensajes-chat.js'
 import { esAdminGlobal, puedeGestionarDepartamento } from './permisos.js'
 import { SLUG_DIRECCION } from './direccion.js'
+import { marcarInstanciaYPropagar } from './marcar-instancia.js'
+import { prerrequisitosPendientes } from './dependencias.js'
 
 // Minusculas y sin acentos, para comparar lo que alguien escribio a mano
 // ("/Mías", "Auditoría") contra un slug. Un solo lugar para no repetir el
@@ -59,6 +61,14 @@ export const COMANDO_ASIGNAR = 10
 export const COMANDO_DERIVAR = 16
 export const COMANDO_APUNTAR = 17
 
+// Marca una tarea como hecha por texto, sin pasar por el boton de la tarjeta
+// del recordatorio -- ese boton solo existe si la tarea aparece en el aviso
+// del dia, y /tomar, /pasar y /nota deliberadamente NO marcan nada (ver sus
+// comentarios). Reusa marcarInstanciaYPropagar, el mismo helper del click de
+// boton: mismo chequeo de "ya estaba", misma propagacion a departamentos
+// compartidos, mismos avisos de prerrequisito pendiente.
+export const COMANDO_MARCAR = 18
+
 // Comandos de status. Los que NO llevan parametro conviene darlos de alta como
 // "Comando rapido" en la consola (se ejecutan con un click desde el menu, sin
 // escribir); los que llevan parametro tienen que ser "Comando de barra".
@@ -83,6 +93,8 @@ const POR_NOMBRE = {
   help: COMANDO_AYUDA,
   vincular: COMANDO_VINCULAR,
   desvincular: COMANDO_DESVINCULAR,
+  marcar: COMANDO_MARCAR,
+  hecha: COMANDO_MARCAR,
   tomar: COMANDO_TOMAR,
   pasar: COMANDO_PASAR,
   nota: COMANDO_NOTA,
@@ -150,6 +162,7 @@ const AYUDA = [
   '`/mias` — las que están a tu nombre (más las del equipo sin responsable fijo)',
   '',
   '*Para coordinar*',
+  '`/marcar cierre` — la das por hecha',
   '`/tomar cierre` — la tarea queda a tu nombre',
   '`/pasar cierre: juan@dcsmart.app` — se la pasás a otra persona',
   '`/nota cierre: hablé con el proveedor` — dejás un comentario en el historial de la tarea',
@@ -282,12 +295,12 @@ function sugerirSobreEventos(items) {
   const primera = items[0]
   if (!primera) return ''
   const nombre = nombreDeEvento(primera.evento)
-  return nombre ? sugerir(`/tarea ${nombre}`, `/tomar ${nombre}`) : ''
+  return nombre ? sugerir(`/marcar ${nombre}`, `/tarea ${nombre}`, `/tomar ${nombre}`) : ''
 }
 
 function sugerirSobreOperables(items) {
   const primera = items[0]
-  return primera?.nombre ? sugerir(`/tarea ${primera.nombre}`, `/tomar ${primera.nombre}`) : ''
+  return primera?.nombre ? sugerir(`/marcar ${primera.nombre}`, `/tarea ${primera.nombre}`, `/tomar ${primera.nombre}`) : ''
 }
 
 function sinNada(texto) {
@@ -540,11 +553,52 @@ function pedirPrecision(resultado, operables, { modoTodo = false } = {}) {
   return `No encontré esa tarea. Las pendientes son:\n\n${disponibles.map((o) => `• ${etiqueta(o)}`).join('\n')}`
 }
 
-// Se usa marcarInstancia para las tres: mergea extendedProperties con las que
-// ya tiene y appendea al historial del evento. Solo pone el ✓ y el gris cuando
-// se le pasa estado REALIZADA, asi que aca no marca nada como hecho.
+// /tomar, /pasar y /nota usan gcal.marcarInstancia DIRECTO: mergean
+// extendedProperties con las que ya tiene y appendean al historial, pero
+// deliberadamente no ponen estado REALIZADA -- ninguna de las tres da la
+// tarea por hecha, solo cambian quien se encarga o dejan constancia.
+//
+// /marcar es la excepcion: SI cierra la tarea, asi que reusa
+// marcarInstanciaYPropagar (lib/marcar-instancia.js) -- el mismo helper del
+// click del boton de la tarjeta -- en vez de gcal.marcarInstancia. Eso da,
+// gratis, lo que las otras tres no necesitan: chequeo de "ya estaba marcada"
+// (evita duplicar la linea de historial en un doble click), propagacion a las
+// copias de departamentos compartidos, y el aviso de prerrequisito pendiente.
 function ahoraISO() {
   return new Date().toISOString()
+}
+
+async function comandoMarcar(deps, { departamentos, modoTodo, email, argumento }) {
+  const { gcal } = deps
+  const hoyISO = hoyEnArgentina()
+  const operables = await instanciasOperables(gcal, departamentos, hoyISO)
+  const r = buscarPorTexto(operables, argumento, hoyISO)
+  if (!r.una) return pedirPrecision(r, operables, { modoTodo })
+
+  const { evento, nombre, departamento } = r.una
+  const etiqueta = modoTodo ? `*${nombre}* (${departamento.nombre})` : `*${nombre}*`
+
+  const { evento: eventoFresco, yaEstaba, avisos } = await marcarInstanciaYPropagar(deps, {
+    calendarId: departamento.id_calendar_google,
+    instanceId: evento.id,
+    emailUsuario: email,
+    evaluarAvisos: ({ idAsignacion, fechaISO }) => prerrequisitosPendientes(deps, { idAsignacion, fechaISO }),
+    // Mismo motivo que el click de boton: Chat corta a los 30s y el backoff
+    // ante un 429 puede dormir hasta 30s solo, asi que la propagacion a
+    // departamentos compartidos se resuelve en background.
+    propagarEnBackground: true
+  })
+
+  if (yaEstaba) {
+    const quien = eventoFresco?.extendedProperties?.private?.realizada_por
+    return `✓ ${etiqueta} ya estaba marcada${quien ? ` por ${quien}` : ''}.`
+  }
+
+  const sufijo = avisos.length
+    ? `\n⚠️ Ojo: todavía no ${avisos.length === 1 ? 'está hecha' : 'están hechas'} ` +
+      avisos.map((a) => `*${a.nombre_tarea}* (${a.departamento})`).join(', ') + '.'
+    : ''
+  return `✅ ${etiqueta} marcada por ${email}.${sufijo}` + sugerir(`/tarea ${nombre}`)
 }
 
 async function comandoTomar(deps, { departamentos, modoTodo, email, argumento }) {
@@ -567,7 +621,7 @@ async function comandoTomar(deps, { departamentos, modoTodo, email, argumento })
     logLine: `${ahoraISO()} - TOMADA por ${email}${actual ? ` (antes: ${actual})` : ''}`
   })
   const etiqueta = modoTodo ? `*${nombre}* (${departamento.nombre})` : `*${nombre}*`
-  const cierre = sugerir(`/nota ${nombre}: `, `/tarea ${nombre}`)
+  const cierre = sugerir(`/marcar ${nombre}`, `/nota ${nombre}: `, `/tarea ${nombre}`)
   return actual
     ? `✋ ${etiqueta} pasa de ${actual} a vos.${cierre}`
     : `✋ Listo, ${etiqueta} queda a tu nombre.${cierre}`
@@ -634,7 +688,7 @@ async function comandoNota(deps, { departamentos, modoTodo, email, argumento }) 
     logLine: `${ahoraISO()} - NOTA de ${email}: ${nota}`
   })
   const etiqueta = modoTodo ? `*${nombre}* (${departamento.nombre})` : `*${nombre}*`
-  return `📝 Anotado en ${etiqueta}:\n_${nota}_` + sugerir(`/tarea ${nombre}`)
+  return `📝 Anotado en ${etiqueta}:\n_${nota}_` + sugerir(`/marcar ${nombre}`, `/tarea ${nombre}`)
 }
 
 // ── Comandos de status ────────────────────────────────────────────────────
@@ -713,7 +767,7 @@ async function comandoTarea(deps, { departamentos, nombreLocal, argumento }) {
     lineas.join('\n') +
     (hecha
       ? sugerir(`/nota ${nombre}: `)
-      : sugerir(`/tomar ${nombre}`, `/nota ${nombre}: `, `/pasar ${nombre}: `))
+      : sugerir(`/marcar ${nombre}`, `/tomar ${nombre}`, `/nota ${nombre}: `, `/pasar ${nombre}: `))
   )
 }
 
@@ -1128,6 +1182,7 @@ const HANDLERS = {
   [COMANDO_HOY]: comandoHoy,
   [COMANDO_ATRASADAS]: comandoAtrasadas,
   [COMANDO_MIAS]: comandoMias,
+  [COMANDO_MARCAR]: comandoMarcar,
   [COMANDO_TOMAR]: comandoTomar,
   [COMANDO_PASAR]: comandoPasar,
   [COMANDO_NOTA]: comandoNota,
