@@ -19,10 +19,13 @@ function textoDeItem({ evento, dias }, nombreLocal) {
 
 // Boton "Marcar hecha" que resuelve el click en el propio endpoint.
 //
-// NO SE USA HOY: los botones de tipo `action` no funcionan en esta app --
+// NO SE USA HOY: nada de lo que llegue como buttonClickedPayload funciona en
+// esta app -- ni los botones dentro de mensajes ni el envio de un dialogo.
 // Chat reconoce el click (queda en chat.googleapis.com/errors con el
 // deploymentFunction correcto) pero nunca llega un request al endpoint, y
-// responde "Can't post a reply". Se probo y descarto: tipo de Space
+// responde "Can't post a reply". Los comandos (appCommandPayload) y los
+// eventos de ciclo de vida (addedToSpacePayload) SI funcionan, asi que el
+// problema esta acotado a ese canal. Se probo y descarto: tipo de Space
 // (colaboracion vs anuncios), permisos del Space, cache del browser, espacios
 // externos, y crear un deployment en gsuiteaddons. Ver
 // docs/CONFIGURAR-CHAT-APP.md.
@@ -157,10 +160,9 @@ export const CAMPO_TAREA = 'tarea'
 // Dialogo (formulario modal) para elegir una tarea de una lista en vez de
 // escribir su nombre. Se abre devolviendo action.navigations[].pushCard.
 //
-// EXPERIMENTAL: el envio del formulario vuelve como buttonClickedPayload con
-// isDialogEvent, o sea por el mismo canal de acciones que hoy no funciona en
-// esta app. Se prueba porque el dialogo se ABRE desde un comando (canal sano) y
-// no es obvio que el envio herede la falla.
+// El dialogo SE ABRE bien (viene de un comando), pero su ENVIO no llega al
+// endpoint: vuelve como buttonClickedPayload, el mismo canal roto que los
+// botones. Confirmado en produccion. Ver botonMarcar arriba.
 export function dialogoAsignar(pendientes, { departamento, porFallback } = {}) {
   // Siempre se nombra el departamento: un "no hay nada pendiente 🎉" sin decir
   // de QUE departamento resulta enganoso -- paso de verdad al probar en un

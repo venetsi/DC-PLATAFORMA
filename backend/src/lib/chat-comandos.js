@@ -43,12 +43,18 @@ export const COMANDO_DESVINCULAR = 6
 export const COMANDO_TOMAR = 7
 export const COMANDO_PASAR = 8
 export const COMANDO_NOTA = 9
-// Experimento: /asignar abre un DIALOGO (formulario modal) para elegir la tarea
-// de una lista en vez de escribir su nombre. Segun la documentacion de Google
-// el envio del dialogo llega como buttonClickedPayload con isDialogEvent, o sea
-// por el mismo canal de acciones que hoy no funciona -- se prueba igual porque
-// el dialogo se ABRE desde un comando (canal que si funciona) y no es obvio que
-// el envio herede la falla. Si no anda, /tomar por texto sigue siendo el camino.
+// /asignar abre un DIALOGO (formulario modal) para elegir la tarea de una lista
+// en vez de escribir su nombre.
+//
+// NO FUNCIONA HOY, y el experimento sirvio para delimitar el problema: el
+// dialogo SI se abre (viene de un comando, canal sano) pero su envio NO llega
+// nunca al endpoint -- Chat muestra "No se pudo cargar este dialogo. La app no
+// responde o la respuesta no es valida". Confirma que lo roto es TODO lo que
+// llega como buttonClickedPayload: botones dentro de mensajes y envios de
+// dialogo por igual. /tomar por texto es el camino que funciona.
+//
+// Se deja el codigo entero (probado de punta a punta simulando el envio) porque
+// el dia que Google destrabe ese canal vuelve a andar sin tocar nada.
 export const COMANDO_ASIGNAR = 10
 
 const POR_NOMBRE = {
@@ -125,7 +131,7 @@ const AYUDA = [
   '_No hace falta escribir el nombre completo de la tarea: con una parte alcanza_',
   '_(`/tomar cierre`). Si hay más de una que coincida, te pregunto cuál._',
   '',
-  '_Solo administradores:_ `/vincular finanzas` para que este Space reciba los recordatorios, y `/desvincular` para que dejen de llegar.',
+  '_Solo administradores:_ `/vincular` y el nombre del departamento, para que este Space reciba los recordatorios. `/desvincular` para que dejen de llegar.',
   '',
   '_Los recordatorios llegan solos todas las mañanas._'
 ].join('\n')
@@ -160,7 +166,7 @@ async function resolverDepartamento(db, { space, extUser }) {
 function avisoDeFallback(departamento) {
   return (
     `\n\n_Este Space no está vinculado a ningún departamento, así que te muestro las de *${departamento.nombre}* (el tuyo)._` +
-    '\n_Un administrador puede vincularlo con_ `/vincular finanzas`_._'
+    '\n_Un administrador puede vincularlo escribiendo_ `/vincular` _y el nombre del departamento._'
   )
 }
 
@@ -477,7 +483,7 @@ export async function pendientesParaAsignar(deps, { space, extUser }) {
   const { db, gcal } = deps
   const { departamento, porFallback } = await resolverDepartamento(db, { space, extUser })
   if (!departamento?.id_calendar_google) {
-    return { error: '⚠️ No pude resolver un departamento con calendario para este Space. Un administrador puede vincularlo con `/vincular finanzas`.' }
+    return { error: '⚠️ No pude resolver un departamento con calendario para este Space. Un administrador puede vincularlo escribiendo `/vincular` y el nombre del departamento.' }
   }
 
   const hoyISO = hoyEnArgentina()

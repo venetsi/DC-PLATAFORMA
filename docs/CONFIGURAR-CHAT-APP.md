@@ -3,12 +3,11 @@
 Todo el código de la Fase C está desplegado. Falta la configuración en la consola de
 Google Cloud, que **no tiene API pública** — hay que hacerla a mano una vez.
 
-**Estado real (2026-08-26, tras un diagnóstico largo — ver el final de este documento):**
-agregar/sacar la app de un Space funciona en producción. Los clicks en los botones de
-las tarjetas **todavía no** — Chat reconoce el botón pero reporta que la respuesta
-"no llegó o fue inválida", y no hay ningún request llegando al servidor. Nada de esto
-rompe lo demás: mientras tanto, sigue saliendo el aviso por webhook en texto plano para
-los departamentos que lo tengan configurado.
+**Estado (2026-08-26):** la app funciona en producción con comandos de barra y con el
+recordatorio diario. Lo único que no funciona son los botones que resuelven una acción
+dentro de Chat — ver "Qué funciona y qué no" más abajo, con el detalle de todo lo que se
+probó. No bloquea nada: los comandos cubren lo mismo y los botones de las tarjetas
+abren la plataforma.
 
 > La documentación oficial de Google está incompleta en varios de estos pasos — lo que
 > sigue está confirmado contra la consola real y contra logs de producción, no copiado
@@ -97,23 +96,32 @@ app puramente de Chat.)*
 ## 3b. Cargar los comandos de barra
 
 En **Google Chat API → Configuration → sección "Comandos"**, agregar uno por uno con
-**"Agrega un comando"**. Los IDs tienen que ser EXACTAMENTE estos, porque son los que
-espera `backend/src/lib/chat-comandos.js`:
+**"Agrega un comando"**:
 
-| ID | Nombre | Descripción sugerida | Tipo |
+| ID | Nombre | Descripción sugerida | Diálogo |
 |---|---|---|---|
-| `1` | `/hoy` | Las tareas que vencen hoy | Comando de barra |
-| `2` | `/atrasadas` | Lo que quedó sin hacer | Comando de barra |
-| `3` | `/mias` | Las tareas que están a mi nombre | Comando de barra |
-| `4` | `/ayuda` | Ver los comandos disponibles | Comando de barra |
+| `1` | `hoy` | Las tareas que vencen hoy | no |
+| `2` | `atrasadas` | Lo que quedó sin hacer | no |
+| `3` | `mias` | Las tareas que están a mi nombre | no |
+| `4` | `ayuda` | Ver los comandos disponibles | no |
+| `5` | `vincular` | Vincular este Space a un departamento | no |
+| `6` | `desvincular` | Dejar de recibir los recordatorios acá | no |
+| `7` | `tomar` | Poner una tarea a mi nombre | no |
+| `8` | `pasar` | Pasarle una tarea a otra persona | no |
+| `9` | `nota` | Dejar un comentario en una tarea | no |
+| `10` | `asignar` | Elegir una tarea de una lista | **sí** — pero no funciona, ver más abajo |
+
+Todos son de tipo **"Comando de barra"**. Los IDs son una referencia, no un requisito:
+el comando se resuelve por su **nombre**, así que si uno queda con otro número igual
+funciona. (Antes se resolvía por ID y un número cruzado hacía que `/ayuda` contestara
+"Atrasadas".)
 
 Los comandos van por un mecanismo **distinto** al de los botones de las tarjetas
-(`appCommandPayload` en vez de `buttonClickedPayload`), así que **pueden funcionar
-incluso mientras los clicks sigan sin andar** — y si funcionan, confirman que el
-problema está en el ruteo de acciones de tarjetas y no en la app.
+(`appCommandPayload` en vez de `buttonClickedPayload`), y **funcionan** aunque los
+botones no. Por eso todo lo que la app escribe se hace por comando.
 
-Probar con `/ayuda` primero: es el único que no toca Calendar, así que aísla si el
-problema fuera de permisos o de datos.
+Para probar, empezar por `/ayuda`: es el único que no toca Calendar, así que aísla si
+el problema fuera de permisos o de datos.
 
 ## 4. Cargar la audiencia en Cloud Run
 
@@ -187,38 +195,51 @@ de Pagos. En particular:
 Las pantallas de **Chat API** y **Marketplace SDK** (pasos 2 y 3 de arriba) son
 seguras — viven en otra sección de la consola y no comparten nada con esto.
 
-## Diagnóstico: los clicks de botones no llegan al webhook (estado abierto)
+## Qué funciona y qué no (verificado en producción)
 
-Agregar/sacar la app del Space funciona (confirmado con requests reales llegando al
-servidor). Tocar un botón ("Marcar hecha", "Vincular") **no** — el botón queda
-girando y termina en *"DC-PLATAFORMA no puede procesar tu solicitud."*, sin que
-Cloud Run registre ningún request entrante para ese click.
+| Canal | Payload | Estado |
+|---|---|---|
+| Agregar / sacar la app de un Space | `addedToSpacePayload` / `removedFromSpacePayload` | ✅ funciona |
+| Comandos de barra (`/hoy`, `/tomar`…) | `appCommandPayload` | ✅ funciona |
+| Botón dentro de un mensaje | `buttonClickedPayload` | ❌ no llega al endpoint |
+| Envío de un diálogo | `buttonClickedPayload` (con `isDialogEvent`) | ❌ no llega al endpoint |
+| Botón de tipo `openLink` | — (lo resuelve el cliente) | ✅ funciona |
 
-**El log más útil para esto no es el de Cloud Run — es el de la propia Chat API:**
+Lo roto está acotado a **todo lo que vuelve como `buttonClickedPayload`**. Chat
+reconoce el click (queda registrado con el `deploymentFunction` correcto) pero nunca
+llega un request al servidor, y muestra *"La app no responde o la respuesta no es
+válida"*.
+
+Por eso la app usa comandos para todo lo que escribe, y los botones de las tarjetas
+son `openLink` (abren la plataforma) en vez de resolver la acción en Chat.
+
+### Qué se probó y descartó
+
+- Tipo de Space (colaboración vs. anuncios) y sus permisos de publicación.
+- Caché del navegador (probado en incógnito) y Spaces marcados como externos.
+- La URL y la audiencia de "Configuración de conexión".
+- Crear e instalar un deployment en `gsuiteaddons` (queda hecho; no cambió nada).
+- Un diálogo, que confirmó que el problema no es del widget sino del canal.
+
+### El log que sirve para diagnosticar
+
+No es el de Cloud Run — es uno dedicado de la propia Chat API:
 
 ```bash
 gcloud logging read 'logName="projects/dc-smart-mvp/logs/chat.googleapis.com%2Ferrors"' --limit 5 --freshness=1h --project dc-smart-mvp
 ```
 
-Muestra `deploymentFunction` (qué botón se clickeó — confirma que Chat sí lo
-reconoce) y el error real:
-`"Can't post a reply. The Chat app didn't respond or its response was invalid."`
+Muestra qué botón se clickeó (`deploymentFunction`) y el error real de Google. Fue
+el que reveló un bug propio que estaba escondido detrás de este: los mensajes cuyo
+texto contenía `&lt;algo&gt;` (los placeholders de la ayuda) eran rechazados enteros con
+`invalidContent`, porque Chat los lee como etiquetas HTML desconocidas. Hay una
+guarda en `routes/chat.js#escaparPseudoEtiquetas` para que no vuelva a pasar.
 
-**Ya se descartó**, probando cada uno:
-- Caché del navegador (mismo resultado en incógnito).
-- Espacio marcado como "externo" (mismo resultado en un Space nuevo, sin ese aviso).
-- Checkboxes reseteados (re-verificados uno por uno).
-- La URL/audiencia de "Configuración de conexión" (correcta).
-- Que faltara la implementación de "Implementaciones de HTTP" (se creó e instaló una,
-  sin cambio).
+### Si algún día se destraba
 
-**Sospecha sin confirmar**: demora de propagación del lado de Google para el ruteo de
-*acciones* específicamente (el deployment de `gsuiteaddons` se creó el mismo día),
-aunque los eventos de ciclo de vida (que no dependen de ese ruteo) ya funcionan.
-
-Para retomar: postear una tarjeta de prueba mínima con
-`backend/src/lib/chat.js#postearEnSpace()` (con un solo botón, sin depender del job
-completo) y clickearla, revisando el log de arriba después de cada intento.
+El código de los botones y del diálogo está escrito y probado de punta a punta
+(simulando el envío). Volver a activarlo es cambiar `botonAbrir` por `botonMarcar`
+en `chat-cards.js#seccionDeTareas`.
 
 ## Opcional: el fallback de identidad
 
