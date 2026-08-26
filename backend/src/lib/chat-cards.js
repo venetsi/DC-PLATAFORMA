@@ -125,7 +125,7 @@ export function cardDepartamento(departamento, baldes, nombreLocal, { umbrales, 
       widgets: [
         {
           decoratedText: {
-            text: `<i>y ${total - mostradas} más</i>`,
+            text: `_y ${total - mostradas} más_`,
             wrapText: true,
             // Sin condicional: urlPublica() siempre devuelve una URL usable,
             // asi que el boton nunca queda a medias.

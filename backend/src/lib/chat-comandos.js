@@ -118,14 +118,14 @@ const AYUDA = [
   '`/mias` — las que están a tu nombre (más las del equipo sin responsable fijo)',
   '',
   '*Para coordinar*',
-  '`/tomar <tarea>` — la tarea queda a tu nombre',
-  '`/pasar <tarea>: <email>` — se la pasás a otra persona',
-  '`/nota <tarea>: <texto>` — dejás un comentario en el historial de la tarea',
+  '`/tomar cierre` — la tarea queda a tu nombre',
+  '`/pasar cierre: juan@dcsmart.app` — se la pasás a otra persona',
+  '`/nota cierre: hablé con el proveedor` — dejás un comentario en el historial de la tarea',
   '',
   '_No hace falta escribir el nombre completo de la tarea: con una parte alcanza_',
   '_(`/tomar cierre`). Si hay más de una que coincida, te pregunto cuál._',
   '',
-  '_Solo administradores:_ `/vincular <departamento>` para que este Space reciba los recordatorios, y `/desvincular` para que dejen de llegar.',
+  '_Solo administradores:_ `/vincular finanzas` para que este Space reciba los recordatorios, y `/desvincular` para que dejen de llegar.',
   '',
   '_Los recordatorios llegan solos todas las mañanas._'
 ].join('\n')
@@ -160,7 +160,7 @@ async function resolverDepartamento(db, { space, extUser }) {
 function avisoDeFallback(departamento) {
   return (
     `\n\n_Este Space no está vinculado a ningún departamento, así que te muestro las de *${departamento.nombre}* (el tuyo)._` +
-    '\n_Un administrador puede vincularlo con_ `/vincular <departamento>`_._'
+    '\n_Un administrador puede vincularlo con_ `/vincular finanzas`_._'
   )
 }
 
@@ -410,7 +410,7 @@ async function comandoPasar(deps, { departamento, email, argumento }) {
   const { tarea, resto: destino } = partirArgumento(argumento)
 
   if (!tarea || !destino) {
-    return 'Usalo así: `/pasar <tarea>: <email>`\nPor ejemplo: `/pasar cierre: juan@dcsmart.app`'
+    return 'Necesito la tarea y el email, separados por dos puntos.\nPor ejemplo: `/pasar cierre: juan@dcsmart.app`'
   }
 
   const emailDestino = normalizarEmail(destino)
@@ -447,7 +447,7 @@ async function comandoNota(deps, { departamento, email, argumento }) {
   const { tarea, resto: nota } = partirArgumento(argumento)
 
   if (!tarea || !nota) {
-    return 'Usalo así: `/nota <tarea>: <texto>`\nPor ejemplo: `/nota cierre: hablé con el proveedor, viene el jueves`'
+    return 'Necesito la tarea y la nota, separadas por dos puntos.\nPor ejemplo: `/nota cierre: hablé con el proveedor, viene el jueves`'
   }
 
   const hoyISO = hoyEnArgentina()
@@ -477,7 +477,7 @@ export async function pendientesParaAsignar(deps, { space, extUser }) {
   const { db, gcal } = deps
   const { departamento, porFallback } = await resolverDepartamento(db, { space, extUser })
   if (!departamento?.id_calendar_google) {
-    return { error: '⚠️ No pude resolver un departamento con calendario para este Space. Un administrador puede vincularlo con `/vincular <departamento>`.' }
+    return { error: '⚠️ No pude resolver un departamento con calendario para este Space. Un administrador puede vincularlo con `/vincular finanzas`.' }
   }
 
   const hoyISO = hoyEnArgentina()

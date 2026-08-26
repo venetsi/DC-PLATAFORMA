@@ -45,8 +45,33 @@ import {
 // Las dos acciones que devuelve este framework (ver
 // hostAppDataAction.chatDataAction en la doc de Workspace Add-ons): crear
 // pisa nada, actualizar reemplaza el mensaje sobre el que se clickeo.
+// Chat rechaza el mensaje COMPLETO si el texto trae algo que parezca una
+// etiqueta HTML desconocida. Paso de verdad: los ejemplos de la ayuda decian
+// "/nota <tarea>: <texto>" y Chat contestaba
+// "Can't post a reply. Verify the URL format.; invalidContent: <texto>",
+// asi que el comando fallaba entero y en el Space solo se veia un error
+// generico. La guarda escapa esos angulos en vez de confiar en que nadie
+// vuelva a escribir un placeholder asi.
+//
+// No se tocan TODOS los `<`: Chat soporta <b>, <i>, <u>, <s> y <a href>, y el
+// formato nativo (*negrita*, _cursiva_) sigue intacto porque no usa angulos.
+//
+// Se cambia a corchetes en vez de escapar a &lt;: no esta confirmado que Chat
+// interprete entidades HTML, y si no lo hiciera el usuario veria "&lt;tarea&gt;"
+// literal. Un corchete se ve bien siempre y ademas es la convencion habitual
+// para un placeholder.
+const ETIQUETAS_QUE_CHAT_ACEPTA = /^\/?(b|i|u|s|font|a)(\s|$)/i
+
+export function escaparPseudoEtiquetas(texto) {
+  if (typeof texto !== 'string') return texto
+  return texto.replace(/<([^<>]*)>/g, (completo, dentro) =>
+    ETIQUETAS_QUE_CHAT_ACEPTA.test(dentro) ? completo : `[${dentro}]`
+  )
+}
+
 function mensajeNuevo(message) {
-  return { hostAppDataAction: { chatDataAction: { createMessageAction: { message } } } }
+  const seguro = message?.text ? { ...message, text: escaparPseudoEtiquetas(message.text) } : message
+  return { hostAppDataAction: { chatDataAction: { createMessageAction: { message: seguro } } } }
 }
 function mensajeActualizado(message) {
   return { hostAppDataAction: { chatDataAction: { updateMessageAction: { message } } } }
