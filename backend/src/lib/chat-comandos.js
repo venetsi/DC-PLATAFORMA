@@ -49,6 +49,15 @@ export const COMANDO_NOTA = 9
 // una vez corregido que action.function tiene que ser la URL del endpoint.
 export const COMANDO_ASIGNAR = 10
 
+// /derivar y /apuntar son la version en dialogo de /pasar y /nota: eligen la
+// tarea (y la persona, o escriben la nota) de un formulario en vez de texto.
+// Comandos NUEVOS a proposito -- no se reconfiguro /pasar ni /nota como
+// "barra + Dialogo" para no arriesgar el comando de barra ya probado en
+// produccion (no esta confirmado que siga aceptando texto plano una vez
+// reconfigurado asi).
+export const COMANDO_DERIVAR = 16
+export const COMANDO_APUNTAR = 17
+
 // Comandos de status. Los que NO llevan parametro conviene darlos de alta como
 // "Comando rapido" en la consola (se ejecutan con un click desde el menu, sin
 // escribir); los que llevan parametro tienen que ser "Comando de barra".
@@ -78,6 +87,8 @@ const POR_NOMBRE = {
   nota: COMANDO_NOTA,
   comentar: COMANDO_NOTA,
   asignar: COMANDO_ASIGNAR,
+  derivar: COMANDO_DERIVAR,
+  apuntar: COMANDO_APUNTAR,
   tarea: COMANDO_TAREA,
   detalle: COMANDO_TAREA,
   local: COMANDO_LOCAL,
@@ -141,6 +152,8 @@ const AYUDA = [
   '`/tomar cierre` — la tarea queda a tu nombre',
   '`/pasar cierre: juan@dcsmart.app` — se la pasás a otra persona',
   '`/nota cierre: hablé con el proveedor` — dejás un comentario en el historial de la tarea',
+  '_(`/derivar` y `/apuntar` hacen lo mismo que `/pasar` y `/nota`, pero con un formulario_',
+  '_para elegir de una lista en vez de escribir.)_',
   '',
   '*Para ver el detalle*',
   '`/tarea cierre` — en qué anda una tarea, quién la tiene y su historial',
@@ -858,6 +871,86 @@ export async function tomarPorInstanceId(deps, { space, extUser, email, instance
   })
   log.info?.({ instanceId, email }, 'chat: tarea tomada desde el dialogo')
   return `✋ ${nombre} queda a tu nombre.`
+}
+
+// Nomina para el dropdown de /derivar. Compania entera, no acotada al
+// departamento: /pasar ya permite pasarle una tarea a alguien de otro equipo
+// (con su propio aviso), asi que el dialogo no tiene por que ser mas
+// restrictivo que el comando de texto que imita.
+export async function personasActivas(deps) {
+  const { db } = deps
+  return db.extUser.findMany({
+    where: { activo: true },
+    select: { email: true, nombre: true },
+    orderBy: { nombre: 'asc' }
+  })
+}
+
+// Reasigna una instancia por su id (viene del dialogo de /derivar). Mismo
+// criterio que tomarPorInstanceId: el id y el email destino se re-verifican
+// del lado del servidor, el formulario no decide nada por si solo.
+export async function pasarPorInstanceId(deps, { space, extUser, email, instanceId, emailDestino }) {
+  const { db, gcal, log = console } = deps
+  const { departamento } = await resolverDepartamento(db, { space, extUser })
+  if (!departamento?.id_calendar_google) return '⚠️ Este Space no está vinculado a ningún departamento.'
+  if (!instanceId) return '⚠️ No pude identificar la tarea.'
+
+  const destino = normalizarEmail(emailDestino)
+  if (!destino) return '⚠️ Elegí a quién le pasás la tarea.'
+  const persona = await db.extUser.findUnique({ where: { email: destino } })
+  if (!persona?.activo) return '⚠️ Esa persona ya no está activa en la plataforma.'
+
+  const instancia = await gcal.leerInstancia({ calendarId: departamento.id_calendar_google, instanceId })
+  if (!instancia) return '⚠️ Esa tarea ya no existe.'
+
+  const props = instancia.extendedProperties?.private || {}
+  const nombre = props.nombre_tarea || instancia.summary || 'La tarea'
+  if (estaHecha(props)) return `${nombre} ya está hecha, no hace falta pasarla.`
+
+  await gcal.marcarInstancia({
+    calendarId: departamento.id_calendar_google,
+    instanceId,
+    extendedProperties: { asignado_a: destino },
+    logLine: `${ahoraISO()} - REASIGNADA a ${destino} por ${email}`
+  })
+  log.info?.({ instanceId, destino }, 'chat: tarea pasada desde el diálogo')
+
+  // Mismo aviso que comandoPasar: si la persona es de otro departamento, esta
+  // tarea no le va a aparecer en su /mias (que mira su propio departamento).
+  const aviso =
+    persona.id_departamento && persona.id_departamento !== departamento.id
+      ? ` ⚠️ Ojo: ${persona.nombre} no es de ${departamento.nombre}, así que esta tarea no le va a aparecer en su \`/mias\`.`
+      : ''
+  return `➡️ ${nombre} queda a nombre de ${persona.nombre}.${aviso}`
+}
+
+// Agrega una nota a una instancia por su id (viene del dialogo de /apuntar).
+export async function notaPorInstanceId(deps, { space, extUser, email, instanceId, nota }) {
+  const { db, gcal, log = console } = deps
+  const { departamento } = await resolverDepartamento(db, { space, extUser })
+  if (!departamento?.id_calendar_google) return '⚠️ Este Space no está vinculado a ningún departamento.'
+  if (!instanceId) return '⚠️ No pude identificar la tarea.'
+
+  const textoNota = String(nota || '').trim()
+  if (!textoNota) return '⚠️ La nota llegó vacía.'
+
+  const instancia = await gcal.leerInstancia({ calendarId: departamento.id_calendar_google, instanceId })
+  if (!instancia) return '⚠️ Esa tarea ya no existe.'
+
+  const props = instancia.extendedProperties?.private || {}
+  const nombre = props.nombre_tarea || instancia.summary || 'La tarea'
+
+  // A diferencia de /derivar, acá SI se puede anotar una tarea ya hecha --
+  // mismo criterio que comandoNota: dejar constancia despues de cerrarla es
+  // un caso legitimo.
+  await gcal.marcarInstancia({
+    calendarId: departamento.id_calendar_google,
+    instanceId,
+    extendedProperties: {},
+    logLine: `${ahoraISO()} - NOTA de ${email}: ${textoNota}`
+  })
+  log.info?.({ instanceId }, 'chat: nota agregada desde el diálogo')
+  return `📝 Anotado en *${nombre}*.`
 }
 
 // Corta el vinculo de este Space. La otra forma de lograr lo mismo es sacar la

@@ -187,6 +187,51 @@ export function cardDepartamento(departamento, baldes, nombreLocal, { umbrales, 
 export const ACCION_ASIGNAR_SUBMIT = 'asignar_submit'
 export const CAMPO_TAREA = 'tarea'
 
+// Aclaracion comun a los tres dialogos: cuando el departamento no salio del
+// Space, hay que decirlo -- sin esto, alguien parado en un Space sin vincular
+// ve las tareas de otro departamento sin ninguna pista de por que.
+function aclaracionDeFallback(porFallback) {
+  return porFallback
+    ? '\n\nEste Space no está vinculado a ningún departamento, así que ves el tuyo. Un administrador puede vincularlo con /vincular.'
+    : ''
+}
+
+// Card de "no hay nada para elegir" -- misma forma para los tres dialogos
+// (sin pendientes, o sin destinatarios en el caso de /derivar).
+function tarjetaDialogoVacia(titulo, departamento, texto) {
+  return {
+    action: {
+      navigations: [
+        {
+          pushCard: {
+            header: { title: titulo, subtitle: departamento?.nombre },
+            sections: [{ widgets: [{ textParagraph: { text: texto } }] }]
+          }
+        }
+      ]
+    }
+  }
+}
+
+// El selector de tarea es el mismo widget en los tres dialogos (/asignar,
+// /derivar, /apuntar): una tarea de una lista, no un numero ni un texto libre.
+function selectorDeTarea(pendientes, { label = '¿Cuál?' } = {}) {
+  return {
+    selectionInput: {
+      name: CAMPO_TAREA,
+      label,
+      type: 'RADIO_BUTTON',
+      items: pendientes.slice(0, MAX_TAREAS_POR_CARD).map((p, i) => ({
+        text: p.etiqueta,
+        // El value viaja al submit: es el id de la instancia, que el
+        // receptor re-verifica contra Calendar igual.
+        value: p.instanceId,
+        selected: i === 0
+      }))
+    }
+  }
+}
+
 // Dialogo (formulario modal) para elegir una tarea de una lista en vez de
 // escribir su nombre. Se abre devolviendo action.navigations[].pushCard.
 //
@@ -198,25 +243,12 @@ export function dialogoAsignar(pendientes, { departamento, porFallback } = {}) {
   // de QUE departamento resulta enganoso -- paso de verdad al probar en un
   // Space sin vincular, que cae al departamento propio de quien escribe.
   const deQuien = departamento ? ` en ${departamento.nombre}` : ''
-  const aclaracion = porFallback
-    ? '\n\nEste Space no está vinculado a ningún departamento, así que ves el tuyo. Un administrador puede vincularlo con /vincular.'
-    : ''
-
   if (!pendientes.length) {
-    return {
-      action: {
-        navigations: [
-          {
-            pushCard: {
-              header: { title: 'Tomar una tarea', subtitle: departamento?.nombre },
-              sections: [
-                { widgets: [{ textParagraph: { text: `No hay tareas pendientes${deQuien}. 🎉${aclaracion}` } }] }
-              ]
-            }
-          }
-        ]
-      }
-    }
+    return tarjetaDialogoVacia(
+      'Tomar una tarea',
+      departamento,
+      `No hay tareas pendientes${deQuien}. 🎉${aclaracionDeFallback(porFallback)}`
+    )
   }
 
   return {
@@ -228,30 +260,105 @@ export function dialogoAsignar(pendientes, { departamento, porFallback } = {}) {
             sections: [
               {
                 widgets: [
+                  selectorDeTarea(pendientes, { label: '¿Cuál tomás?' }),
+                  { buttonList: { buttons: [{ text: 'Tomar', onClick: accionEnEsteEndpoint(ACCION_ASIGNAR_SUBMIT) }] } }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+
+// /derivar: version en dialogo de /pasar -- elegir tarea Y persona de dos
+// listas en vez de escribir "tarea: email". Nace como comando NUEVO y no como
+// un cambio de tipo sobre /pasar, para no arriesgar el comando de barra que
+// ya esta probado en produccion (no esta confirmado que un comando configurado
+// como "barra + Dialogo" siga aceptando texto plano).
+export const ACCION_PASAR_SUBMIT = 'pasar_submit'
+export const CAMPO_PERSONA = 'persona'
+// Techo de personas en el dropdown -- 30 hoy, no deberia acercarse nunca, pero
+// evita un payload gigante si la nomina crece mucho sin que nadie lo note.
+const MAX_PERSONAS_POR_DIALOGO = 100
+
+export function dialogoPasar(pendientes, personas, { departamento, porFallback } = {}) {
+  const deQuien = departamento ? ` en ${departamento.nombre}` : ''
+  if (!pendientes.length) {
+    return tarjetaDialogoVacia(
+      'Pasar una tarea',
+      departamento,
+      `No hay tareas pendientes${deQuien}. 🎉${aclaracionDeFallback(porFallback)}`
+    )
+  }
+  if (!personas.length) {
+    return tarjetaDialogoVacia('Pasar una tarea', departamento, 'No hay usuarios activos para elegir.')
+  }
+
+  return {
+    action: {
+      navigations: [
+        {
+          pushCard: {
+            header: { title: 'Pasar una tarea', subtitle: departamento?.nombre },
+            sections: [
+              {
+                widgets: [
+                  selectorDeTarea(pendientes, { label: '¿Cuál pasás?' }),
                   {
+                    // Sin item preseleccionado, a proposito: a diferencia de
+                    // la tarea (donde la mas vieja es un default razonable),
+                    // acá no hay una persona "por defecto" -- si nadie elige,
+                    // pasarPorInstanceId lo rechaza en vez de adivinar.
                     selectionInput: {
-                      name: CAMPO_TAREA,
-                      label: '¿Cuál tomás?',
-                      type: 'RADIO_BUTTON',
-                      items: pendientes.slice(0, MAX_TAREAS_POR_CARD).map((p, i) => ({
-                        text: p.etiqueta,
-                        // El value viaja al submit: es el id de la instancia,
-                        // que el receptor re-verifica contra Calendar igual.
-                        value: p.instanceId,
-                        selected: i === 0
+                      name: CAMPO_PERSONA,
+                      label: '¿A quién se la pasás?',
+                      type: 'DROPDOWN',
+                      items: personas.slice(0, MAX_PERSONAS_POR_DIALOGO).map((p) => ({
+                        text: `${p.nombre} (${p.email})`,
+                        value: p.email
                       }))
                     }
                   },
-                  {
-                    buttonList: {
-                      buttons: [
-                        {
-                          text: 'Tomar',
-                          onClick: accionEnEsteEndpoint(ACCION_ASIGNAR_SUBMIT)
-                        }
-                      ]
-                    }
-                  }
+                  { buttonList: { buttons: [{ text: 'Pasar', onClick: accionEnEsteEndpoint(ACCION_PASAR_SUBMIT) }] } }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+
+// /apuntar: version en dialogo de /nota -- elegir tarea de una lista y
+// escribir el comentario en un textInput, en vez de "tarea: comentario".
+export const ACCION_NOTA_SUBMIT = 'nota_submit'
+export const CAMPO_NOTA_TEXTO = 'nota_texto'
+
+export function dialogoApuntar(pendientes, { departamento, porFallback } = {}) {
+  const deQuien = departamento ? ` en ${departamento.nombre}` : ''
+  if (!pendientes.length) {
+    return tarjetaDialogoVacia(
+      'Dejar una nota',
+      departamento,
+      `No hay tareas pendientes${deQuien}. 🎉${aclaracionDeFallback(porFallback)}`
+    )
+  }
+
+  return {
+    action: {
+      navigations: [
+        {
+          pushCard: {
+            header: { title: 'Dejar una nota', subtitle: departamento?.nombre },
+            sections: [
+              {
+                widgets: [
+                  selectorDeTarea(pendientes, { label: '¿En cuál?' }),
+                  { textInput: { name: CAMPO_NOTA_TEXTO, label: 'Nota', type: 'MULTIPLE_LINE' } },
+                  { buttonList: { buttons: [{ text: 'Anotar', onClick: accionEnEsteEndpoint(ACCION_NOTA_SUBMIT) }] } }
                 ]
               }
             ]

@@ -25,22 +25,34 @@ import { resolverEmail } from '../lib/chat.js'
 import {
   cardVincular,
   dialogoAsignar,
+  dialogoPasar,
+  dialogoApuntar,
   cerrarDialogo,
   ACCION_MARCAR,
   ACCION_VINCULAR,
   ACCION_ASIGNAR_SUBMIT,
+  ACCION_PASAR_SUBMIT,
+  ACCION_NOTA_SUBMIT,
   CAMPO_TAREA,
+  CAMPO_PERSONA,
+  CAMPO_NOTA_TEXTO,
   CAMPO_ACCION
 } from '../lib/chat-cards.js'
 import { marcarInstanciaYPropagar } from '../lib/marcar-instancia.js'
 import { prerrequisitosPendientes } from '../lib/dependencias.js'
 import { esAdminGlobal, puedeGestionarDepartamento } from '../lib/permisos.js'
+import { construirTarjetaDepartamento, conNotaSuperior } from '../lib/chat-recordatorio.js'
 import {
   ejecutarComando,
   resolverComando,
   pendientesParaAsignar,
   tomarPorInstanceId,
-  COMANDO_ASIGNAR
+  pasarPorInstanceId,
+  notaPorInstanceId,
+  personasActivas,
+  COMANDO_ASIGNAR,
+  COMANDO_DERIVAR,
+  COMANDO_APUNTAR
 } from '../lib/chat-comandos.js'
 
 // Las dos acciones que devuelve este framework (ver
@@ -78,13 +90,24 @@ function mensajeActualizado(message) {
   return { hostAppDataAction: { chatDataAction: { updateMessageAction: { message } } } }
 }
 
-// TODO: los rechazos (sin permiso, sin identificar, etc.) quedaban antes como
-// mensaje PRIVADO (solo lo veia quien clickeaba, via privateMessageViewer).
-// Ese campo es del formato clasico de Chat bot; en el formato de Workspace
-// Add-ons no se encontro su equivalente documentado. Por ahora estos mensajes
-// salen visibles para todo el Space -- no es grave (no exponen datos
-// sensibles, son avisos de "no tenes permiso"/"no pude identificarte"), pero
-// es mas ruido del que hacia falta. Retomar cuando aparezca la doc.
+// Rechazos de un CLICK (sin permiso, sin identificar, ya no aplica, etc.)
+// salen privados: solo los ve quien clickeo, via privateMessageViewer del
+// recurso Message de la Chat API -- ese campo no es especifico del bot
+// clasico, es del recurso `message` en si, y `message` es lo mismo que se
+// envuelve en createMessageAction aca, asi que aplica igual.
+// `usuario.name` es el `users/<id>` que ya trae todo evento de Chat
+// (chatEvent.user), asi que no hace falta haber resuelto el email todavia.
+// Si por algun motivo no vino `usuario.name`, sale publico como fallback: es
+// mejor que un click se pierda visible a que se pierda en silencio.
+//
+// Los rechazos de un COMANDO DE BARRA (/tomar, /pasar, etc.) siguen publicos
+// a proposito -- decision explicita del usuario: un comando lo escribe una
+// persona a la vista de todos, tiene sentido que la respuesta tambien lo sea.
+function mensajePrivado(usuario, texto) {
+  const base = { text: texto }
+  if (usuario?.name) base.privateMessageViewer = { name: usuario.name }
+  return mensajeNuevo(base)
+}
 
 export default async function chatRoutes(fastify) {
   fastify.post('/eventos', async (request, reply) => {
@@ -198,16 +221,22 @@ async function manejarComando(fastify, chatEvent) {
     return mensajeNuevo({ text: '⚠️ Tu usuario no está activo en la plataforma.' })
   }
 
-  // /asignar responde con un DIALOGO, no con un mensaje: es una estructura
-  // distinta (action.navigations) y va sin el envoltorio de chatDataAction.
-  if (resolverComando({ comandoId, texto }) === COMANDO_ASIGNAR) {
+  // /asignar, /derivar y /apuntar responden con un DIALOGO, no con un mensaje:
+  // es una estructura distinta (action.navigations) y va sin el envoltorio de
+  // chatDataAction. Los tres arrancan igual (misma lista de pendientes), asi
+  // que comparten la resolucion -- solo cambia que card arma cada uno.
+  const comando = resolverComando({ comandoId, texto })
+  if (comando === COMANDO_ASIGNAR || comando === COMANDO_DERIVAR || comando === COMANDO_APUNTAR) {
     const { departamento, pendientes, porFallback, error } = await pendientesParaAsignar(fastify, { space, extUser })
     if (error) return mensajeNuevo({ text: error })
     fastify.log.info(
-      { departamento: departamento.slug, pendientes: pendientes.length, porFallback },
+      { comando, departamento: departamento.slug, pendientes: pendientes.length, porFallback },
       'chat: abriendo diálogo'
     )
-    return dialogoAsignar(pendientes, { departamento, porFallback })
+    if (comando === COMANDO_ASIGNAR) return dialogoAsignar(pendientes, { departamento, porFallback })
+    if (comando === COMANDO_APUNTAR) return dialogoApuntar(pendientes, { departamento, porFallback })
+    const personas = await personasActivas(fastify)
+    return dialogoPasar(pendientes, personas, { departamento, porFallback })
   }
 
   const respuesta = await ejecutarComando(fastify, { comandoId, texto, space, extUser, email })
@@ -245,12 +274,12 @@ async function manejarClick(fastify, chatEvent, common) {
 
   const email = await resolverEmail({ user: usuario, db: fastify.db, log: fastify.log })
   if (!email) {
-    return mensajeNuevo({ text: '⚠️ No pude identificarte. Entrá a la plataforma para marcar la tarea.' })
+    return mensajePrivado(usuario, '⚠️ No pude identificarte. Entrá a la plataforma para marcar la tarea.')
   }
 
   const extUser = await fastify.db.extUser.findUnique({ where: { email } })
   if (!extUser?.activo) {
-    return mensajeNuevo({ text: '⚠️ Tu usuario no está activo en la plataforma.' })
+    return mensajePrivado(usuario, '⚠️ Tu usuario no está activo en la plataforma.')
   }
 
   // El space de un click de boton viaje dentro del propio payload (mismo
@@ -258,16 +287,30 @@ async function manejarClick(fastify, chatEvent, common) {
   // hermano de `user` -- confirmado por los otros dos eventos reales.
   const space = chatEvent.buttonClickedPayload?.space?.name || chatEvent.space?.name
 
-  // Envio del dialogo experimental (/asignar). Llega por este mismo camino,
-  // con isDialogEvent/dialogEventType=SUBMIT_DIALOG, y los valores del
+  // Envio de un dialogo (/asignar, /derivar, /apuntar). Llega por este mismo
+  // camino, con isDialogEvent/dialogEventType=SUBMIT_DIALOG, y los valores del
   // formulario en commonEventObject.formInputs.
   if (funcion === ACCION_ASIGNAR_SUBMIT) {
     const instanceId = leerCampoDelFormulario(common, CAMPO_TAREA)
     fastify.log.info(
       { instanceId, esDialogo: chatEvent.buttonClickedPayload?.isDialogEvent },
-      'chat: envío de diálogo recibido'
+      'chat: envío de diálogo recibido (asignar)'
     )
     const texto = await tomarPorInstanceId(fastify, { space, extUser, email, instanceId })
+    return cerrarDialogo(texto)
+  }
+  if (funcion === ACCION_PASAR_SUBMIT) {
+    const instanceId = leerCampoDelFormulario(common, CAMPO_TAREA)
+    const emailDestino = leerCampoDelFormulario(common, CAMPO_PERSONA)
+    fastify.log.info({ instanceId, emailDestino }, 'chat: envío de diálogo recibido (derivar)')
+    const texto = await pasarPorInstanceId(fastify, { space, extUser, email, instanceId, emailDestino })
+    return cerrarDialogo(texto)
+  }
+  if (funcion === ACCION_NOTA_SUBMIT) {
+    const instanceId = leerCampoDelFormulario(common, CAMPO_TAREA)
+    const nota = leerCampoDelFormulario(common, CAMPO_NOTA_TEXTO)
+    fastify.log.info({ instanceId }, 'chat: envío de diálogo recibido (apuntar)')
+    const texto = await notaPorInstanceId(fastify, { space, extUser, email, instanceId, nota })
     return cerrarDialogo(texto)
   }
 
@@ -281,18 +324,18 @@ function leerCampoDelFormulario(common, campo) {
   return common?.formInputs?.[campo]?.stringInputs?.value?.[0] || null
 }
 
-async function vincular(fastify, space, { extUser, params }) {
+async function vincular(fastify, space, { extUser, usuario, params }) {
   if (!esAdminGlobal(extUser)) {
-    return mensajeNuevo({ text: '⚠️ Solo un administrador puede vincular este Space a un departamento.' })
+    return mensajePrivado(usuario, '⚠️ Solo un administrador puede vincular este Space a un departamento.')
   }
   const idDepartamento = params.idDepartamento
   if (!space || !idDepartamento) return {}
 
   const departamento = await fastify.db.departamento.findUnique({ where: { id: idDepartamento } })
-  if (!departamento) return mensajeNuevo({ text: '⚠️ Ese departamento ya no existe.' })
+  if (!departamento) return mensajePrivado(usuario, '⚠️ Ese departamento ya no existe.')
 
   const ocupado = await fastify.db.departamento.findUnique({ where: { chat_space_name: space } })
-  if (ocupado) return mensajeNuevo({ text: `Este Space ya está vinculado a *${ocupado.nombre}*.` })
+  if (ocupado) return mensajePrivado(usuario, `Este Space ya está vinculado a *${ocupado.nombre}*.`)
 
   await fastify.db.departamento.update({ where: { id: idDepartamento }, data: { chat_space_name: space } })
   fastify.log.info({ space, departamento: departamento.slug }, 'chat: space vinculado')
@@ -302,24 +345,24 @@ async function vincular(fastify, space, { extUser, params }) {
   })
 }
 
-async function marcar(fastify, space, { extUser, email, params }) {
+async function marcar(fastify, space, { extUser, email, usuario, params }) {
   // El departamento sale del SPACE, no de los parametros de la card: es el
   // unico dato de este request que el cliente no eligio.
   const departamento = space
     ? await fastify.db.departamento.findUnique({ where: { chat_space_name: space } })
     : null
   if (!departamento?.id_calendar_google) {
-    return mensajeNuevo({ text: '⚠️ Este Space no está vinculado a ningún departamento.' })
+    return mensajePrivado(usuario, '⚠️ Este Space no está vinculado a ningún departamento.')
   }
 
   // Un Space es semi-publico dentro de la organizacion: que alguien lo vea no
   // significa que pueda cerrar tareas de ese departamento.
   if (!puedeGestionarDepartamento(extUser, departamento.id)) {
-    return mensajeNuevo({ text: `⚠️ No tenés permiso para marcar tareas de ${departamento.nombre}.` })
+    return mensajePrivado(usuario, `⚠️ No tenés permiso para marcar tareas de ${departamento.nombre}.`)
   }
 
   const instanceId = params.instanceId
-  if (!instanceId) return mensajeNuevo({ text: '⚠️ No pude identificar la tarea.' })
+  if (!instanceId) return mensajePrivado(usuario, '⚠️ No pude identificar la tarea.')
 
   try {
     const { evento: instancia, yaEstaba, avisos } = await marcarInstanciaYPropagar(fastify, {
@@ -335,17 +378,35 @@ async function marcar(fastify, space, { extUser, email, params }) {
 
     const titulo = instancia?.extendedProperties?.private?.nombre_tarea || instancia?.summary || 'La tarea'
     if (yaEstaba) {
+      // No hubo cambio de estado -- no vale la pena reconstruir la card por
+      // esto, y tampoco es un aviso que le sirva a todo el Space.
       const quien = instancia?.extendedProperties?.private?.realizada_por
-      return mensajeNuevo({ text: `✓ *${titulo}* ya estaba marcada${quien ? ` por ${quien}` : ''}.` })
+      return mensajePrivado(usuario, `✓ *${titulo}* ya estaba marcada${quien ? ` por ${quien}` : ''}.`)
     }
 
     const sufijo = avisos.length
       ? `\n⚠️ Ojo: todavía no ${avisos.length === 1 ? 'está hecha' : 'están hechas'} ` +
         avisos.map((a) => `*${a.nombre_tarea}* (${a.departamento})`).join(', ') + '.'
       : ''
-    return mensajeNuevo({ text: `✅ *${titulo}* marcada por ${email}.${sufijo}` })
+    // Escapado igual que en mensajeNuevo: el titulo/email vienen de datos ya
+    // cargados por un admin, no de un placeholder libre, pero no cuesta nada
+    // aplicar la misma guarda para el widget de texto de la card.
+    const nota = escaparPseudoEtiquetas(`✅ *${titulo}* marcada por ${email}.${sufijo}`)
+
+    // Se actualiza la card EN SU LUGAR (misma tarjeta, no un mensaje nuevo):
+    // el boton que se acaba de clickear ya no aplica -- la tarea esta hecha
+    // -- asi que dejarlo invita a un segundo click sobre algo ya resuelto.
+    // Si la reconstruccion fallara (Calendar caido, etc.), un mensaje de
+    // texto simple es preferible a que el click entero termine en error.
+    try {
+      const tarjeta = await construirTarjetaDepartamento(fastify, departamento)
+      return mensajeActualizado(conNotaSuperior(tarjeta, nota))
+    } catch (err) {
+      fastify.log.error({ err: err.message, instanceId }, 'chat: no se pudo reconstruir la tarjeta')
+      return mensajeNuevo({ text: nota })
+    }
   } catch (err) {
     fastify.log.error({ err: err.message, instanceId }, 'chat: fallo el marcado')
-    return mensajeNuevo({ text: '⚠️ No pude marcarla. Probá desde la plataforma.' })
+    return mensajePrivado(usuario, '⚠️ No pude marcarla. Probá desde la plataforma.')
   }
 }

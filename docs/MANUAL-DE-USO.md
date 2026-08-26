@@ -191,6 +191,10 @@ No hace falta escribir el nombre completo de la tarea: con una parte alcanza. Si
 más de una que coincida, la app te pregunta cuál. Todo queda registrado en el historial
 del evento en Google Calendar, con tu nombre y la fecha.
 
+Si preferís elegir de una lista en vez de escribir, `/tomar`, `/pasar` y `/nota` tienen
+cada uno su versión en formulario: `/asignar`, `/derivar` y `/apuntar`. Hacen exactamente
+lo mismo, solo cambia cómo elegís la tarea (y, en el caso de `/derivar`, la persona).
+
 Un par de detalles:
 
 - `/tomar` y `/pasar` **no** marcan la tarea como hecha, solo cambian quién se encarga.
@@ -201,17 +205,18 @@ Un par de detalles:
 
 **Marcar una tarea desde el recordatorio.** Cada tarea del aviso diario trae un botón
 **Marcar hecha**: un click la cierra sin salir de Chat, y queda registrada en Google
-Calendar con tu nombre igual que si la marcaras desde la plataforma.
+Calendar con tu nombre igual que si la marcaras desde la plataforma. La tarjeta se
+actualiza en el momento con las tareas que quedan pendientes, así que no hace falta
+recargar nada ni se acumulan mensajes viejos con botones que ya no sirven.
 
-- Solo pueden marcar los del departamento (y los administradores).
-- Si alguien ya la marcó, el segundo click avisa quién fue y no duplica nada.
+- Solo pueden marcar los del departamento (y los administradores); si alguien más lo
+  intenta, o pasa algo raro (la tarea ya no existe, el Space no está vinculado), el aviso
+  lo ve solo quien clickeó — no se llena el Space de mensajes de error ajenos.
+- Si alguien ya la marcó, el segundo click te avisa a vos quién fue, sin duplicar nada.
 - Si la tarea espera a otra que todavía no está hecha, se marca igual y la respuesta lo
   aclara.
 - El botón **Ver todas** del pie abre la plataforma cuando hay más tareas de las que
   entran en la tarjeta.
-
-También podés elegir una tarea de una lista con `/asignar`, que abre un formulario en
-vez de pedirte el nombre.
 
 ### Vincular el Space de un departamento (administrador)
 

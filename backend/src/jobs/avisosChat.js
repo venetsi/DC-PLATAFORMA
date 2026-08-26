@@ -22,9 +22,9 @@ import { clasificarParaAviso, resolverUmbrales } from '../lib/escalamiento.js'
 import { crearTransporteChat, crearTransporteConsola, enviarEnSerie } from '../lib/notificaciones.js'
 import { mensajeDepartamento, mensajeDireccion } from '../lib/mensajes-chat.js'
 import { cardDepartamento } from '../lib/chat-cards.js'
+import { DIAS_MINIMOS, desdeHaceNDias, finDeHoyArgentina } from '../lib/ventana-avisos.js'
 
 const SLUG_DIRECCION = process.env.AVISO_SLUG_DIRECCION || 'direccion'
-const DIAS_MINIMOS = 14 // piso historico de la ventana, aunque los umbrales sean chicos
 
 // La ventana se deriva de los umbrales en vez de estar hardcodeada: si alguien
 // configura "escalar a los 20 dias", una ventana fija de 14 nunca llegaria a
@@ -32,20 +32,6 @@ const DIAS_MINIMOS = 14 // piso historico de la ventana, aunque los umbrales sea
 function diasDeVentana(departamentos) {
   const mayor = Math.max(...departamentos.map((d) => resolverUmbrales(d).direccion), 0)
   return Math.max(DIAS_MINIMOS, mayor + 7)
-}
-
-function desdeHaceNDias(n) {
-  const d = new Date()
-  d.setUTCDate(d.getUTCDate() - n)
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString()
-}
-
-// Fin del dia de hoy en Argentina = 03:00 UTC del dia siguiente (UTC-3 todo el
-// año). Con el fin del dia UTC se perdian las tareas de hoy entre las 21:00 y
-// la medianoche local.
-function finDeHoyArgentina(hoyISO) {
-  const [a, m, d] = hoyISO.split('-').map(Number)
-  return new Date(Date.UTC(a, m - 1, d + 1, 3, 0, 0)).toISOString()
 }
 
 async function correr() {

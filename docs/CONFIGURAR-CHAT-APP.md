@@ -4,8 +4,10 @@ Todo el código de la Fase C está desplegado. Falta la configuración en la con
 Google Cloud, que **no tiene API pública** — hay que hacerla a mano una vez.
 
 **Estado (2026-08-26): todo funciona** — comandos de barra, botones que resuelven la
-acción dentro de Chat, y diálogos. Hubo un bug que costó encontrar y está explicado en
-"El campo action.function" más abajo: vale leerlo antes de tocar cualquier botón.
+acción dentro de Chat, y diálogos (`/asignar`, `/derivar`, `/apuntar`). Marcar una tarea
+actualiza la tarjeta en su lugar y los rechazos de un click salen privados. Hubo un bug
+que costó encontrar y está explicado en "El campo action.function" más abajo: vale
+leerlo antes de tocar cualquier botón.
 
 > La documentación oficial de Google está incompleta en varios de estos pasos — lo que
 > sigue está confirmado contra la consola real y contra logs de producción, no copiado
@@ -120,7 +122,9 @@ En **Google Chat API → Configuration → sección "Comandos"**, agregar uno po
 | `9` | `nota` | barra | Dejar un comentario en una tarea |
 | `11` | `tarea` | barra | El detalle y el historial de una tarea |
 | `12` | `local` | barra | Las tareas de un local o de un grupo |
-| `10` | `asignar` | barra + **Diálogo** | Elegir una tarea de una lista |
+| `10` | `asignar` | barra + **Diálogo** | Elegir una tarea de una lista (equivale a `/tomar`) |
+| `16` | `derivar` | barra + **Diálogo** | Elegir tarea y persona de dos listas (equivale a `/pasar`) |
+| `17` | `apuntar` | barra + **Diálogo** | Elegir la tarea de una lista y escribir la nota en un formulario (equivale a `/nota`) |
 
 > **Los IDs importan solo para los comandos rápidos.** Un comando de barra se resuelve
 > por su **nombre** (viene en el texto del mensaje), así que si le queda otro número
@@ -132,6 +136,13 @@ También hay alias, por si alguien escribe otra palabra: `/tareas` = `/hoy`,
 `/vencidas` = `/atrasadas`, `/estado` = `/resumen`, `/detalle` = `/tarea`,
 `/grupo` = `/local`, `/comentar` = `/nota`, `/help` = `/ayuda`. No hace falta darlos
 de alta: funcionan si alguien los escribe.
+
+> **`/derivar` y `/apuntar` son comandos NUEVOS, no una reconfiguración de `/pasar` y
+> `/nota`.** Hacen lo mismo, pero con un diálogo en vez de texto ("tarea: destino" /
+> "tarea: nota"). Se dieron de alta aparte a propósito: no está confirmado que un
+> comando ya configurado como *barra* siga aceptando texto plano una vez que se le
+> agrega el checkbox de *Diálogo*, y `/pasar`/`/nota` ya están probados en producción
+> — no valía la pena arriesgarlos para ahorrarse dos comandos.
 
 Los comandos van por un mecanismo **distinto** al de los botones de las tarjetas
 (`appCommandPayload` en vez de `buttonClickedPayload`), y **funcionan** aunque los
@@ -283,6 +294,24 @@ Muestra el `deploymentFunction` (qué botón se tocó) y el mensaje de Google. F
 reveló, además, que un mensaje cuyo texto contenga `&lt;algo&gt;` es rechazado **entero**
 con `invalidContent`, porque Chat lo lee como una etiqueta HTML desconocida. Hay una
 guarda en `routes/chat.js#escaparPseudoEtiquetas`.
+
+## Después del fix: la tarjeta en su lugar, rechazos privados y dos diálogos más
+
+Con los botones funcionando, se revisaron tres cosas más (2026-08-26):
+
+- **Marcar una tarea actualiza la tarjeta EN SU LUGAR** (`updateMessageAction`) en vez
+  de postear un mensaje nuevo con `✅ marcada`. La tarjeta se reconstruye contra
+  Calendar en vivo (`lib/chat-recordatorio.js`) y la confirmación queda como una línea
+  arriba de las secciones que sigan vigentes. Si la reconstrucción fallara por lo que
+  sea, cae a un mensaje de texto simple en vez de romper el click.
+- **Los rechazos de un click salen privados** (solo los ve quien clickeó), usando
+  `privateMessageViewer` en el `message` que devuelve `createMessageAction` — ese campo
+  es del recurso `Message` de la Chat API, no algo exclusivo del bot clásico, así que
+  aplica igual acá. Los rechazos de un **comando de barra** (`/pasar`, `/tomar`...)
+  siguen públicos a propósito: quien escribe el comando lo hace a la vista de todos.
+- **`/derivar` y `/apuntar`**: versión en diálogo de `/pasar` y `/nota` (ver la tabla de
+  comandos más arriba). Comandos nuevos, no una reconfiguración de los existentes — el
+  motivo está en la nota debajo de esa tabla.
 
 ## Opcional: el fallback de identidad
 
