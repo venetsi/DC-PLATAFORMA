@@ -127,6 +127,7 @@ En **Google Chat API → Configuration → sección "Comandos"**, agregar uno po
 | `10` | `asignar` | barra + **Diálogo** | Elegir una tarea de una lista (equivale a `/tomar`) |
 | `16` | `derivar` | barra + **Diálogo** | Elegir tarea y persona de dos listas (equivale a `/pasar`) |
 | `17` | `apuntar` | barra + **Diálogo** | Elegir la tarea de una lista y escribir la nota en un formulario (equivale a `/nota`) |
+| `19` | `tildar` | barra + **Diálogo** | Checkbox de varias tareas a la vez, ordenadas por atraso (equivale a `/marcar`, pero de a muchas) |
 
 > **Los IDs importan solo para los comandos rápidos.** Un comando de barra se resuelve
 > por su **nombre** (viene en el texto del mensaje), así que si le queda otro número
@@ -152,6 +153,19 @@ No hace falta darlos de alta: funcionan si alguien los escribe.
 > comando ya configurado como *barra* siga aceptando texto plano una vez que se le
 > agrega el checkbox de *Diálogo*, y `/pasar`/`/nota` ya están probados en producción
 > — no valía la pena arriesgarlos para ahorrarse dos comandos.
+
+> **`/tildar` es distinto a los otros tres diálogos: usa `CHECK_BOX`, no
+> `RADIO_BUTTON`**, porque el pedido fue elegir VARIAS tareas para marcar juntas, no una
+> sola. `formInputs` en ese caso devuelve un array con cada value tildado — hace falta
+> un lector aparte (`leerCampoMultipleDelFormulario` en `routes/chat.js`), el existente
+> (`leerCampoDelFormulario`) solo toma el primer valor. Arriba del checkbox lleva el
+> semáforo + contadores del día, con el MISMO criterio que `routes/tv.js#estado_general`
+> (rojo si algo de hoy quedó vencido, amarillo si hay pendientes de hoy, verde si no).
+> Las cards de Chat no tienen colores de verdad — se usan los mismos 🔴🟡🟢 que ya usa
+> el kiosko para lo mismo, no una paleta nueva. La lista va ordenada por antigüedad
+> (más atrasada primero) y acotada a vencidas + pendientes de hoy — a diferencia de
+> `/asignar`, tomar algo con anticipación no tiene sentido en un checklist de "esto ya
+> lo hice".
 
 Los comandos van por un mecanismo **distinto** al de los botones de las tarjetas
 (`appCommandPayload` en vez de `buttonClickedPayload`), y **funcionan** aunque los

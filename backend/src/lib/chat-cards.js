@@ -384,6 +384,75 @@ export function dialogoApuntar(pendientes, { departamento, porFallback, modoTodo
   }
 }
 
+// /tildar: version en dialogo de /marcar, pero de VARIAS de una -- un
+// checkbox por tarea (no un radio button como los otros tres dialogos),
+// ordenadas por atraso, con el semaforo + contadores del dia arriba. El
+// pedido fue explicito por "un checkbox" y "los colores": Chat no tiene
+// colores de verdad en una card, asi que se usan los mismos 🔴🟡🟢 del
+// kiosko -- ver chat-comandos.js#resumenDelDia, que calcula esto con el
+// MISMO criterio que routes/tv.js#estado_general.
+export const ACCION_TILDAR_SUBMIT = 'tildar_submit'
+export const CAMPO_TAREAS = 'tareas' // plural: CHECK_BOX puede volver con varios values
+
+function selectorMultipleDeTareas(pendientes) {
+  return {
+    selectionInput: {
+      name: CAMPO_TAREAS,
+      label: `¿Cuáles ya están hechas? (${pendientes.length})`,
+      type: 'CHECK_BOX',
+      items: pendientes.slice(0, MAX_TAREAS_POR_CARD).map((p) => ({
+        text: p.etiqueta,
+        value: p.instanceId,
+        // Sin nada preseleccionado, igual que el dropdown de /derivar: aca
+        // hay VARIAS en juego (no una sola "mas relevante" como en el radio
+        // button de /asignar), asi que default a todo tildado seria peligroso.
+        selected: false
+      }))
+    }
+  }
+}
+
+export function dialogoTildar(pendientes, { departamento, porFallback, modoTodo, resumen } = {}) {
+  const deQuien = deQuienDialogo({ departamento, modoTodo })
+  const subtitulo = subtituloDialogo({ departamento, modoTodo })
+
+  if (!pendientes.length) {
+    return tarjetaDialogoVacia(
+      'Marcar tareas',
+      subtitulo,
+      `No hay nada atrasado ni pendiente de hoy${deQuien}. 🎉${aclaracionDeFallback(porFallback)}`
+    )
+  }
+
+  const encabezado = resumen
+    ? `${resumen.semaforo} *Hoy:* ${resumen.vencidas} vencidas · ${resumen.pendientes} pendientes · ${resumen.realizadas} hechas`
+    : ''
+  const recorte = pendientes.length > MAX_TAREAS_POR_CARD
+    ? `\n_y ${pendientes.length - MAX_TAREAS_POR_CARD} más -- marcalas de a una con \`/marcar\`._`
+    : ''
+
+  return {
+    action: {
+      navigations: [
+        {
+          pushCard: {
+            header: { title: 'Marcar tareas', subtitle: subtitulo },
+            sections: [
+              {
+                widgets: [
+                  ...(encabezado ? [{ textParagraph: { text: `${encabezado}${recorte}` } }] : []),
+                  selectorMultipleDeTareas(pendientes),
+                  { buttonList: { buttons: [{ text: 'Marcar', onClick: accionEnEsteEndpoint(ACCION_TILDAR_SUBMIT) }] } }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+
 // Cierra el dialogo y muestra un aviso flotante.
 export function cerrarDialogo(texto) {
   return {

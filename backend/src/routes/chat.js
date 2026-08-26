@@ -27,15 +27,18 @@ import {
   dialogoAsignar,
   dialogoPasar,
   dialogoApuntar,
+  dialogoTildar,
   cerrarDialogo,
   ACCION_MARCAR,
   ACCION_VINCULAR,
   ACCION_ASIGNAR_SUBMIT,
   ACCION_PASAR_SUBMIT,
   ACCION_NOTA_SUBMIT,
+  ACCION_TILDAR_SUBMIT,
   CAMPO_TAREA,
   CAMPO_PERSONA,
   CAMPO_NOTA_TEXTO,
+  CAMPO_TAREAS,
   CAMPO_ACCION
 } from '../lib/chat-cards.js'
 import { marcarInstanciaYPropagar } from '../lib/marcar-instancia.js'
@@ -46,14 +49,17 @@ import {
   ejecutarComando,
   resolverComando,
   pendientesParaAsignar,
+  pendientesParaTildar,
   tomarPorInstanceId,
   pasarPorInstanceId,
   notaPorInstanceId,
+  marcarVarias,
   personasActivas,
   puedeOperarEnChat,
   COMANDO_ASIGNAR,
   COMANDO_DERIVAR,
-  COMANDO_APUNTAR
+  COMANDO_APUNTAR,
+  COMANDO_TILDAR
 } from '../lib/chat-comandos.js'
 
 // Las dos acciones que devuelve este framework (ver
@@ -240,6 +246,19 @@ async function manejarComando(fastify, chatEvent) {
     return dialogoPasar(pendientes, personas, { departamento, porFallback, modoTodo })
   }
 
+  // /tildar tambien es un dialogo, pero con su propia lista (ordenada por
+  // atraso, no por fecha) y su propio resumen del dia -- por eso no comparte
+  // el bloque de arriba con pendientesParaAsignar.
+  if (comando === COMANDO_TILDAR) {
+    const { departamento, pendientes, porFallback, modoTodo, resumen, error } = await pendientesParaTildar(fastify, { space, extUser })
+    if (error) return mensajeNuevo({ text: error })
+    fastify.log.info(
+      { departamento: departamento.slug, pendientes: pendientes.length, porFallback, modoTodo },
+      'chat: abriendo diálogo (tildar)'
+    )
+    return dialogoTildar(pendientes, { departamento, porFallback, modoTodo, resumen })
+  }
+
   const respuesta = await ejecutarComando(fastify, { comandoId, texto, space, extUser, email })
   return mensajeNuevo({ text: respuesta })
 }
@@ -314,6 +333,12 @@ async function manejarClick(fastify, chatEvent, common) {
     const texto = await notaPorInstanceId(fastify, { space, extUser, email, instanceId, nota })
     return cerrarDialogo(texto)
   }
+  if (funcion === ACCION_TILDAR_SUBMIT) {
+    const instanceIds = leerCampoMultipleDelFormulario(common, CAMPO_TAREAS)
+    fastify.log.info({ cantidad: instanceIds.length }, 'chat: envío de diálogo recibido (tildar)')
+    const texto = await marcarVarias(fastify, { space, extUser, email, instanceIds })
+    return cerrarDialogo(texto)
+  }
 
   if (funcion === ACCION_VINCULAR) return vincular(fastify, space, { extUser, usuario, params })
   if (funcion === ACCION_MARCAR) return marcar(fastify, space, { extUser, email, usuario, params })
@@ -323,6 +348,12 @@ async function manejarClick(fastify, chatEvent, common) {
 // formInputs viene como { campo: { stringInputs: { value: [...] } } }.
 function leerCampoDelFormulario(common, campo) {
   return common?.formInputs?.[campo]?.stringInputs?.value?.[0] || null
+}
+
+// El checkbox de /tildar puede volver con VARIOS values marcados -- a
+// diferencia de leerCampoDelFormulario, aca no se toma solo el primero.
+function leerCampoMultipleDelFormulario(common, campo) {
+  return common?.formInputs?.[campo]?.stringInputs?.value || []
 }
 
 async function vincular(fastify, space, { extUser, usuario, params }) {

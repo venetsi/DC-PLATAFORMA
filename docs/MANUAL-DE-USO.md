@@ -196,6 +196,11 @@ Si preferís elegir de una lista en vez de escribir, `/tomar`, `/pasar` y `/nota
 cada uno su versión en formulario: `/asignar`, `/derivar` y `/apuntar`. Hacen exactamente
 lo mismo, solo cambia cómo elegís la tarea (y, en el caso de `/derivar`, la persona).
 
+`/marcar` también tiene su versión en formulario, pero para varias tareas a la vez:
+**`/tildar`** abre un checklist con checkbox, ordenado de la más atrasada a la más
+nueva, con un semáforo arriba (🔴🟡🟢, igual que la pantalla de oficina) y cuántas
+tenés vencidas/pendientes/hechas hoy. Tildás las que ya hiciste y las marca todas juntas.
+
 Un par de detalles:
 
 - `/marcar` es el único de estos cuatro que da la tarea por hecha. `/tomar` y `/pasar`
@@ -258,7 +263,7 @@ comandos dejan de estar acotados a un solo departamento.
   información de **los 11 departamentos mezclada**, y cada línea aclara de cuál es
   (`[Costos]`, `[RRHH]`, etc.).
 - `/marcar`, `/tomar`, `/pasar` y `/nota` — y sus versiones en formulario `/asignar`,
-  `/derivar` y `/apuntar` — actúan sobre la tarea que encuentren, sea de qué
+  `/derivar`, `/apuntar` y `/tildar` — actúan sobre la tarea que encuentren, sea de qué
   departamento sea.
 
 Quien escribe desde ese Space obtiene esta visión completa **sin importar su propio

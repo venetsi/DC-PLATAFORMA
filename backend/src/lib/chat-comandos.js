@@ -69,6 +69,13 @@ export const COMANDO_APUNTAR = 17
 // compartidos, mismos avisos de prerrequisito pendiente.
 export const COMANDO_MARCAR = 18
 
+// Version en dialogo de /marcar, pero de VARIAS de una: un checkbox por tarea
+// (no un radio button como /asignar, /derivar, /apuntar) ordenadas por
+// atraso, con el semaforo del dia arriba -- mismo criterio que el kiosko
+// (routes/tv.js#estado_general). Comando nuevo, mismo motivo que /derivar y
+// /apuntar: no arriesgar /marcar, que ya esta probado en produccion.
+export const COMANDO_TILDAR = 19
+
 // Comandos de status. Los que NO llevan parametro conviene darlos de alta como
 // "Comando rapido" en la consola (se ejecutan con un click desde el menu, sin
 // escribir); los que llevan parametro tienen que ser "Comando de barra".
@@ -95,6 +102,7 @@ const POR_NOMBRE = {
   desvincular: COMANDO_DESVINCULAR,
   marcar: COMANDO_MARCAR,
   hecha: COMANDO_MARCAR,
+  tildar: COMANDO_TILDAR,
   tomar: COMANDO_TOMAR,
   pasar: COMANDO_PASAR,
   nota: COMANDO_NOTA,
@@ -163,6 +171,7 @@ const AYUDA = [
   '',
   '*Para coordinar*',
   '`/marcar cierre` — la das por hecha',
+  '`/tildar` — elegís de una lista, con checkbox, varias para marcar juntas',
   '`/tomar cierre` — la tarea queda a tu nombre',
   '`/pasar cierre: juan@dcsmart.app` — se la pasás a otra persona',
   '`/nota cierre: hablé con el proveedor` — dejás un comentario en el historial de la tarea',
@@ -291,16 +300,23 @@ function nombreDeEvento(evento) {
   return evento?.extendedProperties?.private?.nombre_tarea || evento?.summary || ''
 }
 
+// Con mas de una pendiente, /tildar (elegir varias con checkbox) es mas util
+// que "/marcar" + el nombre de la primera nomas -- esa era una sugerencia
+// arbitraria en cuanto habia dos o mas.
 function sugerirSobreEventos(items) {
   const primera = items[0]
   if (!primera) return ''
   const nombre = nombreDeEvento(primera.evento)
-  return nombre ? sugerir(`/marcar ${nombre}`, `/tarea ${nombre}`, `/tomar ${nombre}`) : ''
+  if (!nombre) return ''
+  const marcar = items.length > 1 ? '/tildar' : `/marcar ${nombre}`
+  return sugerir(marcar, `/tarea ${nombre}`, `/tomar ${nombre}`)
 }
 
 function sugerirSobreOperables(items) {
   const primera = items[0]
-  return primera?.nombre ? sugerir(`/marcar ${primera.nombre}`, `/tarea ${primera.nombre}`, `/tomar ${primera.nombre}`) : ''
+  if (!primera?.nombre) return ''
+  const marcar = items.length > 1 ? '/tildar' : `/marcar ${primera.nombre}`
+  return sugerir(marcar, `/tarea ${primera.nombre}`, `/tomar ${primera.nombre}`)
 }
 
 function sinNada(texto) {
@@ -1018,6 +1034,21 @@ async function departamentoDeTareaCodificada(db, valorCodificado, { space, extUs
   return { departamento, instanceId }
 }
 
+// Semaforo + contadores del dia, MISMO criterio que el kiosko
+// (routes/tv.js#estado_general): rojo si algo de hoy quedo vencido, amarillo
+// si hay pendientes de hoy sin vencer todavia, verde si no hay nada de hoy
+// por hacer. Acotado a "hoy" a proposito -- es el mismo alcance que usa el
+// kiosko para este numero, aunque el checklist de /tildar despues muestre
+// todo el backlog.
+function resumenDelDia(operables, hoyISO) {
+  const deHoy = operables.filter((o) => o.fechaISO === hoyISO)
+  const vencidas = deHoy.filter((o) => !o.hecha && o.vencida).length
+  const pendientes = deHoy.filter((o) => !o.hecha && !o.vencida).length
+  const realizadas = deHoy.filter((o) => o.hecha).length
+  const semaforo = vencidas > 0 ? '🔴' : pendientes > 0 ? '🟡' : '🟢'
+  return { semaforo, vencidas, pendientes, realizadas }
+}
+
 // { departamento, pendientes, porFallback, modoTodo } | { error }
 export async function pendientesParaAsignar(deps, { space, extUser }) {
   const { db, gcal } = deps
@@ -1151,6 +1182,106 @@ export async function notaPorInstanceId(deps, { space, extUser, email, instanceI
   })
   log.info?.({ instanceId, departamento: departamento.slug }, 'chat: nota agregada desde el diálogo')
   return `📝 Anotado en *${nombre}*.`
+}
+
+// ── Apoyo del dialogo /tildar (checkbox, varias tareas de una) ────────────
+
+// { departamento, pendientes, porFallback, modoTodo, resumen } | { error }
+//
+// A diferencia de pendientesParaAsignar (ordenada por fecha, pensada para
+// "cual tomo"), esta lista va ordenada por ATRASO -- la mas vieja primero -- y
+// se acota a lo vencido + lo de hoy: tomar algo con dos semanas de
+// anticipacion no tiene sentido en un checklist de "esto ya lo hice".
+export async function pendientesParaTildar(deps, { space, extUser }) {
+  const { db, gcal } = deps
+  const { departamento, porFallback } = await resolverDepartamento(db, { space, extUser })
+  if (!departamento?.id_calendar_google) {
+    return { error: '⚠️ No pude resolver un departamento con calendario para este Space. Un administrador puede vincularlo escribiendo `/vincular` y el nombre del departamento.' }
+  }
+
+  const modoTodo = esModoTodo(departamento, porFallback)
+  const departamentos = modoTodo ? await departamentosOperables(db) : [departamento]
+
+  const hoyISO = hoyEnArgentina()
+  const operables = await instanciasOperables(gcal, departamentos, hoyISO)
+  const resumen = resumenDelDia(operables, hoyISO)
+
+  const pendientes = operables
+    .filter((o) => !o.hecha && (o.vencida || o.fechaISO === hoyISO))
+    .map((o) => ({ ...o, dias: o.vencida ? diasHabilesVencida(o.evento, { hoyISO }) : 0 }))
+    .sort((a, b) => b.dias - a.dias)
+    .map((o) => {
+      // 🔴/🟡, no 🚨/⚠️/🕒: el pedido fue explicito por "los colores" del
+      // semaforo, y usar el mismo par que el kiosko (en vez del vocabulario
+      // de tres niveles de la tarjeta diaria) es lo que hace que se lea igual
+      // que la pantalla de oficina que esto imita.
+      const color = o.vencida ? '🔴' : '🟡'
+      const antiguedad = o.vencida ? ` — hace ${o.dias}d` : ' — hoy'
+      const deQuien = modoTodo ? ` [${o.departamento.nombre}]` : ''
+      return {
+        instanceId: codificarTarea(o.departamento.id, o.evento.id),
+        etiqueta: `${color} ${o.nombre}${deQuien}${antiguedad}`
+      }
+    })
+
+  return { departamento, pendientes, porFallback, modoTodo, resumen }
+}
+
+// Marca VARIAS instancias codificadas de una sola vez (vienen del checkbox
+// del dialogo /tildar). Cada una se re-verifica y marca por separado -- si
+// una falla (por ejemplo ya no existe, o alguien la desvinculo del
+// departamento mientras tanto), no aborta las demas.
+export async function marcarVarias(deps, { space, extUser, email, instanceIds }) {
+  const { db, gcal, log = console } = deps
+  const valores = (Array.isArray(instanceIds) ? instanceIds : [instanceIds]).filter(Boolean)
+  if (!valores.length) return '⚠️ No tildaste ninguna.'
+
+  const marcadas = []
+  const yaEstaban = []
+  const fallidas = []
+  const avisos = []
+
+  for (const valor of valores) {
+    let nombre = null
+    try {
+      const { departamento, instanceId } = await departamentoDeTareaCodificada(db, valor, { space, extUser })
+      if (!departamento) {
+        fallidas.push('una tarea (ya no tenés acceso a su departamento)')
+        continue
+      }
+      const previa = await gcal.leerInstancia({ calendarId: departamento.id_calendar_google, instanceId })
+      nombre = previa?.extendedProperties?.private?.nombre_tarea || previa?.summary || 'Tarea'
+
+      const { yaEstaba, avisos: avisosDeEsta } = await marcarInstanciaYPropagar(deps, {
+        calendarId: departamento.id_calendar_google,
+        instanceId,
+        emailUsuario: email,
+        evaluarAvisos: ({ idAsignacion, fechaISO }) => prerrequisitosPendientes(deps, { idAsignacion, fechaISO }),
+        propagarEnBackground: true
+      })
+      if (yaEstaba) yaEstaban.push(nombre)
+      else {
+        marcadas.push(nombre)
+        avisos.push(...avisosDeEsta)
+      }
+    } catch (err) {
+      log.error?.({ err: err.message }, 'chat: fallo marcar desde el checkbox de /tildar')
+      fallidas.push(nombre || 'una tarea')
+    }
+  }
+
+  const lineas = []
+  if (marcadas.length) lineas.push(`✅ Marcadas (${marcadas.length}): ${marcadas.join(', ')}.`)
+  if (yaEstaban.length) lineas.push(`✓ Ya estaban hechas (${yaEstaban.length}): ${yaEstaban.join(', ')}.`)
+  if (fallidas.length) lineas.push(`⚠️ No se pudieron marcar (${fallidas.length}): ${fallidas.join(', ')}.`)
+  if (avisos.length) {
+    const unicos = [...new Map(avisos.map((a) => [`${a.nombre_tarea}|${a.departamento}`, a])).values()]
+    lineas.push(
+      `⚠️ Ojo: todavía no ${unicos.length === 1 ? 'está hecha' : 'están hechas'} ` +
+      unicos.map((a) => `*${a.nombre_tarea}* (${a.departamento})`).join(', ') + '.'
+    )
+  }
+  return lineas.join('\n') || 'No se marcó nada.'
 }
 
 // Corta el vinculo de este Space. La otra forma de lograr lo mismo es sacar la
