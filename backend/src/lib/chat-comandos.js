@@ -202,6 +202,38 @@ function encabezado(titulo, departamento) {
   return `*${titulo} — ${departamento.nombre}*`
 }
 
+// Chat no permite encadenar comandos (cada uno es un evento independiente) ni
+// tiene wizards usables acá (los dialogos dependen del canal roto). Lo que si
+// se puede es dejar el siguiente comando ARMADO para copiar, que en la
+// practica da el mismo efecto sin estado ni sintaxis nueva.
+//
+// Se usa el nombre COMPLETO de la tarea a proposito: un fragmento seria mas
+// corto pero podria matchear otra cosa, y la gracia es poder copiar y pegar
+// sin pensar.
+function sugerir(...comandos) {
+  const utiles = comandos.filter(Boolean)
+  if (!utiles.length) return ''
+  return `\n\n_Después:_ ${utiles.map((c) => `\`${c}\``).join(' · ')}`
+}
+
+// Las listas guardan sus items de dos formas: /hoy, /atrasadas y /mias usan
+// { evento, dias }; /local usa los "operables" con .nombre ya resuelto.
+function nombreDeEvento(evento) {
+  return evento?.extendedProperties?.private?.nombre_tarea || evento?.summary || ''
+}
+
+function sugerirSobreEventos(items) {
+  const primera = items[0]
+  if (!primera) return ''
+  const nombre = nombreDeEvento(primera.evento)
+  return nombre ? sugerir(`/tarea ${nombre}`, `/tomar ${nombre}`) : ''
+}
+
+function sugerirSobreOperables(items) {
+  const primera = items[0]
+  return primera?.nombre ? sugerir(`/tarea ${primera.nombre}`, `/tomar ${primera.nombre}`) : ''
+}
+
 function sinNada(texto) {
   return `${texto} 🎉`
 }
@@ -239,7 +271,7 @@ async function comandoHoy(deps, { departamento, nombreLocal }) {
   if (hechas.length) {
     bloques.push(`\n✅ *Hechas (${hechas.length}):*\n${hechas.map((i) => lineaDeTarea(i, nombreLocal)).join('\n')}`)
   }
-  return bloques.join('\n')
+  return bloques.join('\n') + sugerirSobreEventos(pendientes)
 }
 
 async function comandoAtrasadas(deps, { departamento, nombreLocal }) {
@@ -261,12 +293,14 @@ async function comandoAtrasadas(deps, { departamento, nombreLocal }) {
     return `${encabezado('Atrasadas', departamento)}\n${sinNada('No hay nada atrasado')}`
   }
 
-  return [
-    encabezado('Atrasadas', departamento),
-    `${vencidas.length} sin resolver, de más vieja a más nueva:`,
-    '',
-    vencidas.map((i) => lineaDeTarea(i, nombreLocal, { conAntiguedad: true })).join('\n')
-  ].join('\n')
+  return (
+    [
+      encabezado('Atrasadas', departamento),
+      `${vencidas.length} sin resolver, de más vieja a más nueva:`,
+      '',
+      vencidas.map((i) => lineaDeTarea(i, nombreLocal, { conAntiguedad: true })).join('\n')
+    ].join('\n') + sugerirSobreEventos(vencidas)
+  )
 }
 
 async function comandoMias(deps, { departamento, nombreLocal, email }) {
@@ -312,7 +346,8 @@ async function comandoMias(deps, { departamento, nombreLocal, email }) {
   if (proximas.length) {
     bloques.push(`\n📅 *Próximos días (${proximas.length}):*\n${proximas.map((i) => lineaDeTarea(i, nombreLocal)).join('\n')}`)
   }
-  return bloques.join('\n')
+  // Lo atrasado primero: es lo que conviene tocar antes que lo de hoy.
+  return bloques.join('\n') + sugerirSobreEventos([...vencidas, ...deHoy])
 }
 
 // Vincula el Space donde se escribio el comando a un departamento. Reemplaza
@@ -434,9 +469,10 @@ async function comandoTomar(deps, { departamento, email, argumento }) {
     extendedProperties: { asignado_a: email },
     logLine: `${ahoraISO()} - TOMADA por ${email}${actual ? ` (antes: ${actual})` : ''}`
   })
+  const cierre = sugerir(`/nota ${nombre}: `, `/tarea ${nombre}`)
   return actual
-    ? `✋ *${nombre}* pasa de ${actual} a vos.`
-    : `✋ Listo, *${nombre}* queda a tu nombre.`
+    ? `✋ *${nombre}* pasa de ${actual} a vos.${cierre}`
+    : `✋ Listo, *${nombre}* queda a tu nombre.${cierre}`
 }
 
 async function comandoPasar(deps, { departamento, email, argumento }) {
@@ -473,7 +509,7 @@ async function comandoPasar(deps, { departamento, email, argumento }) {
     persona.id_departamento && persona.id_departamento !== departamento.id
       ? `\n⚠️ Ojo: ${persona.nombre} no es de ${departamento.nombre}, así que esta tarea no le va a aparecer en su \`/mias\`. Avisale por las suyas.`
       : ''
-  return `➡️ *${nombre}* queda a nombre de ${persona.nombre} (${emailDestino}).${aviso}`
+  return `➡️ *${nombre}* queda a nombre de ${persona.nombre} (${emailDestino}).${aviso}` + sugerir(`/nota ${nombre}: `)
 }
 
 async function comandoNota(deps, { departamento, email, argumento }) {
@@ -498,7 +534,7 @@ async function comandoNota(deps, { departamento, email, argumento }) {
     extendedProperties: {},
     logLine: `${ahoraISO()} - NOTA de ${email}: ${nota}`
   })
-  return `📝 Anotado en *${nombre}*:\n_${nota}_`
+  return `📝 Anotado en *${nombre}*:\n_${nota}_` + sugerir(`/tarea ${nombre}`)
 }
 
 // ── Comandos de status ────────────────────────────────────────────────────
@@ -573,7 +609,12 @@ async function comandoTarea(deps, { departamento, nombreLocal, argumento }) {
     lineas.push('\n📜 _Sin historial todavía._')
   }
 
-  return lineas.join('\n')
+  return (
+    lineas.join('\n') +
+    (hecha
+      ? sugerir(`/nota ${nombre}: `)
+      : sugerir(`/tomar ${nombre}`, `/nota ${nombre}: `, `/pasar ${nombre}: `))
+  )
 }
 
 // Tareas de un local, o de todos los locales de un grupo. Acepta las dos cosas
@@ -663,7 +704,7 @@ async function comandoLocal(deps, { departamento, argumento, preferirGrupo }) {
   if (vencidas.length) bloques.push(`\n⚠️ *Atrasadas (${vencidas.length}):*\n${vencidas.map(linea).join('\n')}`)
   if (pendientes.length) bloques.push(`\n🕒 *Pendientes (${pendientes.length}):*\n${pendientes.map(linea).join('\n')}`)
   if (hechas.length) bloques.push(`\n✅ ${hechas.length} ${hechas.length === 1 ? 'hecha' : 'hechas'} en el período.`)
-  return bloques.join('\n')
+  return bloques.join('\n') + sugerirSobreOperables([...vencidas, ...pendientes])
 }
 
 // Numeros del departamento: la respuesta a "¿cómo venimos?".
@@ -695,7 +736,10 @@ async function comandoResumen(deps, { departamento }) {
   ]
   if (masVieja) lineas.push(`\nLa más atrasada: *${masVieja.nombre}*, hace ${masVieja.dias} días hábiles.`)
   if (!vencidas.length && !hoy.filter((o) => !o.hecha).length) lineas.push(`\n${sinNada('Al día')}`)
-  return lineas.join('\n')
+  return (
+    lineas.join('\n') +
+    (masVieja ? sugerir(`/tarea ${masVieja.nombre}`, '/atrasadas', '/equipo') : sugerir('/hoy'))
+  )
 }
 
 // Carga por persona: quien tiene que y cuanto atraso arrastra.
@@ -730,7 +774,7 @@ async function comandoEquipo(deps, { departamento }) {
       : `${total} pendientes, al día`
     lineas.push(`• ${etiqueta} — ${detalle}`)
   }
-  return lineas.join('\n')
+  return lineas.join('\n') + sugerir('/atrasadas', '/resumen')
 }
 
 // Panorama de configuracion de los 11 departamentos. A proposito NO consulta
