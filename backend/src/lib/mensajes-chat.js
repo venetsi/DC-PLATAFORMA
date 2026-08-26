@@ -19,11 +19,17 @@ function antiguedad(dias) {
 // Google Calendar), armar la linea con el summary producia
 // "• CMV — MAFIA (GRUPO MAFIA) (MAFIA)". El fallback al summary cubre los
 // eventos creados antes de que existiera esa property.
-export function lineaDeTarea({ evento, dias }, nombreLocal, { conAntiguedad = false } = {}) {
+// `conDepartamento` es para el "modo todo" de Dirección (ver chat-comandos.js):
+// cuando una lista mezcla varios departamentos, cada línea tiene que decir de
+// cuál es, porque el local ya no alcanza para ubicarla. Los items siguen
+// siendo los mismos en todos lados; el departamento es un campo mas que se
+// ignora si no se pide.
+export function lineaDeTarea({ evento, dias, departamento }, nombreLocal, { conAntiguedad = false, conDepartamento = false } = {}) {
   const props = evento.extendedProperties?.private || {}
   const titulo = props.nombre_tarea || evento.summary
   const responsable = props.asignado_a ? ` — ${props.asignado_a}` : ''
-  return `• ${titulo} (${nombreDeLocal(props, nombreLocal)})${responsable}${conAntiguedad ? antiguedad(dias) : ''}`
+  const depto = conDepartamento && departamento ? ` [${departamento.nombre}]` : ''
+  return `• ${titulo} (${nombreDeLocal(props, nombreLocal)})${depto}${responsable}${conAntiguedad ? antiguedad(dias) : ''}`
 }
 
 // Recordatorio diario de un departamento. Se sigue mandando todos los dias

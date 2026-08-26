@@ -40,7 +40,7 @@ import {
 } from '../lib/chat-cards.js'
 import { marcarInstanciaYPropagar } from '../lib/marcar-instancia.js'
 import { prerrequisitosPendientes } from '../lib/dependencias.js'
-import { esAdminGlobal, puedeGestionarDepartamento } from '../lib/permisos.js'
+import { esAdminGlobal } from '../lib/permisos.js'
 import { construirTarjetaDepartamento, conNotaSuperior } from '../lib/chat-recordatorio.js'
 import {
   ejecutarComando,
@@ -50,6 +50,7 @@ import {
   pasarPorInstanceId,
   notaPorInstanceId,
   personasActivas,
+  puedeOperarEnChat,
   COMANDO_ASIGNAR,
   COMANDO_DERIVAR,
   COMANDO_APUNTAR
@@ -227,16 +228,16 @@ async function manejarComando(fastify, chatEvent) {
   // que comparten la resolucion -- solo cambia que card arma cada uno.
   const comando = resolverComando({ comandoId, texto })
   if (comando === COMANDO_ASIGNAR || comando === COMANDO_DERIVAR || comando === COMANDO_APUNTAR) {
-    const { departamento, pendientes, porFallback, error } = await pendientesParaAsignar(fastify, { space, extUser })
+    const { departamento, pendientes, porFallback, modoTodo, error } = await pendientesParaAsignar(fastify, { space, extUser })
     if (error) return mensajeNuevo({ text: error })
     fastify.log.info(
-      { comando, departamento: departamento.slug, pendientes: pendientes.length, porFallback },
+      { comando, departamento: departamento.slug, pendientes: pendientes.length, porFallback, modoTodo },
       'chat: abriendo diálogo'
     )
-    if (comando === COMANDO_ASIGNAR) return dialogoAsignar(pendientes, { departamento, porFallback })
-    if (comando === COMANDO_APUNTAR) return dialogoApuntar(pendientes, { departamento, porFallback })
+    if (comando === COMANDO_ASIGNAR) return dialogoAsignar(pendientes, { departamento, porFallback, modoTodo })
+    if (comando === COMANDO_APUNTAR) return dialogoApuntar(pendientes, { departamento, porFallback, modoTodo })
     const personas = await personasActivas(fastify)
-    return dialogoPasar(pendientes, personas, { departamento, porFallback })
+    return dialogoPasar(pendientes, personas, { departamento, porFallback, modoTodo })
   }
 
   const respuesta = await ejecutarComando(fastify, { comandoId, texto, space, extUser, email })
@@ -356,8 +357,10 @@ async function marcar(fastify, space, { extUser, email, usuario, params }) {
   }
 
   // Un Space es semi-publico dentro de la organizacion: que alguien lo vea no
-  // significa que pueda cerrar tareas de ese departamento.
-  if (!puedeGestionarDepartamento(extUser, departamento.id)) {
+  // significa que pueda cerrar tareas de ese departamento. Excepto el Space de
+  // Dirección: ahi el control de acceso es la membresia del Space en si (ver
+  // puedeOperarEnChat), no pertenecer a ese departamento.
+  if (!puedeOperarEnChat(extUser, departamento)) {
     return mensajePrivado(usuario, `⚠️ No tenés permiso para marcar tareas de ${departamento.nombre}.`)
   }
 

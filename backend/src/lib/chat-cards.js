@@ -196,15 +196,27 @@ function aclaracionDeFallback(porFallback) {
     : ''
 }
 
+// Subtitulo de la card del dialogo: el departamento, salvo en "modo todo"
+// (Space de Dirección viendo la empresa entera -- ver chat-comandos.js), que
+// no tiene UN departamento que nombrar.
+function subtituloDialogo({ departamento, modoTodo }) {
+  return modoTodo ? 'Todos los departamentos' : departamento?.nombre
+}
+
+function deQuienDialogo({ departamento, modoTodo }) {
+  if (modoTodo) return ' en cualquier departamento'
+  return departamento ? ` en ${departamento.nombre}` : ''
+}
+
 // Card de "no hay nada para elegir" -- misma forma para los tres dialogos
 // (sin pendientes, o sin destinatarios en el caso de /derivar).
-function tarjetaDialogoVacia(titulo, departamento, texto) {
+function tarjetaDialogoVacia(titulo, subtitulo, texto) {
   return {
     action: {
       navigations: [
         {
           pushCard: {
-            header: { title: titulo, subtitle: departamento?.nombre },
+            header: { title: titulo, subtitle: subtitulo },
             sections: [{ widgets: [{ textParagraph: { text: texto } }] }]
           }
         }
@@ -238,15 +250,16 @@ function selectorDeTarea(pendientes, { label = '¿Cuál?' } = {}) {
 // El envio del formulario vuelve como buttonClickedPayload con los valores en
 // commonEventObject.formInputs, y FUNCIONA -- verificado en produccion una vez
 // corregido que action.function tiene que ser la URL del endpoint.
-export function dialogoAsignar(pendientes, { departamento, porFallback } = {}) {
-  // Siempre se nombra el departamento: un "no hay nada pendiente 🎉" sin decir
-  // de QUE departamento resulta enganoso -- paso de verdad al probar en un
-  // Space sin vincular, que cae al departamento propio de quien escribe.
-  const deQuien = departamento ? ` en ${departamento.nombre}` : ''
+export function dialogoAsignar(pendientes, { departamento, porFallback, modoTodo } = {}) {
+  // Siempre se nombra el ambito: un "no hay nada pendiente 🎉" sin decir DONDE
+  // resulta enganoso -- paso de verdad al probar en un Space sin vincular, que
+  // cae al departamento propio de quien escribe.
+  const deQuien = deQuienDialogo({ departamento, modoTodo })
+  const subtitulo = subtituloDialogo({ departamento, modoTodo })
   if (!pendientes.length) {
     return tarjetaDialogoVacia(
       'Tomar una tarea',
-      departamento,
+      subtitulo,
       `No hay tareas pendientes${deQuien}. 🎉${aclaracionDeFallback(porFallback)}`
     )
   }
@@ -256,7 +269,7 @@ export function dialogoAsignar(pendientes, { departamento, porFallback } = {}) {
       navigations: [
         {
           pushCard: {
-            header: { title: 'Tomar una tarea', subtitle: departamento?.nombre },
+            header: { title: 'Tomar una tarea', subtitle: subtitulo },
             sections: [
               {
                 widgets: [
@@ -283,17 +296,18 @@ export const CAMPO_PERSONA = 'persona'
 // evita un payload gigante si la nomina crece mucho sin que nadie lo note.
 const MAX_PERSONAS_POR_DIALOGO = 100
 
-export function dialogoPasar(pendientes, personas, { departamento, porFallback } = {}) {
-  const deQuien = departamento ? ` en ${departamento.nombre}` : ''
+export function dialogoPasar(pendientes, personas, { departamento, porFallback, modoTodo } = {}) {
+  const deQuien = deQuienDialogo({ departamento, modoTodo })
+  const subtitulo = subtituloDialogo({ departamento, modoTodo })
   if (!pendientes.length) {
     return tarjetaDialogoVacia(
       'Pasar una tarea',
-      departamento,
+      subtitulo,
       `No hay tareas pendientes${deQuien}. 🎉${aclaracionDeFallback(porFallback)}`
     )
   }
   if (!personas.length) {
-    return tarjetaDialogoVacia('Pasar una tarea', departamento, 'No hay usuarios activos para elegir.')
+    return tarjetaDialogoVacia('Pasar una tarea', subtitulo, 'No hay usuarios activos para elegir.')
   }
 
   return {
@@ -301,7 +315,7 @@ export function dialogoPasar(pendientes, personas, { departamento, porFallback }
       navigations: [
         {
           pushCard: {
-            header: { title: 'Pasar una tarea', subtitle: departamento?.nombre },
+            header: { title: 'Pasar una tarea', subtitle: subtitulo },
             sections: [
               {
                 widgets: [
@@ -337,12 +351,13 @@ export function dialogoPasar(pendientes, personas, { departamento, porFallback }
 export const ACCION_NOTA_SUBMIT = 'nota_submit'
 export const CAMPO_NOTA_TEXTO = 'nota_texto'
 
-export function dialogoApuntar(pendientes, { departamento, porFallback } = {}) {
-  const deQuien = departamento ? ` en ${departamento.nombre}` : ''
+export function dialogoApuntar(pendientes, { departamento, porFallback, modoTodo } = {}) {
+  const deQuien = deQuienDialogo({ departamento, modoTodo })
+  const subtitulo = subtituloDialogo({ departamento, modoTodo })
   if (!pendientes.length) {
     return tarjetaDialogoVacia(
       'Dejar una nota',
-      departamento,
+      subtitulo,
       `No hay tareas pendientes${deQuien}. 🎉${aclaracionDeFallback(porFallback)}`
     )
   }
@@ -352,7 +367,7 @@ export function dialogoApuntar(pendientes, { departamento, porFallback } = {}) {
       navigations: [
         {
           pushCard: {
-            header: { title: 'Dejar una nota', subtitle: departamento?.nombre },
+            header: { title: 'Dejar una nota', subtitle: subtitulo },
             sections: [
               {
                 widgets: [

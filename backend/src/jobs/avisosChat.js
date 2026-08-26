@@ -23,8 +23,7 @@ import { crearTransporteChat, crearTransporteConsola, enviarEnSerie } from '../l
 import { mensajeDepartamento, mensajeDireccion } from '../lib/mensajes-chat.js'
 import { cardDepartamento } from '../lib/chat-cards.js'
 import { DIAS_MINIMOS, desdeHaceNDias, finDeHoyArgentina } from '../lib/ventana-avisos.js'
-
-const SLUG_DIRECCION = process.env.AVISO_SLUG_DIRECCION || 'direccion'
+import { SLUG_DIRECCION } from '../lib/direccion.js'
 
 // La ventana se deriva de los umbrales en vez de estar hardcodeada: si alguien
 // configura "escalar a los 20 dias", una ventana fija de 14 nunca llegaria a

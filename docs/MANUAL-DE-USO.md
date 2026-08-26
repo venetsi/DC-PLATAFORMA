@@ -244,6 +244,22 @@ PATCH /api/departamentos/:id/notificaciones
 Un departamento **sin** Space se sigue evaluando igual — sus tareas atrasadas llegan a
 Dirección — pero no recibe su propio recordatorio hasta que se le vincule uno.
 
+### El Space de Dirección ve todos los departamentos
+
+El Space que se vincule a **Dirección** es distinto de los demás: desde ahí, los
+comandos dejan de estar acotados a un solo departamento.
+
+- `/hoy`, `/atrasadas`, `/mias`, `/tarea`, `/local`, `/resumen` y `/equipo` traen la
+  información de **los 11 departamentos mezclada**, y cada línea aclara de cuál es
+  (`[Costos]`, `[RRHH]`, etc.).
+- `/tomar`, `/pasar` y `/nota` — y sus versiones en formulario `/asignar`, `/derivar` y
+  `/apuntar` — actúan sobre la tarea que encuentren, sea de qué departamento sea.
+
+Quien escribe desde ese Space obtiene esta visión completa **sin importar su propio
+departamento** — el control es formar parte del Space, no la ficha de la persona. Por
+eso conviene armar ese grupo con cuidado de a quién se agrega: equivale, dentro de Chat,
+al mismo nivel de acceso que un administrador.
+
 ## Preguntas frecuentes
 
 **Marqué una tarea por error, ¿la puedo destildar?**

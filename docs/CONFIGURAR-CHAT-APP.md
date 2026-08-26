@@ -5,8 +5,9 @@ Google Cloud, que **no tiene API pública** — hay que hacerla a mano una vez.
 
 **Estado (2026-08-26): todo funciona** — comandos de barra, botones que resuelven la
 acción dentro de Chat, y diálogos (`/asignar`, `/derivar`, `/apuntar`). Marcar una tarea
-actualiza la tarjeta en su lugar y los rechazos de un click salen privados. Hubo un bug
-que costó encontrar y está explicado en "El campo action.function" más abajo: vale
+actualiza la tarjeta en su lugar y los rechazos de un click salen privados. El Space de
+Dirección ve y opera sobre todos los departamentos ("modo todo", ver más abajo). Hubo un
+bug que costó encontrar y está explicado en "El campo action.function" más abajo: vale
 leerlo antes de tocar cualquier botón.
 
 > La documentación oficial de Google está incompleta en varios de estos pasos — lo que
@@ -181,9 +182,35 @@ Por cada departamento, en Google Chat:
 No hay que cargar nada por SQL. Si más adelante se saca la app del Space, la
 vinculación se limpia sola.
 
-> **Dirección es la más importante**: es la que recibe el consolidado del escalamiento,
-> y hoy no tiene ni Space ni webhook, así que ese nivel se calcula pero no llega a
-> nadie.
+> **Dirección es distinta a los demás**: además de recibir el consolidado del
+> escalamiento, su Space entra en **"modo todo"** (ver más abajo) — conviene armar el
+> grupo con cuidado de a quién se agrega.
+
+### El Space de Dirección ve y opera sobre TODOS los departamentos ("modo todo")
+
+Decisión explícita del usuario (2026-08-26): el Space vinculado a **Dirección**
+—cualquiera que sea, se puede recrear cuando haga falta— deja de estar acotado a las
+tareas propias de Dirección. Desde ahí:
+
+- `/hoy`, `/atrasadas`, `/mias`, `/tarea`, `/local`, `/resumen` y `/equipo` mezclan los
+  11 departamentos, con cada línea marcando `[Departamento]` de dónde es.
+- `/tomar`, `/pasar`, `/nota` (y sus diálogos `/asignar`, `/derivar`, `/apuntar`) actúan
+  sobre la tarea de **cualquier** departamento que encuentren por el texto — el
+  `calendarId` sale de la tarea encontrada, no de Dirección.
+
+**El control de acceso es la membresía del Space, no la ficha de la persona.** Quien
+escriba desde ese Space obtiene el modo todo aunque su propio departamento no sea
+Dirección — así lo pidió el usuario a propósito, para no tener que mantener sincronizada
+una lista aparte de "quién es de Dirección". Por eso arma con cuidado a quién agregás al
+grupo/Space que vincules ahí: es, en la práctica, el mismo nivel de acceso que un admin
+global dentro de Chat.
+
+Detalle técnico para quien toque `chat-comandos.js`: la tarea que viaja en el `value` de
+un diálogo abierto en modo todo lleva el id de departamento codificado
+(`idDepartamento::instanceId`, ver `codificarTarea`/`decodificarTarea`), porque el mismo
+id de evento de Calendar puede repetirse entre calendarios distintos. Fuera de modo todo
+esa codificación se re-verifica contra el departamento del contexto — no alcanza con
+mandar un `value` manipulado para operar sobre otro departamento.
 
 ## 6. Verificar
 
