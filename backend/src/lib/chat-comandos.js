@@ -139,13 +139,29 @@ function unDia(fechaISO, dias) {
 // gestionar (caso normal, el Space ES el del departamento), y si no el propio.
 // Nunca devuelve uno que la persona no pueda ver -- un Space puede tener gente
 // de otros equipos.
+// Devuelve { departamento, porFallback }: `porFallback` es true cuando NO se
+// pudo usar el del Space y se cayo al propio. Importa decirlo en la respuesta:
+// sin eso, alguien parado en un Space sin vincular ve las tareas de otro
+// departamento sin ninguna pista de por que -- paso de verdad, y el mensaje
+// "no hay tareas pendientes 🎉" resultaba enganoso.
 async function resolverDepartamento(db, { space, extUser }) {
   if (space) {
     const delSpace = await db.departamento.findUnique({ where: { chat_space_name: space } })
-    if (delSpace && puedeGestionarDepartamento(extUser, delSpace.id)) return delSpace
+    if (delSpace && puedeGestionarDepartamento(extUser, delSpace.id)) {
+      return { departamento: delSpace, porFallback: false }
+    }
   }
-  if (!extUser?.id_departamento) return null
-  return db.departamento.findUnique({ where: { id: extUser.id_departamento } })
+  if (!extUser?.id_departamento) return { departamento: null, porFallback: false }
+  const propio = await db.departamento.findUnique({ where: { id: extUser.id_departamento } })
+  return { departamento: propio, porFallback: true }
+}
+
+// Aviso que se agrega cuando el departamento no salio del Space.
+function avisoDeFallback(departamento) {
+  return (
+    `\n\n_Este Space no está vinculado a ningún departamento, así que te muestro las de *${departamento.nombre}* (el tuyo)._` +
+    '\n_Un administrador puede vincularlo con_ `/vincular <departamento>`_._'
+  )
 }
 
 function encabezado(titulo, departamento) {
@@ -459,9 +475,9 @@ async function comandoNota(deps, { departamento, email, argumento }) {
 // { departamento, pendientes } | { error }
 export async function pendientesParaAsignar(deps, { space, extUser }) {
   const { db, gcal } = deps
-  const departamento = await resolverDepartamento(db, { space, extUser })
+  const { departamento, porFallback } = await resolverDepartamento(db, { space, extUser })
   if (!departamento?.id_calendar_google) {
-    return { error: '⚠️ Este Space no está vinculado a un departamento con calendario.' }
+    return { error: '⚠️ No pude resolver un departamento con calendario para este Space. Un administrador puede vincularlo con `/vincular <departamento>`.' }
   }
 
   const hoyISO = hoyEnArgentina()
@@ -478,7 +494,7 @@ export async function pendientesParaAsignar(deps, { space, extUser }) {
           : `${o.nombre} — ${o.fechaISO}`
     }))
 
-  return { departamento, pendientes }
+  return { departamento, pendientes, porFallback }
 }
 
 // Toma una instancia por su id (viene del dialogo). El id se re-verifica contra
@@ -486,7 +502,7 @@ export async function pendientesParaAsignar(deps, { space, extUser }) {
 // formulario no decide permisos.
 export async function tomarPorInstanceId(deps, { space, extUser, email, instanceId }) {
   const { db, gcal, log = console } = deps
-  const departamento = await resolverDepartamento(db, { space, extUser })
+  const { departamento } = await resolverDepartamento(db, { space, extUser })
   if (!departamento?.id_calendar_google) return '⚠️ Este Space no está vinculado a ningún departamento.'
   if (!instanceId) return '⚠️ No pude identificar la tarea.'
 
@@ -566,7 +582,7 @@ export async function ejecutarComando(deps, { comandoId, texto, space, extUser, 
     return `No conozco ese comando.\n\n${AYUDA}`
   }
 
-  const departamento = await resolverDepartamento(db, { space, extUser })
+  const { departamento, porFallback } = await resolverDepartamento(db, { space, extUser })
   if (!departamento) {
     return '⚠️ Tu usuario todavía no tiene departamento asignado. Pedile a un administrador que te lo cargue.'
   }
@@ -577,10 +593,11 @@ export async function ejecutarComando(deps, { comandoId, texto, space, extUser, 
   try {
     const locales = await db.extLocal.findMany({ select: { id: true, nombre: true } })
     const nombreLocal = new Map(locales.map((l) => [l.id, l.nombre]))
-    return await handler(
+    const respuesta = await handler(
       { db, gcal, log },
       { departamento, nombreLocal, email, argumento: argumentoDeComando(texto) }
     )
+    return porFallback ? `${respuesta}${avisoDeFallback(departamento)}` : respuesta
   } catch (err) {
     log.error?.({ err: err.message, comandoId, texto }, 'chat: fallo un comando')
     return '⚠️ No pude traer las tareas. Probá de nuevo o entrá a la plataforma.'

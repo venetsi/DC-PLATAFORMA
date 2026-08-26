@@ -161,14 +161,25 @@ export const CAMPO_TAREA = 'tarea'
 // isDialogEvent, o sea por el mismo canal de acciones que hoy no funciona en
 // esta app. Se prueba porque el dialogo se ABRE desde un comando (canal sano) y
 // no es obvio que el envio herede la falla.
-export function dialogoAsignar(pendientes) {
+export function dialogoAsignar(pendientes, { departamento, porFallback } = {}) {
+  // Siempre se nombra el departamento: un "no hay nada pendiente 🎉" sin decir
+  // de QUE departamento resulta enganoso -- paso de verdad al probar en un
+  // Space sin vincular, que cae al departamento propio de quien escribe.
+  const deQuien = departamento ? ` en ${departamento.nombre}` : ''
+  const aclaracion = porFallback
+    ? '\n\nEste Space no está vinculado a ningún departamento, así que ves el tuyo. Un administrador puede vincularlo con /vincular.'
+    : ''
+
   if (!pendientes.length) {
     return {
       action: {
         navigations: [
           {
             pushCard: {
-              sections: [{ widgets: [{ textParagraph: { text: 'No hay tareas pendientes para asignar. 🎉' } }] }]
+              header: { title: 'Tomar una tarea', subtitle: departamento?.nombre },
+              sections: [
+                { widgets: [{ textParagraph: { text: `No hay tareas pendientes${deQuien}. 🎉${aclaracion}` } }] }
+              ]
             }
           }
         ]
@@ -181,7 +192,7 @@ export function dialogoAsignar(pendientes) {
       navigations: [
         {
           pushCard: {
-            header: { title: 'Tomar una tarea' },
+            header: { title: 'Tomar una tarea', subtitle: departamento?.nombre },
             sections: [
               {
                 widgets: [

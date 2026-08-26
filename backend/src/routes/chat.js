@@ -175,10 +175,13 @@ async function manejarComando(fastify, chatEvent) {
   // /asignar responde con un DIALOGO, no con un mensaje: es una estructura
   // distinta (action.navigations) y va sin el envoltorio de chatDataAction.
   if (resolverComando({ comandoId, texto }) === COMANDO_ASIGNAR) {
-    const { departamento, pendientes, error } = await pendientesParaAsignar(fastify, { space, extUser })
+    const { departamento, pendientes, porFallback, error } = await pendientesParaAsignar(fastify, { space, extUser })
     if (error) return mensajeNuevo({ text: error })
-    fastify.log.info({ departamento: departamento.slug, pendientes: pendientes.length }, 'chat: abriendo diálogo')
-    return dialogoAsignar(pendientes)
+    fastify.log.info(
+      { departamento: departamento.slug, pendientes: pendientes.length, porFallback },
+      'chat: abriendo diálogo'
+    )
+    return dialogoAsignar(pendientes, { departamento, porFallback })
   }
 
   const respuesta = await ejecutarComando(fastify, { comandoId, texto, space, extUser, email })
