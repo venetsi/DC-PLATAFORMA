@@ -24,6 +24,12 @@ function sinAcentos(texto) {
     .trim()
 }
 
+// Mismo criterio que routes/instancias.js: los emails se comparan siempre en
+// minusculas (el ticket SSO puede traerlos con mayusculas).
+function normalizarEmail(email) {
+  return String(email || '').toLowerCase().trim()
+}
+
 // IDs "canonicos", que se usan solo como fallback: lo que manda es el NOMBRE
 // del comando, que viene en el texto del mensaje. Se prioriza el nombre porque
 // el ID lo elige a mano quien configura la app en la consola, y un numero mal
@@ -34,6 +40,9 @@ export const COMANDO_MIAS = 3
 export const COMANDO_AYUDA = 4
 export const COMANDO_VINCULAR = 5
 export const COMANDO_DESVINCULAR = 6
+export const COMANDO_TOMAR = 7
+export const COMANDO_PASAR = 8
+export const COMANDO_NOTA = 9
 
 const POR_NOMBRE = {
   hoy: COMANDO_HOY,
@@ -44,7 +53,24 @@ const POR_NOMBRE = {
   ayuda: COMANDO_AYUDA,
   help: COMANDO_AYUDA,
   vincular: COMANDO_VINCULAR,
-  desvincular: COMANDO_DESVINCULAR
+  desvincular: COMANDO_DESVINCULAR,
+  tomar: COMANDO_TOMAR,
+  pasar: COMANDO_PASAR,
+  nota: COMANDO_NOTA,
+  comentar: COMANDO_NOTA
+}
+
+// Separador para los comandos que llevan dos partes:
+//   /pasar cierre: juan@dcsmart.app
+//   /nota cierre: hablé con el proveedor
+// Sin un separador explicito no hay forma de saber donde termina el nombre de
+// la tarea y empieza el resto.
+const SEPARADOR = ':'
+
+function partirArgumento(argumento) {
+  const i = String(argumento || '').indexOf(SEPARADOR)
+  if (i < 0) return { tarea: String(argumento || '').trim(), resto: '' }
+  return { tarea: argumento.slice(0, i).trim(), resto: argumento.slice(i + 1).trim() }
 }
 
 // "/vincular finanzas" -> "finanzas". Todo lo que sigue al nombre del comando.
@@ -78,12 +104,18 @@ export function resolverComando({ comandoId, texto }) {
 const DIAS_ATRASADAS = 30
 
 const AYUDA = [
-  '*Comandos disponibles*',
-  '',
+  '*Para mirar*',
   '`/hoy` — las tareas que vencen hoy en este departamento',
   '`/atrasadas` — lo que quedó sin hacer, de más viejo a más nuevo',
   '`/mias` — las que están a tu nombre (más las del equipo sin responsable fijo)',
-  '`/ayuda` — esta lista',
+  '',
+  '*Para coordinar*',
+  '`/tomar <tarea>` — la tarea queda a tu nombre',
+  '`/pasar <tarea>: <email>` — se la pasás a otra persona',
+  '`/nota <tarea>: <texto>` — dejás un comentario en el historial de la tarea',
+  '',
+  '_No hace falta escribir el nombre completo de la tarea: con una parte alcanza_',
+  '_(`/tomar cierre`). Si hay más de una que coincida, te pregunto cuál._',
   '',
   '_Solo administradores:_ `/vincular <departamento>` para que este Space reciba los recordatorios, y `/desvincular` para que dejen de llegar.',
   '',
@@ -266,6 +298,151 @@ async function comandoVincular(deps, { space, extUser, argumento }) {
   return `✅ Listo. Este Space queda vinculado a *${elegido.nombre}*: acá van a llegar los recordatorios diarios.`
 }
 
+// ── Comandos que operan sobre UNA tarea ───────────────────────────────────
+//
+// La tarea se identifica por texto parcial de su nombre, NO por un numero de
+// una lista previa: entre que alguien mira /hoy y escribe el comando, otra
+// persona puede marcar algo y correr la numeracion, y el comando terminaria
+// aplicandose a la tarea equivocada. El texto no tiene ese problema, y la
+// respuesta siempre nombra la tarea sobre la que se actuo para que un match
+// erroneo se vea al instante.
+
+async function instanciasOperables(gcal, departamento, hoyISO) {
+  const items = await instanciasDelRango(gcal, departamento, {
+    desdeISO: unDia(hoyISO, -DIAS_ATRASADAS),
+    hastaISO: unDia(hoyISO, 14)
+  })
+  return items.map((evento) => ({
+    evento,
+    nombre: evento.extendedProperties?.private?.nombre_tarea || evento.summary || '(sin nombre)',
+    ...clasificarInstancia(evento)
+  }))
+}
+
+// { una } | { varias } | { ninguna }
+function buscarPorTexto(operables, texto, hoyISO) {
+  const q = sinAcentos(texto)
+  if (!q) return { ninguna: true }
+
+  const exactas = operables.filter((o) => sinAcentos(o.nombre) === q)
+  const candidatas = exactas.length ? exactas : operables.filter((o) => sinAcentos(o.nombre).includes(q))
+  if (!candidatas.length) return { ninguna: true }
+
+  // Varias instancias de LA MISMA tarea (una recurrente cae muchos dias) no es
+  // ambiguedad real: se elige la de hoy, y si no hay, la mas atrasada. Solo se
+  // pide precisar cuando son tareas distintas.
+  const nombres = new Set(candidatas.map((c) => c.nombre))
+  if (nombres.size > 1) return { varias: candidatas }
+
+  const deHoy = candidatas.find((c) => c.fechaISO === hoyISO)
+  if (deHoy) return { una: deHoy }
+  const ordenadas = [...candidatas].sort((a, b) => String(a.fechaISO).localeCompare(String(b.fechaISO)))
+  return { una: ordenadas[0] }
+}
+
+function pedirPrecision(resultado, operables) {
+  if (resultado.varias) {
+    const opciones = [...new Set(resultado.varias.map((c) => c.nombre))].map((n) => `• ${n}`).join('\n')
+    return `Hay más de una tarea que coincide. ¿Cuál?\n\n${opciones}`
+  }
+  const disponibles = [...new Set(operables.filter((o) => !o.hecha).map((o) => o.nombre))]
+  if (!disponibles.length) return 'No encontré esa tarea, y no hay ninguna pendiente en este departamento.'
+  return `No encontré esa tarea. Las pendientes son:\n\n${disponibles.map((n) => `• ${n}`).join('\n')}`
+}
+
+// Se usa marcarInstancia para las tres: mergea extendedProperties con las que
+// ya tiene y appendea al historial del evento. Solo pone el ✓ y el gris cuando
+// se le pasa estado REALIZADA, asi que aca no marca nada como hecho.
+function ahoraISO() {
+  return new Date().toISOString()
+}
+
+async function comandoTomar(deps, { departamento, email, argumento }) {
+  const { gcal } = deps
+  const hoyISO = hoyEnArgentina()
+  const operables = await instanciasOperables(gcal, departamento, hoyISO)
+  const r = buscarPorTexto(operables, argumento, hoyISO)
+  if (!r.una) return pedirPrecision(r, operables)
+
+  const { evento, nombre, hecha } = r.una
+  if (hecha) return `*${nombre}* ya está hecha, no hace falta tomarla.`
+
+  const actual = evento.extendedProperties?.private?.asignado_a
+  if (actual && actual.toLowerCase() === email) return `*${nombre}* ya está a tu nombre.`
+
+  await gcal.marcarInstancia({
+    calendarId: departamento.id_calendar_google,
+    instanceId: evento.id,
+    extendedProperties: { asignado_a: email },
+    logLine: `${ahoraISO()} - TOMADA por ${email}${actual ? ` (antes: ${actual})` : ''}`
+  })
+  return actual
+    ? `✋ *${nombre}* pasa de ${actual} a vos.`
+    : `✋ Listo, *${nombre}* queda a tu nombre.`
+}
+
+async function comandoPasar(deps, { departamento, email, argumento }) {
+  const { db, gcal } = deps
+  const { tarea, resto: destino } = partirArgumento(argumento)
+
+  if (!tarea || !destino) {
+    return 'Usalo así: `/pasar <tarea>: <email>`\nPor ejemplo: `/pasar cierre: juan@dcsmart.app`'
+  }
+
+  const emailDestino = normalizarEmail(destino)
+  const persona = await db.extUser.findUnique({ where: { email: emailDestino } })
+  if (!persona?.activo) return `No encontré a *${destino}* entre los usuarios activos de la plataforma.`
+
+  const hoyISO = hoyEnArgentina()
+  const operables = await instanciasOperables(gcal, departamento, hoyISO)
+  const r = buscarPorTexto(operables, tarea, hoyISO)
+  if (!r.una) return pedirPrecision(r, operables)
+
+  const { evento, nombre, hecha } = r.una
+  if (hecha) return `*${nombre}* ya está hecha, no hace falta pasarla.`
+
+  await gcal.marcarInstancia({
+    calendarId: departamento.id_calendar_google,
+    instanceId: evento.id,
+    extendedProperties: { asignado_a: emailDestino },
+    logLine: `${ahoraISO()} - REASIGNADA a ${emailDestino} por ${email}`
+  })
+
+  // Se avisa cuando la persona es de otro departamento: el sistema lo permite,
+  // pero esa tarea no le va a aparecer en su /mias (que mira su propio
+  // departamento), asi que puede no enterarse nunca.
+  const aviso =
+    persona.id_departamento && persona.id_departamento !== departamento.id
+      ? `\n⚠️ Ojo: ${persona.nombre} no es de ${departamento.nombre}, así que esta tarea no le va a aparecer en su \`/mias\`. Avisale por las suyas.`
+      : ''
+  return `➡️ *${nombre}* queda a nombre de ${persona.nombre} (${emailDestino}).${aviso}`
+}
+
+async function comandoNota(deps, { departamento, email, argumento }) {
+  const { gcal } = deps
+  const { tarea, resto: nota } = partirArgumento(argumento)
+
+  if (!tarea || !nota) {
+    return 'Usalo así: `/nota <tarea>: <texto>`\nPor ejemplo: `/nota cierre: hablé con el proveedor, viene el jueves`'
+  }
+
+  const hoyISO = hoyEnArgentina()
+  const operables = await instanciasOperables(gcal, departamento, hoyISO)
+  // A diferencia de /tomar y /pasar, aca SI se puede anotar una tarea ya hecha:
+  // dejar constancia despues de cerrarla es un caso legitimo.
+  const r = buscarPorTexto(operables, tarea, hoyISO)
+  if (!r.una) return pedirPrecision(r, operables)
+
+  const { evento, nombre } = r.una
+  await gcal.marcarInstancia({
+    calendarId: departamento.id_calendar_google,
+    instanceId: evento.id,
+    extendedProperties: {},
+    logLine: `${ahoraISO()} - NOTA de ${email}: ${nota}`
+  })
+  return `📝 Anotado en *${nombre}*:\n_${nota}_`
+}
+
 // Corta el vinculo de este Space. La otra forma de lograr lo mismo es sacar la
 // app del Space (REMOVED_FROM_SPACE tambien limpia), pero eso ademas silencia
 // los comandos -- con esto el Space deja de recibir los recordatorios y sigue
@@ -292,7 +469,10 @@ async function comandoDesvincular(deps, { space, extUser }) {
 const HANDLERS = {
   [COMANDO_HOY]: comandoHoy,
   [COMANDO_ATRASADAS]: comandoAtrasadas,
-  [COMANDO_MIAS]: comandoMias
+  [COMANDO_MIAS]: comandoMias,
+  [COMANDO_TOMAR]: comandoTomar,
+  [COMANDO_PASAR]: comandoPasar,
+  [COMANDO_NOTA]: comandoNota
 }
 
 // Devuelve el TEXTO de la respuesta (el envoltorio de Chat lo pone routes/chat.js).
@@ -333,7 +513,10 @@ export async function ejecutarComando(deps, { comandoId, texto, space, extUser, 
   try {
     const locales = await db.extLocal.findMany({ select: { id: true, nombre: true } })
     const nombreLocal = new Map(locales.map((l) => [l.id, l.nombre]))
-    return await handler({ db, gcal, log }, { departamento, nombreLocal, email })
+    return await handler(
+      { db, gcal, log },
+      { departamento, nombreLocal, email, argumento: argumentoDeComando(texto) }
+    )
   } catch (err) {
     log.error?.({ err: err.message, comandoId, texto }, 'chat: fallo un comando')
     return '⚠️ No pude traer las tareas. Probá de nuevo o entrá a la plataforma.'
