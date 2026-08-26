@@ -94,6 +94,27 @@ que sigue abierto — se hizo durante el diagnóstico y no hizo daño, así que 
 documentado como parte del camino, pero no se descarta que sea prescindible para una
 app puramente de Chat.)*
 
+## 3b. Cargar los comandos de barra
+
+En **Google Chat API → Configuration → sección "Comandos"**, agregar uno por uno con
+**"Agrega un comando"**. Los IDs tienen que ser EXACTAMENTE estos, porque son los que
+espera `backend/src/lib/chat-comandos.js`:
+
+| ID | Nombre | Descripción sugerida | Tipo |
+|---|---|---|---|
+| `1` | `/hoy` | Las tareas que vencen hoy | Comando de barra |
+| `2` | `/atrasadas` | Lo que quedó sin hacer | Comando de barra |
+| `3` | `/mias` | Las tareas que están a mi nombre | Comando de barra |
+| `4` | `/ayuda` | Ver los comandos disponibles | Comando de barra |
+
+Los comandos van por un mecanismo **distinto** al de los botones de las tarjetas
+(`appCommandPayload` en vez de `buttonClickedPayload`), así que **pueden funcionar
+incluso mientras los clicks sigan sin andar** — y si funcionan, confirman que el
+problema está en el ruteo de acciones de tarjetas y no en la app.
+
+Probar con `/ayuda` primero: es el único que no toca Calendar, así que aísla si el
+problema fuera de permisos o de datos.
+
 ## 4. Cargar la audiencia en Cloud Run
 
 Es exactamente la misma URL del paso 2.

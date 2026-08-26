@@ -141,7 +141,14 @@ async function manejarComando(fastify, chatEvent) {
   const usuario = chatEvent.user
   const space = chatEvent.appCommandPayload?.space?.name || chatEvent.space?.name
 
-  fastify.log.info({ comandoId, space }, 'chat: comando recibido')
+  // Se loguea el payload del comando entero a proposito: hace falta confirmar
+  // COMO llega el argumento (el texto despues de "/derivar X a Y") antes de
+  // construir un comando que lo use -- no esta documentado, igual que el resto
+  // del shape de este framework. Sacar cuando quede confirmado.
+  fastify.log.info(
+    { comandoId, space, payloadCrudo: JSON.stringify(chatEvent.appCommandPayload || {}).slice(0, 1200) },
+    'chat: comando recibido'
+  )
 
   const email = await resolverEmail({ user: usuario, db: fastify.db, log: fastify.log })
   if (!email) {
