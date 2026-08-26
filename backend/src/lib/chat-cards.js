@@ -17,37 +17,63 @@ function textoDeItem({ evento, dias }, nombreLocal) {
   return lineaDeTarea({ evento, dias }, nombreLocal, { conAntiguedad: true }).replace(/^• /, '')
 }
 
-// Boton "Marcar hecha" que resuelve el click en el propio endpoint.
+// En el framework de Workspace Add-ons con endpoint HTTP, `action.function` es
+// la **URL a invocar**, no un nombre de funcion. El placeholder FUNCTION_URL de
+// la documentacion de Google era literal.
 //
-// NO SE USA HOY: nada de lo que llegue como buttonClickedPayload funciona en
-// esta app -- ni los botones dentro de mensajes ni el envio de un dialogo.
-// Chat reconoce el click (queda en chat.googleapis.com/errors con el
-// deploymentFunction correcto) pero nunca llega un request al endpoint, y
-// responde "Can't post a reply". Los comandos (appCommandPayload) y los
-// eventos de ciclo de vida (addedToSpacePayload) SI funcionan, asi que el
-// problema esta acotado a ese canal. Se probo y descarto: tipo de Space
-// (colaboracion vs anuncios), permisos del Space, cache del browser, espacios
-// externos, y crear un deployment en gsuiteaddons. Ver
-// docs/CONFIGURAR-CHAT-APP.md.
+// Comprobado empiricamente (2026-08-26) posteando una card con cuatro botones,
+// uno por variante, y mirando cual llegaba al servidor:
+//   function: 'probar_A_nombre'            -> NO llega ningun request
+//   function: '<URL del endpoint>'         -> llega, 200
+//   function: '<URL>#fragmento'            -> llega pero 401
+//   function: '<URL>?query=1'              -> llega pero 401
+// Las dos ultimas fallan porque el `aud` del token pasa a incluir el fragmento
+// o el query y deja de coincidir con CHAT_AUDIENCE. O sea: la URL tiene que ser
+// EXACTA, sin nada agregado.
 //
-// Se deja armado porque el dia que se resuelva es cambiar una linea en
-// seccionDeTareas, y porque los parametros/permisos del receptor ya estan
-// escritos y probados (routes/chat.js#marcar).
+// Consecuencia: como todos los botones apuntan a la misma URL, la accion no
+// puede ir en `function`. Ademas el payload del click NO trae
+// commonEventObject.invokedFunction (verificado en el body real), asi que la
+// accion viaja como un parametro mas -- ver CAMPO_ACCION.
+//
+// La URL tiene que coincidir EXACTA con la configurada en la consola de Chat,
+// porque es tambien el `aud` del token que Google firma (una con ?query o
+// #fragmento llega al endpoint pero falla la verificacion con 401).
+//
+// CHAT_AUDIENCE es esa misma URL, asi que se reusa para no tener dos fuentes de
+// verdad. El default explicito NO es decorativo: las cards no se construyen
+// solo en el servicio web -- tambien las arma el Cloud Run Job del aviso
+// diario, que no tiene esa variable seteada. Sin el default, ese job posteaba
+// botones con `function: ''`, o sea otra vez botones muertos, y en silencio.
+export const URL_ENDPOINT_POR_DEFECTO =
+  'https://dc-plataforma-api-288069746644.us-central1.run.app/api/chat/eventos'
+
+export function urlDelEndpoint() {
+  const url = (process.env.CHAT_AUDIENCE || '').trim()
+  return url || URL_ENDPOINT_POR_DEFECTO
+}
+
+export const CAMPO_ACCION = 'accion'
+
+function accionEnEsteEndpoint(accion, parametros = []) {
+  return {
+    action: {
+      function: urlDelEndpoint(),
+      // Los parametros vienen del CLIENTE cuando vuelven: el receptor los
+      // re-verifica contra la base, nunca confia en ellos para decidir
+      // permisos. `accion` dice QUE hacer, ya que function ahora es la URL.
+      parameters: [{ key: CAMPO_ACCION, value: accion }, ...parametros]
+    }
+  }
+}
+
 function botonMarcar(evento) {
   return {
     text: 'Marcar hecha',
-    onClick: {
-      action: {
-        function: ACCION_MARCAR,
-        // Estos parametros vienen del CLIENTE cuando vuelven: el receptor los
-        // re-verifica contra la base, nunca confia en ellos para decidir
-        // permisos.
-        parameters: [
-          { key: 'instanceId', value: evento.id },
-          { key: 'fecha', value: evento.start?.date || '' }
-        ]
-      }
-    }
+    onClick: accionEnEsteEndpoint(ACCION_MARCAR, [
+      { key: 'instanceId', value: evento.id },
+      { key: 'fecha', value: evento.start?.date || '' }
+    ])
   }
 }
 
@@ -70,12 +96,11 @@ export function urlPublica(url) {
   }
 }
 
-// Boton que abre la tarea en la plataforma. Es el que se usa: `openLink` NO
-// pasa por el ruteo de acciones roto (verificado en produccion), asi que la
-// tarjeta queda util en vez de tener un boton que falla.
-function botonAbrir(urlApp) {
+// Boton que abre la plataforma en el navegador (openLink lo resuelve el
+// cliente, sin pasar por el endpoint). Se usa para el "Ver todas" del pie.
+function botonAbrir(urlApp, texto = 'Abrir') {
   return {
-    text: 'Abrir',
+    text: texto,
     onClick: { openLink: { url: `${urlPublica(urlApp)}/mis-tareas` } }
   }
 }
@@ -85,7 +110,11 @@ function seccionDeTareas(titulo, items, nombreLocal, { conBotones = true, urlApp
     decoratedText: {
       text: textoDeItem({ evento, dias }, nombreLocal),
       wrapText: true,
-      ...(conBotones ? { button: botonAbrir(urlApp) } : {})
+      // Un solo boton por fila: decoratedText admite `button` (singular), no
+      // una lista. Se elige "Marcar hecha", que es la accion que la gente
+      // quiere hacer desde el aviso; para ver el detalle esta el "Ver todas"
+      // del pie y los comandos.
+      ...(conBotones ? { button: botonMarcar(evento) } : {})
     }
   }))
   return { header: titulo, collapsible: false, widgets }
@@ -132,7 +161,7 @@ export function cardDepartamento(departamento, baldes, nombreLocal, { umbrales, 
             wrapText: true,
             // Sin condicional: urlPublica() siempre devuelve una URL usable,
             // asi que el boton nunca queda a medias.
-            button: { text: 'Ver todas', onClick: { openLink: { url: `${urlPublica(urlApp)}/mis-tareas` } } }
+            button: botonAbrir(urlApp, 'Ver todas')
           }
         }
       ]
@@ -153,16 +182,17 @@ export function cardDepartamento(departamento, baldes, nombreLocal, { umbrales, 
 }
 
 // Card que se manda cuando agregan la app a un Space: vincularlo a un
-// departamento con un click, en vez de cargar el Space por SQL a mano.
+// departamento con un click, en vez de cargar chat_space_name por SQL a mano.
+// El comando /vincular hace lo mismo, para quien prefiera escribirlo.
 export const ACCION_ASIGNAR_SUBMIT = 'asignar_submit'
 export const CAMPO_TAREA = 'tarea'
 
 // Dialogo (formulario modal) para elegir una tarea de una lista en vez de
 // escribir su nombre. Se abre devolviendo action.navigations[].pushCard.
 //
-// El dialogo SE ABRE bien (viene de un comando), pero su ENVIO no llega al
-// endpoint: vuelve como buttonClickedPayload, el mismo canal roto que los
-// botones. Confirmado en produccion. Ver botonMarcar arriba.
+// El envio del formulario vuelve como buttonClickedPayload con los valores en
+// commonEventObject.formInputs, y FUNCIONA -- verificado en produccion una vez
+// corregido que action.function tiene que ser la URL del endpoint.
 export function dialogoAsignar(pendientes, { departamento, porFallback } = {}) {
   // Siempre se nombra el departamento: un "no hay nada pendiente 🎉" sin decir
   // de QUE departamento resulta enganoso -- paso de verdad al probar en un
@@ -217,7 +247,7 @@ export function dialogoAsignar(pendientes, { departamento, porFallback } = {}) {
                       buttons: [
                         {
                           text: 'Tomar',
-                          onClick: { action: { function: ACCION_ASIGNAR_SUBMIT } }
+                          onClick: accionEnEsteEndpoint(ACCION_ASIGNAR_SUBMIT)
                         }
                       ]
                     }
@@ -242,10 +272,9 @@ export function cerrarDialogo(texto) {
   }
 }
 
-// Se responde con TEXTO y no con una card de botones a proposito: los botones
-// de tipo `action` no funcionan (ver botonMarcar), y una card cuyos botones no
-// hacen nada es peor que una instruccion clara. El comando /vincular hace el
-// mismo trabajo y ese camino si funciona.
+// Card con un boton por departamento. El comando /vincular hace exactamente lo
+// mismo, para quien prefiera escribirlo o cuando hay mas departamentos libres
+// que botones en la card.
 export function cardVincular(departamentosDisponibles) {
   if (!departamentosDisponibles.length) {
     return {
@@ -255,15 +284,43 @@ export function cardVincular(departamentosDisponibles) {
     }
   }
 
-  const lista = departamentosDisponibles.map((d) => `• ${d.nombre} — \`/vincular ${d.slug}\``).join('\n')
+  // Una card por cada departamento seria demasiado alta con 11: se limita y el
+  // resto queda accesible por comando, que hace exactamente lo mismo.
+  const conBoton = departamentosDisponibles.slice(0, MAX_TAREAS_POR_CARD)
+  const resto = departamentosDisponibles.length - conBoton.length
+
   return {
-    text: [
-      '👋 *Hola, soy DC-PLATAFORMA.*',
-      'Para que este Space reciba los recordatorios, un administrador tiene que vincularlo a un departamento con el comando `/vincular`:',
-      '',
-      lista,
-      '',
-      '_Después de eso, todas las mañanas llega acá el resumen de tareas._'
-    ].join('\n')
+    cardsV2: [
+      {
+        cardId: 'vincular-space',
+        card: {
+          header: { title: 'DC-PLATAFORMA', subtitle: '¿A qué departamento vinculo este Space?' },
+          sections: [
+            {
+              widgets: [
+                ...conBoton.map((d) => ({
+                  decoratedText: {
+                    text: d.nombre,
+                    button: {
+                      text: 'Vincular',
+                      onClick: accionEnEsteEndpoint(ACCION_VINCULAR, [
+                        { key: 'idDepartamento', value: d.id }
+                      ])
+                    }
+                  }
+                })),
+                {
+                  textParagraph: {
+                    text: resto
+                      ? `_y ${resto} más — también podés escribir_ \`/vincular\` _y el nombre._`
+                      : '_También podés escribir_ `/vincular` _y el nombre del departamento._'
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
   }
 }

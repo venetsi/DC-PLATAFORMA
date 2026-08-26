@@ -3,11 +3,9 @@
 Todo el código de la Fase C está desplegado. Falta la configuración en la consola de
 Google Cloud, que **no tiene API pública** — hay que hacerla a mano una vez.
 
-**Estado (2026-08-26):** la app funciona en producción con comandos de barra y con el
-recordatorio diario. Lo único que no funciona son los botones que resuelven una acción
-dentro de Chat — ver "Qué funciona y qué no" más abajo, con el detalle de todo lo que se
-probó. No bloquea nada: los comandos cubren lo mismo y los botones de las tarjetas
-abren la plataforma.
+**Estado (2026-08-26): todo funciona** — comandos de barra, botones que resuelven la
+acción dentro de Chat, y diálogos. Hubo un bug que costó encontrar y está explicado en
+"El campo action.function" más abajo: vale leerlo antes de tocar cualquier botón.
 
 > La documentación oficial de Google está incompleta en varios de estos pasos — lo que
 > sigue está confirmado contra la consola real y contra logs de producción, no copiado
@@ -122,7 +120,7 @@ En **Google Chat API → Configuration → sección "Comandos"**, agregar uno po
 | `9` | `nota` | barra | Dejar un comentario en una tarea |
 | `11` | `tarea` | barra | El detalle y el historial de una tarea |
 | `12` | `local` | barra | Las tareas de un local o de un grupo |
-| `10` | `asignar` | barra + **Diálogo** | No funciona, ver más abajo |
+| `10` | `asignar` | barra + **Diálogo** | Elegir una tarea de una lista |
 
 > **Los IDs importan solo para los comandos rápidos.** Un comando de barra se resuelve
 > por su **nombre** (viene en el texto del mensaje), así que si le queda otro número
@@ -214,51 +212,77 @@ de Pagos. En particular:
 Las pantallas de **Chat API** y **Marketplace SDK** (pasos 2 y 3 de arriba) son
 seguras — viven en otra sección de la consola y no comparten nada con esto.
 
-## Qué funciona y qué no (verificado en producción)
+## El campo `action.function`: la URL, no el nombre
 
-| Canal | Payload | Estado |
+**Este es el detalle que hace que un botón funcione o no**, y es la diferencia más
+importante entre una Chat app "clásica" y una publicada como Workspace Add-on (que es
+lo que es esta app).
+
+| | Chat app clásica | **Workspace Add-on (nuestro caso)** |
 |---|---|---|
-| Agregar / sacar la app de un Space | `addedToSpacePayload` / `removedFromSpacePayload` | ✅ funciona |
-| Comandos de barra (`/hoy`, `/tomar`…) | `appCommandPayload` | ✅ funciona |
-| Botón dentro de un mensaje | `buttonClickedPayload` | ❌ no llega al endpoint |
-| Envío de un diálogo | `buttonClickedPayload` (con `isDialogEvent`) | ❌ no llega al endpoint |
-| Botón de tipo `openLink` | — (lo resuelve el cliente) | ✅ funciona |
+| `action.function` | el **nombre** de una función | la **URL completa** del endpoint |
 
-Lo roto está acotado a **todo lo que vuelve como `buttonClickedPayload`**. Chat
-reconoce el click (queda registrado con el `deploymentFunction` correcto) pero nunca
-llega un request al servidor, y muestra *"La app no responde o la respuesta no es
-válida"*.
+Textual, de [chat/convert](https://developers.google.com/workspace/add-ons/chat/convert):
 
-Por eso la app usa comandos para todo lo que escribe, y los botones de las tarjetas
-son `openLink` (abren la plataforma) en vez de resolver la acción en Chat.
+> "add-ons use a full HTTP URL for a card's `action.function`, while Chat apps built
+> with Google Chat API interaction events use a function name."
 
-### Qué se probó y descartó
+Y sobre cómo distinguir entonces una acción de otra:
 
-- Tipo de Space (colaboración vs. anuncios) y sus permisos de publicación.
-- Caché del navegador (probado en incógnito) y Spaces marcados como externos.
-- La URL y la audiencia de "Configuración de conexión".
-- Crear e instalar un deployment en `gsuiteaddons` (queda hecho; no cambió nada).
-- Un diálogo, que confirmó que el problema no es del widget sino del canal.
+> "You can set a unique HTTP endpoint per button, or use a common endpoint and pass the
+> action as a parameter in `action.parameters`."
+
+Esta app usa lo segundo. Un botón se ve así (`chat-cards.js`):
+
+```json
+{
+  "onClick": {
+    "action": {
+      "function": "https://dc-plataforma-api-288069746644.us-central1.run.app/api/chat/eventos",
+      "parameters": [
+        { "key": "accion", "value": "marcar" },
+        { "key": "instanceId", "value": "..." }
+      ]
+    }
+  }
+}
+```
+
+**Dos trampas, las dos verificadas empíricamente:**
+
+1. **La URL tiene que ser EXACTA**, la misma que `CHAT_AUDIENCE`. Se probó con cuatro
+   variantes y el resultado fue: un nombre simbólico no genera **ningún** request; la
+   URL limpia da 200; la URL con `#fragmento` o `?query` **llega al endpoint pero da
+   401**, porque el `aud` del token pasa a incluir eso y deja de coincidir.
+
+2. **El payload del click NO trae `commonEventObject.invokedFunction`.** Si el código
+   lo lee de ahí para decidir qué hacer, queda `undefined` y termina devolviendo algo
+   vacío — que Chat reporta como *"la respuesta no es válida"*, sin ninguna pista de
+   la causa real. La acción tiene que leerse de `commonEventObject.parameters`.
+
+### Qué canales usa la app
+
+| Canal | Payload que llega |
+|---|---|
+| Agregar / sacar la app de un Space | `addedToSpacePayload` / `removedFromSpacePayload` |
+| Comandos (`/hoy`, `/tomar`…) | `appCommandPayload` |
+| Botón que resuelve una acción | `buttonClickedPayload` + `parameters` |
+| Envío de un diálogo | `buttonClickedPayload` + `formInputs` |
+| Botón `openLink` | ninguno: lo resuelve el cliente |
 
 ### El log que sirve para diagnosticar
 
-No es el de Cloud Run — es uno dedicado de la propia Chat API:
+No es el de Cloud Run — es uno dedicado de la propia Chat API, y es el único lugar
+donde aparece el error real:
 
 ```bash
 gcloud logging read 'logName="projects/dc-smart-mvp/logs/chat.googleapis.com%2Ferrors"' --limit 5 --freshness=1h --project dc-smart-mvp
 ```
 
-Muestra qué botón se clickeó (`deploymentFunction`) y el error real de Google. Fue
-el que reveló un bug propio que estaba escondido detrás de este: los mensajes cuyo
-texto contenía `&lt;algo&gt;` (los placeholders de la ayuda) eran rechazados enteros con
-`invalidContent`, porque Chat los lee como etiquetas HTML desconocidas. Hay una
-guarda en `routes/chat.js#escaparPseudoEtiquetas` para que no vuelva a pasar.
-
-### Si algún día se destraba
-
-El código de los botones y del diálogo está escrito y probado de punta a punta
-(simulando el envío). Volver a activarlo es cambiar `botonAbrir` por `botonMarcar`
-en `chat-cards.js#seccionDeTareas`.
+Muestra el `deploymentFunction` (qué botón se tocó) y el mensaje de Google. Fue el que
+reveló, además, que un mensaje cuyo texto contenga `&lt;algo&gt;` es rechazado **entero**
+con `invalidContent`, porque Chat lo lee como una etiqueta HTML desconocida. Hay una
+guarda en `routes/chat.js#escaparPseudoEtiquetas`.
 
 ## Opcional: el fallback de identidad
 

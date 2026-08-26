@@ -44,17 +44,9 @@ export const COMANDO_TOMAR = 7
 export const COMANDO_PASAR = 8
 export const COMANDO_NOTA = 9
 // /asignar abre un DIALOGO (formulario modal) para elegir la tarea de una lista
-// en vez de escribir su nombre.
-//
-// NO FUNCIONA HOY, y el experimento sirvio para delimitar el problema: el
-// dialogo SI se abre (viene de un comando, canal sano) pero su envio NO llega
-// nunca al endpoint -- Chat muestra "No se pudo cargar este dialogo. La app no
-// responde o la respuesta no es valida". Confirma que lo roto es TODO lo que
-// llega como buttonClickedPayload: botones dentro de mensajes y envios de
-// dialogo por igual. /tomar por texto es el camino que funciona.
-//
-// Se deja el codigo entero (probado de punta a punta simulando el envio) porque
-// el dia que Google destrabe ese canal vuelve a andar sin tocar nada.
+// en vez de escribir su nombre. FUNCIONA: el envio del formulario llega como
+// buttonClickedPayload con formInputs -- verificado en produccion 2026-08-26,
+// una vez corregido que action.function tiene que ser la URL del endpoint.
 export const COMANDO_ASIGNAR = 10
 
 // Comandos de status. Los que NO llevan parametro conviene darlos de alta como
@@ -202,10 +194,10 @@ function encabezado(titulo, departamento) {
   return `*${titulo} — ${departamento.nombre}*`
 }
 
-// Chat no permite encadenar comandos (cada uno es un evento independiente) ni
-// tiene wizards usables acá (los dialogos dependen del canal roto). Lo que si
-// se puede es dejar el siguiente comando ARMADO para copiar, que en la
-// practica da el mismo efecto sin estado ni sintaxis nueva.
+// Chat no permite encadenar comandos: cada uno es un evento independiente y no
+// hay forma de mandar dos en un mismo mensaje. Lo que si se puede es dejar el
+// siguiente comando ARMADO para copiar, que en la practica da el mismo efecto
+// sin estado ni sintaxis nueva.
 //
 // Se usa el nombre COMPLETO de la tarea a proposito: un fragmento seria mas
 // corto pero podria matchear otra cosa, y la gracia es poder copiar y pegar
@@ -350,9 +342,10 @@ async function comandoMias(deps, { departamento, nombreLocal, email }) {
   return bloques.join('\n') + sugerirSobreEventos([...vencidas, ...deHoy])
 }
 
-// Vincula el Space donde se escribio el comando a un departamento. Reemplaza
-// la card de botones que se usaba antes (los botones `action` no funcionan),
-// y sigue siendo lo unico que evita cargar chat_space_name por SQL a mano.
+// Vincula el Space donde se escribio el comando a un departamento. Hace lo
+// mismo que la card de botones que manda ADDED_TO_SPACE, para quien prefiera
+// escribirlo -- y sirve cuando hay mas departamentos libres que botones en la
+// card. Entre los dos caminos, nunca hace falta cargar chat_space_name por SQL.
 async function comandoVincular(deps, { space, extUser, argumento }) {
   const { db, log = console } = deps
 

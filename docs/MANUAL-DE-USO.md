@@ -138,8 +138,9 @@ Todas las mañanas (8 hs) cada departamento recibe en su Space un recordatorio c
 - **Pendientes de hoy** — lo que vence hoy.
 
 Cada línea muestra el local, el responsable si tiene uno, y hace cuántos **días
-hábiles** está atrasada, con un botón para abrirla en la plataforma. Se cuentan días hábiles y no de calendario a propósito: una
-tarea del viernes no debe escalar sola el lunes solo porque pasó el fin de semana.
+hábiles** está atrasada, con un botón **Marcar hecha** al lado. Se cuentan días
+hábiles y no de calendario a propósito: una tarea del viernes no debe escalar sola el
+lunes solo porque pasó el fin de semana.
 
 El recordatorio se repite todos los días mientras la tarea siga sin hacerse.
 
@@ -198,8 +199,19 @@ Un par de detalles:
 - Si escribís un comando en un Space que no está vinculado a ningún departamento, la app
   te muestra las de tu propio departamento y te lo aclara.
 
-El botón **Abrir** de las tarjetas del recordatorio lleva a la plataforma, donde se
-marcan las tareas como hechas.
+**Marcar una tarea desde el recordatorio.** Cada tarea del aviso diario trae un botón
+**Marcar hecha**: un click la cierra sin salir de Chat, y queda registrada en Google
+Calendar con tu nombre igual que si la marcaras desde la plataforma.
+
+- Solo pueden marcar los del departamento (y los administradores).
+- Si alguien ya la marcó, el segundo click avisa quién fue y no duplica nada.
+- Si la tarea espera a otra que todavía no está hecha, se marca igual y la respuesta lo
+  aclara.
+- El botón **Ver todas** del pie abre la plataforma cuando hay más tareas de las que
+  entran en la tarjeta.
+
+También podés elegir una tarea de una lista con `/asignar`, que abre un formulario en
+vez de pedirte el nombre.
 
 ### Vincular el Space de un departamento (administrador)
 

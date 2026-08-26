@@ -29,7 +29,8 @@ import {
   ACCION_MARCAR,
   ACCION_VINCULAR,
   ACCION_ASIGNAR_SUBMIT,
-  CAMPO_TAREA
+  CAMPO_TAREA,
+  CAMPO_ACCION
 } from '../lib/chat-cards.js'
 import { marcarInstanciaYPropagar } from '../lib/marcar-instancia.js'
 import { prerrequisitosPendientes } from '../lib/dependencias.js'
@@ -226,9 +227,21 @@ function normalizarParametros(parametros) {
 }
 
 async function manejarClick(fastify, chatEvent, common) {
-  const funcion = common.invokedFunction
   const usuario = chatEvent.user
   const params = normalizarParametros(common.parameters)
+
+  // La accion viene en los PARAMETROS, no en invokedFunction.
+  //
+  // En este framework `action.function` es la URL del endpoint (ver
+  // chat-cards.js), asi que no puede llevar el nombre de la accion. Y el
+  // payload real de un click NO trae commonEventObject.invokedFunction --
+  // verificado sobre el body crudo de un click que si llego. Antes se leia de
+  // ahi, quedaba undefined, y el handler caia en un `return {}` que Chat
+  // reportaba como "la respuesta no es valida": el sintoma que se investigo
+  // durante toda la fase.
+  //
+  // Se deja invokedFunction como respaldo por si en algun evento si viniera.
+  const funcion = params[CAMPO_ACCION] || common.invokedFunction
 
   const email = await resolverEmail({ user: usuario, db: fastify.db, log: fastify.log })
   if (!email) {
