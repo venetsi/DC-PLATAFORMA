@@ -114,7 +114,7 @@ async function manejarAgregado(fastify, payload) {
 
   const disponibles = await fastify.db.departamento.findMany({
     where: { activo: true, chat_space_name: null },
-    select: { id: true, nombre: true },
+    select: { id: true, nombre: true, slug: true },
     orderBy: { nombre: 'asc' }
   })
   fastify.log.info({ space, disponibles: disponibles.length }, 'chat: enviando tarjeta de vinculación')
@@ -140,15 +140,14 @@ async function manejarComando(fastify, chatEvent) {
   const comandoId = chatEvent.appCommandPayload?.appCommandMetadata?.appCommandId
   const usuario = chatEvent.user
   const space = chatEvent.appCommandPayload?.space?.name || chatEvent.space?.name
+  // El texto llega completo, con la barra incluida ("/atrasadas", "/derivar X
+  // a Y") -- confirmado contra un comando real en produccion. Se pasa a
+  // ejecutarComando porque el NOMBRE manda sobre el appCommandId: ese id lo
+  // elige a mano quien configura la app y un numero cruzado hacia que /ayuda
+  // contestara "Atrasadas".
+  const texto = chatEvent.appCommandPayload?.message?.text || ''
 
-  // Se loguea el payload del comando entero a proposito: hace falta confirmar
-  // COMO llega el argumento (el texto despues de "/derivar X a Y") antes de
-  // construir un comando que lo use -- no esta documentado, igual que el resto
-  // del shape de este framework. Sacar cuando quede confirmado.
-  fastify.log.info(
-    { comandoId, space, payloadCrudo: JSON.stringify(chatEvent.appCommandPayload || {}).slice(0, 1200) },
-    'chat: comando recibido'
-  )
+  fastify.log.info({ comandoId, texto, space }, 'chat: comando recibido')
 
   const email = await resolverEmail({ user: usuario, db: fastify.db, log: fastify.log })
   if (!email) {
@@ -159,8 +158,8 @@ async function manejarComando(fastify, chatEvent) {
     return mensajeNuevo({ text: '⚠️ Tu usuario no está activo en la plataforma.' })
   }
 
-  const texto = await ejecutarComando(fastify, { comandoId, space, extUser, email })
-  return mensajeNuevo({ text: texto })
+  const respuesta = await ejecutarComando(fastify, { comandoId, texto, space, extUser, email })
+  return mensajeNuevo({ text: respuesta })
 }
 
 // `common.parameters` viene de Action.setParameters -- en la doc de Apps

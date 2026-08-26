@@ -11,12 +11,65 @@
 // Chat API (seccion "Comandos"): hay que usar los mismos numeros de aca.
 import { hoyEnArgentina, clasificarInstancia, diasHabilesVencida } from './vencimiento.js'
 import { lineaDeTarea } from './mensajes-chat.js'
-import { puedeGestionarDepartamento } from './permisos.js'
+import { esAdminGlobal, puedeGestionarDepartamento } from './permisos.js'
 
+// Minusculas y sin acentos, para comparar lo que alguien escribio a mano
+// ("/Mías", "Auditoría") contra un slug. Un solo lugar para no repetir el
+// rango de diacriticos en cada comparacion.
+function sinAcentos(texto) {
+  return String(texto || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim()
+}
+
+// IDs "canonicos", que se usan solo como fallback: lo que manda es el NOMBRE
+// del comando, que viene en el texto del mensaje. Se prioriza el nombre porque
+// el ID lo elige a mano quien configura la app en la consola, y un numero mal
+// puesto hacia que /ayuda contestara "Atrasadas" -- paso de verdad.
 export const COMANDO_HOY = 1
 export const COMANDO_ATRASADAS = 2
 export const COMANDO_MIAS = 3
 export const COMANDO_AYUDA = 4
+export const COMANDO_VINCULAR = 5
+
+const POR_NOMBRE = {
+  hoy: COMANDO_HOY,
+  tareas: COMANDO_HOY,
+  atrasadas: COMANDO_ATRASADAS,
+  vencidas: COMANDO_ATRASADAS,
+  mias: COMANDO_MIAS,
+  ayuda: COMANDO_AYUDA,
+  help: COMANDO_AYUDA,
+  vincular: COMANDO_VINCULAR
+}
+
+// "/vincular finanzas" -> "finanzas". Todo lo que sigue al nombre del comando.
+export function argumentoDeComando(texto) {
+  const partes = String(texto || '').trim().split(/\s+/)
+  return partes.slice(1).join(' ').trim()
+}
+
+// "/atrasadas algo" -> "atrasadas". Tolera acentos y mayusculas para que
+// /Mías y /mias sean lo mismo.
+export function nombreDeComando(texto) {
+  const primera = String(texto || '').trim().split(/\s+/)[0] || ''
+  if (!primera.startsWith('/')) return null
+  return sinAcentos(primera.slice(1))
+}
+
+const IDS_CONOCIDOS = new Set(Object.values(POR_NOMBRE))
+
+// El nombre gana sobre el ID. Devuelve null si no se reconoce ninguno.
+// Se valida contra IDS_CONOCIDOS y no contra HANDLERS porque AYUDA y VINCULAR
+// se resuelven aparte, fuera de esa tabla.
+export function resolverComando({ comandoId, texto }) {
+  const porNombre = POR_NOMBRE[nombreDeComando(texto)]
+  if (porNombre) return porNombre
+  const id = Number(comandoId)
+  return IDS_CONOCIDOS.has(id) ? id : null
+}
 
 // Cuanto para atras mira /atrasadas. Mismo criterio que el kiosko: un mes de
 // backlog alcanza para ver lo que hay que resolver sin arrastrar historia.
@@ -29,6 +82,8 @@ const AYUDA = [
   '`/atrasadas` — lo que quedó sin hacer, de más viejo a más nuevo',
   '`/mias` — las que están a tu nombre (más las del equipo sin responsable fijo)',
   '`/ayuda` — esta lista',
+  '',
+  '_Solo administradores:_ `/vincular <departamento>` para que este Space reciba los recordatorios.',
   '',
   '_Los recordatorios llegan solos todas las mañanas._'
 ].join('\n')
@@ -168,6 +223,50 @@ async function comandoMias(deps, { departamento, nombreLocal, email }) {
   return bloques.join('\n')
 }
 
+// Vincula el Space donde se escribio el comando a un departamento. Reemplaza
+// la card de botones que se usaba antes (los botones `action` no funcionan),
+// y sigue siendo lo unico que evita cargar chat_space_name por SQL a mano.
+async function comandoVincular(deps, { space, extUser, argumento }) {
+  const { db, log = console } = deps
+
+  if (!esAdminGlobal(extUser)) {
+    return '⚠️ Solo un administrador puede vincular este Space a un departamento.'
+  }
+  if (!space) return '⚠️ No pude identificar este Space.'
+
+  const yaVinculado = await db.departamento.findUnique({ where: { chat_space_name: space } })
+  if (yaVinculado) {
+    return `Este Space ya está vinculado a *${yaVinculado.nombre}*. Para cambiarlo, desvinculalo primero desde la plataforma.`
+  }
+
+  const libres = await db.departamento.findMany({
+    where: { activo: true, chat_space_name: null },
+    select: { id: true, nombre: true, slug: true },
+    orderBy: { nombre: 'asc' }
+  })
+  const comoElegir = libres.map((d) => `• \`/vincular ${d.slug}\` — ${d.nombre}`).join('\n')
+
+  if (!argumento) {
+    return `¿A qué departamento vinculo este Space?\n\n${comoElegir}`
+  }
+
+  // Se acepta el slug o el nombre, sin distinguir acentos ni mayusculas: quien
+  // escribe el comando no tiene por que saber cual es el slug exacto.
+  const buscado = sinAcentos(argumento)
+  const elegido = libres.find((d) => sinAcentos(d.slug) === buscado || sinAcentos(d.nombre) === buscado)
+
+  if (!elegido) {
+    return `No encontré un departamento libre que se llame "${argumento}".\n\n${comoElegir}`
+  }
+
+  await db.departamento.update({ where: { id: elegido.id }, data: { chat_space_name: space } })
+  log.info?.({ space, departamento: elegido.slug }, 'chat: space vinculado por comando')
+  return `✅ Listo. Este Space queda vinculado a *${elegido.nombre}*: acá van a llegar los recordatorios diarios.`
+}
+
+// Comandos que necesitan resolver un departamento con calendario antes de
+// correr. /vincular queda afuera: justamente sirve para ANTES de que el Space
+// tenga departamento, y pedirle uno seria circular.
 const HANDLERS = {
   [COMANDO_HOY]: comandoHoy,
   [COMANDO_ATRASADAS]: comandoAtrasadas,
@@ -177,14 +276,24 @@ const HANDLERS = {
 // Devuelve el TEXTO de la respuesta (el envoltorio de Chat lo pone routes/chat.js).
 // Nunca tira: un comando que explota tiene que contestar algo legible, no
 // dejar al usuario mirando un error de Chat.
-export async function ejecutarComando(deps, { comandoId, space, extUser, email }) {
+export async function ejecutarComando(deps, { comandoId, texto, space, extUser, email }) {
   const { db, gcal, log = console } = deps
 
-  if (Number(comandoId) === COMANDO_AYUDA) return AYUDA
+  const comando = resolverComando({ comandoId, texto })
+  if (comando === COMANDO_AYUDA) return AYUDA
 
-  const handler = HANDLERS[Number(comandoId)]
+  if (comando === COMANDO_VINCULAR) {
+    try {
+      return await comandoVincular({ db, log }, { space, extUser, argumento: argumentoDeComando(texto) })
+    } catch (err) {
+      log.error?.({ err: err.message }, 'chat: fallo /vincular')
+      return '⚠️ No pude vincular el Space. Probá de nuevo.'
+    }
+  }
+
+  const handler = HANDLERS[comando]
   if (!handler) {
-    log.warn?.({ comandoId }, 'chat: comando desconocido')
+    log.warn?.({ comandoId, texto }, 'chat: comando desconocido')
     return `No conozco ese comando.\n\n${AYUDA}`
   }
 
@@ -201,7 +310,7 @@ export async function ejecutarComando(deps, { comandoId, space, extUser, email }
     const nombreLocal = new Map(locales.map((l) => [l.id, l.nombre]))
     return await handler({ db, gcal, log }, { departamento, nombreLocal, email })
   } catch (err) {
-    log.error?.({ err: err.message, comandoId }, 'chat: fallo un comando')
+    log.error?.({ err: err.message, comandoId, texto }, 'chat: fallo un comando')
     return '⚠️ No pude traer las tareas. Probá de nuevo o entrá a la plataforma.'
   }
 }

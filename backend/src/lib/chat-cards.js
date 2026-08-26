@@ -17,30 +17,53 @@ function textoDeItem({ evento, dias }, nombreLocal) {
   return lineaDeTarea({ evento, dias }, nombreLocal, { conAntiguedad: true }).replace(/^• /, '')
 }
 
-function seccionDeTareas(titulo, items, nombreLocal, { conBotones = true } = {}) {
+// Boton "Marcar hecha" que resuelve el click en el propio endpoint.
+//
+// NO SE USA HOY: los botones de tipo `action` no funcionan en esta app --
+// Chat reconoce el click (queda en chat.googleapis.com/errors con el
+// deploymentFunction correcto) pero nunca llega un request al endpoint, y
+// responde "Can't post a reply". Se probo y descarto: tipo de Space
+// (colaboracion vs anuncios), permisos del Space, cache del browser, espacios
+// externos, y crear un deployment en gsuiteaddons. Ver
+// docs/CONFIGURAR-CHAT-APP.md.
+//
+// Se deja armado porque el dia que se resuelva es cambiar una linea en
+// seccionDeTareas, y porque los parametros/permisos del receptor ya estan
+// escritos y probados (routes/chat.js#marcar).
+function botonMarcar(evento) {
+  return {
+    text: 'Marcar hecha',
+    onClick: {
+      action: {
+        function: ACCION_MARCAR,
+        // Estos parametros vienen del CLIENTE cuando vuelven: el receptor los
+        // re-verifica contra la base, nunca confia en ellos para decidir
+        // permisos.
+        parameters: [
+          { key: 'instanceId', value: evento.id },
+          { key: 'fecha', value: evento.start?.date || '' }
+        ]
+      }
+    }
+  }
+}
+
+// Boton que abre la tarea en la plataforma. Es el que se usa: `openLink` NO
+// pasa por el ruteo de acciones roto (verificado en produccion), asi que la
+// tarjeta queda util en vez de tener un boton que falla.
+function botonAbrir(urlApp) {
+  return {
+    text: 'Abrir',
+    onClick: { openLink: { url: `${urlApp || 'https://dc-plataforma.web.app'}/mis-tareas` } }
+  }
+}
+
+function seccionDeTareas(titulo, items, nombreLocal, { conBotones = true, urlApp } = {}) {
   const widgets = items.map(({ evento, dias }) => ({
     decoratedText: {
       text: textoDeItem({ evento, dias }, nombreLocal),
       wrapText: true,
-      ...(conBotones
-        ? {
-            button: {
-              text: 'Marcar hecha',
-              onClick: {
-                action: {
-                  function: ACCION_MARCAR,
-                  // Estos parametros vienen del CLIENTE cuando vuelven: el
-                  // receptor los re-verifica contra la base, nunca confia en
-                  // ellos para decidir permisos.
-                  parameters: [
-                    { key: 'instanceId', value: evento.id },
-                    { key: 'fecha', value: evento.start?.date || '' }
-                  ]
-                }
-              }
-            }
-          }
-        : {})
+      ...(conBotones ? { button: botonAbrir(urlApp) } : {})
     }
   }))
   return { header: titulo, collapsible: false, widgets }
@@ -66,14 +89,14 @@ export function cardDepartamento(departamento, baldes, nombreLocal, { umbrales, 
     const titulo = umbrales?.departamento
       ? `🚨 Atrasadas ${umbrales.departamento}+ días hábiles`
       : '🚨 Atrasadas'
-    secciones.push(seccionDeTareas(titulo, escaladasVisibles, nombreLocal))
+    secciones.push(seccionDeTareas(titulo, escaladasVisibles, nombreLocal, { urlApp }))
   }
 
   const restoVisible = recortar(resto)
-  if (restoVisible.length) secciones.push(seccionDeTareas('⚠️ Vencidas', restoVisible, nombreLocal))
+  if (restoVisible.length) secciones.push(seccionDeTareas('⚠️ Vencidas', restoVisible, nombreLocal, { urlApp }))
 
   const hoyVisible = recortar(pendientesHoy)
-  if (hoyVisible.length) secciones.push(seccionDeTareas('🕒 Pendientes de hoy', hoyVisible, nombreLocal))
+  if (hoyVisible.length) secciones.push(seccionDeTareas('🕒 Pendientes de hoy', hoyVisible, nombreLocal, { urlApp }))
 
   // El recorte se dice en voz alta: una card truncada en silencio se lee como
   // "no hay nada mas", que es peor que no mostrar nada.
@@ -109,6 +132,10 @@ export function cardDepartamento(departamento, baldes, nombreLocal, { umbrales, 
 
 // Card que se manda cuando agregan la app a un Space: vincularlo a un
 // departamento con un click, en vez de cargar el Space por SQL a mano.
+// Se responde con TEXTO y no con una card de botones a proposito: los botones
+// de tipo `action` no funcionan (ver botonMarcar), y una card cuyos botones no
+// hacen nada es peor que una instruccion clara. El comando /vincular hace el
+// mismo trabajo y ese camino si funciona.
 export function cardVincular(departamentosDisponibles) {
   if (!departamentosDisponibles.length) {
     return {
@@ -118,27 +145,15 @@ export function cardVincular(departamentosDisponibles) {
     }
   }
 
+  const lista = departamentosDisponibles.map((d) => `• ${d.nombre} — \`/vincular ${d.slug}\``).join('\n')
   return {
-    cardsV2: [
-      {
-        cardId: 'vincular-space',
-        card: {
-          header: { title: 'DC-PLATAFORMA', subtitle: '¿A qué departamento vinculo este Space?' },
-          sections: [
-            {
-              widgets: departamentosDisponibles.map((d) => ({
-                decoratedText: {
-                  text: d.nombre,
-                  button: {
-                    text: 'Vincular',
-                    onClick: { action: { function: ACCION_VINCULAR, parameters: [{ key: 'idDepartamento', value: d.id }] } }
-                  }
-                }
-              }))
-            }
-          ]
-        }
-      }
-    ]
+    text: [
+      '👋 *Hola, soy DC-PLATAFORMA.*',
+      'Para que este Space reciba los recordatorios, un administrador tiene que vincularlo a un departamento con el comando `/vincular`:',
+      '',
+      lista,
+      '',
+      '_Después de eso, todas las mañanas llega acá el resumen de tareas._'
+    ].join('\n')
   }
 }
