@@ -9,7 +9,7 @@
 //
 // Los IDs son numericos y los asigna QUIEN CONFIGURA la app en la consola de
 // Chat API (seccion "Comandos"): hay que usar los mismos numeros de aca.
-import { hoyEnArgentina, clasificarInstancia, diasHabilesVencida } from './vencimiento.js'
+import { hoyEnArgentina, clasificarInstancia, diasHabilesVencida, estaHecha } from './vencimiento.js'
 import { lineaDeTarea } from './mensajes-chat.js'
 import { esAdminGlobal, puedeGestionarDepartamento } from './permisos.js'
 
@@ -43,6 +43,13 @@ export const COMANDO_DESVINCULAR = 6
 export const COMANDO_TOMAR = 7
 export const COMANDO_PASAR = 8
 export const COMANDO_NOTA = 9
+// Experimento: /asignar abre un DIALOGO (formulario modal) para elegir la tarea
+// de una lista en vez de escribir su nombre. Segun la documentacion de Google
+// el envio del dialogo llega como buttonClickedPayload con isDialogEvent, o sea
+// por el mismo canal de acciones que hoy no funciona -- se prueba igual porque
+// el dialogo se ABRE desde un comando (canal que si funciona) y no es obvio que
+// el envio herede la falla. Si no anda, /tomar por texto sigue siendo el camino.
+export const COMANDO_ASIGNAR = 10
 
 const POR_NOMBRE = {
   hoy: COMANDO_HOY,
@@ -57,7 +64,8 @@ const POR_NOMBRE = {
   tomar: COMANDO_TOMAR,
   pasar: COMANDO_PASAR,
   nota: COMANDO_NOTA,
-  comentar: COMANDO_NOTA
+  comentar: COMANDO_NOTA,
+  asignar: COMANDO_ASIGNAR
 }
 
 // Separador para los comandos que llevan dos partes:
@@ -441,6 +449,62 @@ async function comandoNota(deps, { departamento, email, argumento }) {
     logLine: `${ahoraISO()} - NOTA de ${email}: ${nota}`
   })
   return `📝 Anotado en *${nombre}*:\n_${nota}_`
+}
+
+// ── Apoyo del dialogo experimental (/asignar) ─────────────────────────────
+//
+// Devuelven estructura en vez de texto, porque un dialogo no es un mensaje:
+// lo arma chat-cards.js y lo despacha routes/chat.js.
+
+// { departamento, pendientes } | { error }
+export async function pendientesParaAsignar(deps, { space, extUser }) {
+  const { db, gcal } = deps
+  const departamento = await resolverDepartamento(db, { space, extUser })
+  if (!departamento?.id_calendar_google) {
+    return { error: '⚠️ Este Space no está vinculado a un departamento con calendario.' }
+  }
+
+  const hoyISO = hoyEnArgentina()
+  const operables = await instanciasOperables(gcal, departamento, hoyISO)
+  const pendientes = operables
+    .filter((o) => !o.hecha)
+    .sort((a, b) => String(a.fechaISO).localeCompare(String(b.fechaISO)))
+    .map((o) => ({
+      instanceId: o.evento.id,
+      etiqueta: o.vencida
+        ? `${o.nombre} — atrasada ${diasHabilesVencida(o.evento, { hoyISO })}d`
+        : o.fechaISO === hoyISO
+          ? `${o.nombre} — hoy`
+          : `${o.nombre} — ${o.fechaISO}`
+    }))
+
+  return { departamento, pendientes }
+}
+
+// Toma una instancia por su id (viene del dialogo). El id se re-verifica contra
+// Calendar igual, y el departamento se resuelve por el Space: lo que llega del
+// formulario no decide permisos.
+export async function tomarPorInstanceId(deps, { space, extUser, email, instanceId }) {
+  const { db, gcal, log = console } = deps
+  const departamento = await resolverDepartamento(db, { space, extUser })
+  if (!departamento?.id_calendar_google) return '⚠️ Este Space no está vinculado a ningún departamento.'
+  if (!instanceId) return '⚠️ No pude identificar la tarea.'
+
+  const instancia = await gcal.leerInstancia({ calendarId: departamento.id_calendar_google, instanceId })
+  if (!instancia) return '⚠️ Esa tarea ya no existe.'
+
+  const props = instancia.extendedProperties?.private || {}
+  const nombre = props.nombre_tarea || instancia.summary || 'La tarea'
+  if (estaHecha(props)) return `${nombre} ya está hecha.`
+
+  await gcal.marcarInstancia({
+    calendarId: departamento.id_calendar_google,
+    instanceId,
+    extendedProperties: { asignado_a: email },
+    logLine: `${ahoraISO()} - TOMADA por ${email}${props.asignado_a ? ` (antes: ${props.asignado_a})` : ''}`
+  })
+  log.info?.({ instanceId, email }, 'chat: tarea tomada desde el dialogo')
+  return `✋ ${nombre} queda a tu nombre.`
 }
 
 // Corta el vinculo de este Space. La otra forma de lograr lo mismo es sacar la

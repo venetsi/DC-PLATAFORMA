@@ -151,6 +151,84 @@ export function cardDepartamento(departamento, baldes, nombreLocal, { umbrales, 
 
 // Card que se manda cuando agregan la app a un Space: vincularlo a un
 // departamento con un click, en vez de cargar el Space por SQL a mano.
+export const ACCION_ASIGNAR_SUBMIT = 'asignar_submit'
+export const CAMPO_TAREA = 'tarea'
+
+// Dialogo (formulario modal) para elegir una tarea de una lista en vez de
+// escribir su nombre. Se abre devolviendo action.navigations[].pushCard.
+//
+// EXPERIMENTAL: el envio del formulario vuelve como buttonClickedPayload con
+// isDialogEvent, o sea por el mismo canal de acciones que hoy no funciona en
+// esta app. Se prueba porque el dialogo se ABRE desde un comando (canal sano) y
+// no es obvio que el envio herede la falla.
+export function dialogoAsignar(pendientes) {
+  if (!pendientes.length) {
+    return {
+      action: {
+        navigations: [
+          {
+            pushCard: {
+              sections: [{ widgets: [{ textParagraph: { text: 'No hay tareas pendientes para asignar. 🎉' } }] }]
+            }
+          }
+        ]
+      }
+    }
+  }
+
+  return {
+    action: {
+      navigations: [
+        {
+          pushCard: {
+            header: { title: 'Tomar una tarea' },
+            sections: [
+              {
+                widgets: [
+                  {
+                    selectionInput: {
+                      name: CAMPO_TAREA,
+                      label: '¿Cuál tomás?',
+                      type: 'RADIO_BUTTON',
+                      items: pendientes.slice(0, MAX_TAREAS_POR_CARD).map((p, i) => ({
+                        text: p.etiqueta,
+                        // El value viaja al submit: es el id de la instancia,
+                        // que el receptor re-verifica contra Calendar igual.
+                        value: p.instanceId,
+                        selected: i === 0
+                      }))
+                    }
+                  },
+                  {
+                    buttonList: {
+                      buttons: [
+                        {
+                          text: 'Tomar',
+                          onClick: { action: { function: ACCION_ASIGNAR_SUBMIT } }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+
+// Cierra el dialogo y muestra un aviso flotante.
+export function cerrarDialogo(texto) {
+  return {
+    action: {
+      navigations: [{ endNavigation: { action: 'CLOSE_DIALOG' } }],
+      notification: { text: texto }
+    }
+  }
+}
+
 // Se responde con TEXTO y no con una card de botones a proposito: los botones
 // de tipo `action` no funcionan (ver botonMarcar), y una card cuyos botones no
 // hacen nada es peor que una instruccion clara. El comando /vincular hace el

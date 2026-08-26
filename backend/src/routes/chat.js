@@ -22,11 +22,25 @@
 // presente -- no hay un campo "type" directo.
 import { verificarPeticionDeChat, ChatNoConfigurado, ChatTokenInvalido } from '../lib/chat-verificar.js'
 import { resolverEmail } from '../lib/chat.js'
-import { cardVincular, ACCION_MARCAR, ACCION_VINCULAR } from '../lib/chat-cards.js'
+import {
+  cardVincular,
+  dialogoAsignar,
+  cerrarDialogo,
+  ACCION_MARCAR,
+  ACCION_VINCULAR,
+  ACCION_ASIGNAR_SUBMIT,
+  CAMPO_TAREA
+} from '../lib/chat-cards.js'
 import { marcarInstanciaYPropagar } from '../lib/marcar-instancia.js'
 import { prerrequisitosPendientes } from '../lib/dependencias.js'
 import { esAdminGlobal, puedeGestionarDepartamento } from '../lib/permisos.js'
-import { ejecutarComando } from '../lib/chat-comandos.js'
+import {
+  ejecutarComando,
+  resolverComando,
+  pendientesParaAsignar,
+  tomarPorInstanceId,
+  COMANDO_ASIGNAR
+} from '../lib/chat-comandos.js'
 
 // Las dos acciones que devuelve este framework (ver
 // hostAppDataAction.chatDataAction en la doc de Workspace Add-ons): crear
@@ -158,6 +172,15 @@ async function manejarComando(fastify, chatEvent) {
     return mensajeNuevo({ text: '⚠️ Tu usuario no está activo en la plataforma.' })
   }
 
+  // /asignar responde con un DIALOGO, no con un mensaje: es una estructura
+  // distinta (action.navigations) y va sin el envoltorio de chatDataAction.
+  if (resolverComando({ comandoId, texto }) === COMANDO_ASIGNAR) {
+    const { departamento, pendientes, error } = await pendientesParaAsignar(fastify, { space, extUser })
+    if (error) return mensajeNuevo({ text: error })
+    fastify.log.info({ departamento: departamento.slug, pendientes: pendientes.length }, 'chat: abriendo diálogo')
+    return dialogoAsignar(pendientes)
+  }
+
   const respuesta = await ejecutarComando(fastify, { comandoId, texto, space, extUser, email })
   return mensajeNuevo({ text: respuesta })
 }
@@ -194,9 +217,27 @@ async function manejarClick(fastify, chatEvent, common) {
   // hermano de `user` -- confirmado por los otros dos eventos reales.
   const space = chatEvent.buttonClickedPayload?.space?.name || chatEvent.space?.name
 
+  // Envio del dialogo experimental (/asignar). Llega por este mismo camino,
+  // con isDialogEvent/dialogEventType=SUBMIT_DIALOG, y los valores del
+  // formulario en commonEventObject.formInputs.
+  if (funcion === ACCION_ASIGNAR_SUBMIT) {
+    const instanceId = leerCampoDelFormulario(common, CAMPO_TAREA)
+    fastify.log.info(
+      { instanceId, esDialogo: chatEvent.buttonClickedPayload?.isDialogEvent },
+      'chat: envío de diálogo recibido'
+    )
+    const texto = await tomarPorInstanceId(fastify, { space, extUser, email, instanceId })
+    return cerrarDialogo(texto)
+  }
+
   if (funcion === ACCION_VINCULAR) return vincular(fastify, space, { extUser, usuario, params })
   if (funcion === ACCION_MARCAR) return marcar(fastify, space, { extUser, email, usuario, params })
   return {}
+}
+
+// formInputs viene como { campo: { stringInputs: { value: [...] } } }.
+function leerCampoDelFormulario(common, campo) {
+  return common?.formInputs?.[campo]?.stringInputs?.value?.[0] || null
 }
 
 async function vincular(fastify, space, { extUser, params }) {
