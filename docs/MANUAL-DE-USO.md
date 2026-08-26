@@ -166,6 +166,18 @@ departamento, sin abrir la plataforma.
 | `/mias` | Las que están a tu nombre, más las del equipo sin responsable fijo |
 | `/ayuda` | La lista de comandos |
 
+**Para ver el detalle:**
+
+| Comando | Qué hace |
+|---|---|
+| `/tarea cierre` | En qué anda esa tarea: estado, quién la tiene, de qué depende y su historial completo |
+| `/local tiamo` | Las tareas de un local. Con `/grupo aldos` ves las de todos los locales del grupo |
+| `/resumen` | Cómo viene el departamento: pendientes de hoy, atrasadas y % de cumplimiento |
+| `/equipo` | Quién tiene qué y cuánto atraso arrastra cada uno |
+
+`/tarea` es el que muestra las notas que se dejaron con `/nota`, junto con quién marcó
+qué y cuándo.
+
 **Para coordinar entre el equipo:**
 
 | Comando | Qué hace |

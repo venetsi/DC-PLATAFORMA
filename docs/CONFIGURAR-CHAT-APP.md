@@ -93,28 +93,47 @@ que sigue abierto — se hizo durante el diagnóstico y no hizo daño, así que 
 documentado como parte del camino, pero no se descarta que sea prescindible para una
 app puramente de Chat.)*
 
-## 3b. Cargar los comandos de barra
+## 3b. Cargar los comandos
 
 En **Google Chat API → Configuration → sección "Comandos"**, agregar uno por uno con
 **"Agrega un comando"**:
 
-| ID | Nombre | Descripción sugerida | Diálogo |
-|---|---|---|---|
-| `1` | `hoy` | Las tareas que vencen hoy | no |
-| `2` | `atrasadas` | Lo que quedó sin hacer | no |
-| `3` | `mias` | Las tareas que están a mi nombre | no |
-| `4` | `ayuda` | Ver los comandos disponibles | no |
-| `5` | `vincular` | Vincular este Space a un departamento | no |
-| `6` | `desvincular` | Dejar de recibir los recordatorios acá | no |
-| `7` | `tomar` | Poner una tarea a mi nombre | no |
-| `8` | `pasar` | Pasarle una tarea a otra persona | no |
-| `9` | `nota` | Dejar un comentario en una tarea | no |
-| `10` | `asignar` | Elegir una tarea de una lista | **sí** — pero no funciona, ver más abajo |
+**El "Tipo de comando" importa:**
 
-Todos son de tipo **"Comando de barra"**. Los IDs son una referencia, no un requisito:
-el comando se resuelve por su **nombre**, así que si uno queda con otro número igual
-funciona. (Antes se resolvía por ID y un número cruzado hacía que `/ayuda` contestara
-"Atrasadas".)
+- **Comando rápido** — se ejecuta con un click desde el menú, sin escribir. Es el
+  mejor tipo para los que no llevan parámetro.
+- **Comando de barra** — se puede escribir y admite parámetros. Obligatorio para los
+  que necesitan un argumento (`/tomar cierre`).
+- *Acción de mensaje* — no se usa en esta app.
+
+| ID | Nombre | Tipo | Para qué |
+|---|---|---|---|
+| `1` | `hoy` | **rápido** | Las tareas que vencen hoy |
+| `2` | `atrasadas` | **rápido** | Lo que quedó sin hacer |
+| `3` | `mias` | **rápido** | Las que están a mi nombre |
+| `4` | `ayuda` | **rápido** | La lista de comandos |
+| `13` | `resumen` | **rápido** | Cómo viene el departamento |
+| `14` | `equipo` | **rápido** | Quién tiene qué |
+| `15` | `departamentos` | **rápido** | Panorama de los 11 (solo admin) |
+| `5` | `vincular` | barra | Vincular este Space a un departamento |
+| `6` | `desvincular` | barra | Dejar de recibir los recordatorios acá |
+| `7` | `tomar` | barra | Poner una tarea a mi nombre |
+| `8` | `pasar` | barra | Pasarle una tarea a otra persona |
+| `9` | `nota` | barra | Dejar un comentario en una tarea |
+| `11` | `tarea` | barra | El detalle y el historial de una tarea |
+| `12` | `local` | barra | Las tareas de un local o de un grupo |
+| `10` | `asignar` | barra + **Diálogo** | No funciona, ver más abajo |
+
+> **Los IDs importan solo para los comandos rápidos.** Un comando de barra se resuelve
+> por su **nombre** (viene en el texto del mensaje), así que si le queda otro número
+> igual funciona. Un comando rápido no se escribe, así que no trae texto y se resuelve
+> **por ID** — ahí el número de la consola tiene que coincidir con el del código
+> (`backend/src/lib/chat-comandos.js`).
+
+También hay alias, por si alguien escribe otra palabra: `/tareas` = `/hoy`,
+`/vencidas` = `/atrasadas`, `/estado` = `/resumen`, `/detalle` = `/tarea`,
+`/grupo` = `/local`, `/comentar` = `/nota`, `/help` = `/ayuda`. No hace falta darlos
+de alta: funcionan si alguien los escribe.
 
 Los comandos van por un mecanismo **distinto** al de los botones de las tarjetas
 (`appCommandPayload` en vez de `buttonClickedPayload`), y **funcionan** aunque los
