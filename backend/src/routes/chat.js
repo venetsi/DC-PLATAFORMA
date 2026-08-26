@@ -26,6 +26,7 @@ import { cardVincular, ACCION_MARCAR, ACCION_VINCULAR } from '../lib/chat-cards.
 import { marcarInstanciaYPropagar } from '../lib/marcar-instancia.js'
 import { prerrequisitosPendientes } from '../lib/dependencias.js'
 import { esAdminGlobal, puedeGestionarDepartamento } from '../lib/permisos.js'
+import { ejecutarComando } from '../lib/chat-comandos.js'
 
 // Las dos acciones que devuelve este framework (ver
 // hostAppDataAction.chatDataAction en la doc de Workspace Add-ons): crear
@@ -86,6 +87,7 @@ export async function manejarEvento(fastify, body) {
 
   if (chatEvent.addedToSpacePayload) return manejarAgregado(fastify, chatEvent.addedToSpacePayload)
   if (chatEvent.removedFromSpacePayload) return manejarRemovido(fastify, chatEvent.removedFromSpacePayload)
+  if (chatEvent.appCommandPayload) return manejarComando(fastify, chatEvent)
   if (chatEvent.buttonClickedPayload) return manejarClick(fastify, chatEvent, common)
   if (chatEvent.messagePayload) {
     return mensajeNuevo({
@@ -130,6 +132,28 @@ async function manejarRemovido(fastify, payload) {
   })
   if (count) fastify.log.info({ space }, 'chat: space desvinculado al sacar la app')
   return {}
+}
+
+// Comando de barra (/hoy, /atrasadas, /mias, /ayuda). Camino independiente del
+// de los botones: llega como appCommandPayload, no como buttonClickedPayload.
+async function manejarComando(fastify, chatEvent) {
+  const comandoId = chatEvent.appCommandPayload?.appCommandMetadata?.appCommandId
+  const usuario = chatEvent.user
+  const space = chatEvent.appCommandPayload?.space?.name || chatEvent.space?.name
+
+  fastify.log.info({ comandoId, space }, 'chat: comando recibido')
+
+  const email = await resolverEmail({ user: usuario, db: fastify.db, log: fastify.log })
+  if (!email) {
+    return mensajeNuevo({ text: '⚠️ No pude identificarte. Entrá a la plataforma.' })
+  }
+  const extUser = await fastify.db.extUser.findUnique({ where: { email } })
+  if (!extUser?.activo) {
+    return mensajeNuevo({ text: '⚠️ Tu usuario no está activo en la plataforma.' })
+  }
+
+  const texto = await ejecutarComando(fastify, { comandoId, space, extUser, email })
+  return mensajeNuevo({ text: texto })
 }
 
 // `common.parameters` viene de Action.setParameters -- en la doc de Apps
