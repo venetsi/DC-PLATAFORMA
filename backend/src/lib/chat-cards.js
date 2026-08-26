@@ -48,13 +48,32 @@ function botonMarcar(evento) {
   }
 }
 
+export const URL_APP_POR_DEFECTO = 'https://dc-plataforma.web.app'
+
+// Un mensaje de Chat lo abre una persona real desde su telefono o su maquina:
+// un link a localhost NUNCA sirve. Paso de verdad -- correr el job desde una
+// maquina de desarrollo posteo botones apuntando a localhost:5173 en un Space
+// real, porque FRONTEND_URL ahi vale eso. La guarda evita que se repita.
+export function urlPublica(url) {
+  if (!url) return URL_APP_POR_DEFECTO
+  try {
+    const { hostname } = new URL(url)
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+      return URL_APP_POR_DEFECTO
+    }
+    return url.replace(/\/+$/, '')
+  } catch {
+    return URL_APP_POR_DEFECTO
+  }
+}
+
 // Boton que abre la tarea en la plataforma. Es el que se usa: `openLink` NO
 // pasa por el ruteo de acciones roto (verificado en produccion), asi que la
 // tarjeta queda util en vez de tener un boton que falla.
 function botonAbrir(urlApp) {
   return {
     text: 'Abrir',
-    onClick: { openLink: { url: `${urlApp || 'https://dc-plataforma.web.app'}/mis-tareas` } }
+    onClick: { openLink: { url: `${urlPublica(urlApp)}/mis-tareas` } }
   }
 }
 
@@ -108,9 +127,9 @@ export function cardDepartamento(departamento, baldes, nombreLocal, { umbrales, 
           decoratedText: {
             text: `<i>y ${total - mostradas} más</i>`,
             wrapText: true,
-            ...(urlApp
-              ? { button: { text: 'Ver todas', onClick: { openLink: { url: urlApp } } } }
-              : {})
+            // Sin condicional: urlPublica() siempre devuelve una URL usable,
+            // asi que el boton nunca queda a medias.
+            button: { text: 'Ver todas', onClick: { openLink: { url: `${urlPublica(urlApp)}/mis-tareas` } } }
           }
         }
       ]

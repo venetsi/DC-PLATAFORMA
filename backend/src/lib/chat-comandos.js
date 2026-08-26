@@ -33,6 +33,7 @@ export const COMANDO_ATRASADAS = 2
 export const COMANDO_MIAS = 3
 export const COMANDO_AYUDA = 4
 export const COMANDO_VINCULAR = 5
+export const COMANDO_DESVINCULAR = 6
 
 const POR_NOMBRE = {
   hoy: COMANDO_HOY,
@@ -42,7 +43,8 @@ const POR_NOMBRE = {
   mias: COMANDO_MIAS,
   ayuda: COMANDO_AYUDA,
   help: COMANDO_AYUDA,
-  vincular: COMANDO_VINCULAR
+  vincular: COMANDO_VINCULAR,
+  desvincular: COMANDO_DESVINCULAR
 }
 
 // "/vincular finanzas" -> "finanzas". Todo lo que sigue al nombre del comando.
@@ -83,7 +85,7 @@ const AYUDA = [
   '`/mias` — las que están a tu nombre (más las del equipo sin responsable fijo)',
   '`/ayuda` — esta lista',
   '',
-  '_Solo administradores:_ `/vincular <departamento>` para que este Space reciba los recordatorios.',
+  '_Solo administradores:_ `/vincular <departamento>` para que este Space reciba los recordatorios, y `/desvincular` para que dejen de llegar.',
   '',
   '_Los recordatorios llegan solos todas las mañanas._'
 ].join('\n')
@@ -264,9 +266,29 @@ async function comandoVincular(deps, { space, extUser, argumento }) {
   return `✅ Listo. Este Space queda vinculado a *${elegido.nombre}*: acá van a llegar los recordatorios diarios.`
 }
 
+// Corta el vinculo de este Space. La otra forma de lograr lo mismo es sacar la
+// app del Space (REMOVED_FROM_SPACE tambien limpia), pero eso ademas silencia
+// los comandos -- con esto el Space deja de recibir los recordatorios y sigue
+// pudiendo consultar.
+async function comandoDesvincular(deps, { space, extUser }) {
+  const { db, log = console } = deps
+
+  if (!esAdminGlobal(extUser)) {
+    return '⚠️ Solo un administrador puede desvincular este Space.'
+  }
+  if (!space) return '⚠️ No pude identificar este Space.'
+
+  const actual = await db.departamento.findUnique({ where: { chat_space_name: space } })
+  if (!actual) return 'Este Space no está vinculado a ningún departamento.'
+
+  await db.departamento.update({ where: { id: actual.id }, data: { chat_space_name: null } })
+  log.info?.({ space, departamento: actual.slug }, 'chat: space desvinculado por comando')
+  return `✅ Listo. Este Space ya no recibe los recordatorios de *${actual.nombre}*.\nPara volver a activarlo: \`/vincular ${actual.slug}\``
+}
+
 // Comandos que necesitan resolver un departamento con calendario antes de
-// correr. /vincular queda afuera: justamente sirve para ANTES de que el Space
-// tenga departamento, y pedirle uno seria circular.
+// correr. /vincular y /desvincular quedan afuera: operan sobre el vinculo del
+// Space, y pedirles un departamento ya resuelto seria circular.
 const HANDLERS = {
   [COMANDO_HOY]: comandoHoy,
   [COMANDO_ATRASADAS]: comandoAtrasadas,
@@ -282,12 +304,15 @@ export async function ejecutarComando(deps, { comandoId, texto, space, extUser, 
   const comando = resolverComando({ comandoId, texto })
   if (comando === COMANDO_AYUDA) return AYUDA
 
-  if (comando === COMANDO_VINCULAR) {
+  if (comando === COMANDO_VINCULAR || comando === COMANDO_DESVINCULAR) {
+    const esVincular = comando === COMANDO_VINCULAR
     try {
-      return await comandoVincular({ db, log }, { space, extUser, argumento: argumentoDeComando(texto) })
+      return esVincular
+        ? await comandoVincular({ db, log }, { space, extUser, argumento: argumentoDeComando(texto) })
+        : await comandoDesvincular({ db, log }, { space, extUser })
     } catch (err) {
-      log.error?.({ err: err.message }, 'chat: fallo /vincular')
-      return '⚠️ No pude vincular el Space. Probá de nuevo.'
+      log.error?.({ err: err.message, comando }, 'chat: fallo el (des)vinculado')
+      return `⚠️ No pude ${esVincular ? 'vincular' : 'desvincular'} el Space. Probá de nuevo.`
     }
   }
 
