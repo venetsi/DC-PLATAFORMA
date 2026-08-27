@@ -198,14 +198,18 @@ function aclaracionDeFallback(porFallback) {
 }
 
 // Subtitulo de la card del dialogo: el departamento, salvo en "modo todo"
-// (Space de Dirección viendo la empresa entera -- ver chat-comandos.js), que
-// no tiene UN departamento que nombrar.
-function subtituloDialogo({ departamento, modoTodo }) {
-  return modoTodo ? 'Todos los departamentos' : departamento?.nombre
+// (Space de Dirección viendo la empresa entera -- ver chat-comandos.js) o un
+// Space compartido entre varios departamentos concretos (ver /compartir),
+// donde se nombran todos los que cubre.
+function subtituloDialogo({ departamento, departamentos, modoTodo }) {
+  if (modoTodo) return 'Todos los departamentos'
+  if (departamentos?.length > 1) return departamentos.map((d) => d.nombre).join(' + ')
+  return departamento?.nombre
 }
 
-function deQuienDialogo({ departamento, modoTodo }) {
+function deQuienDialogo({ departamento, departamentos, modoTodo }) {
   if (modoTodo) return ' en cualquier departamento'
+  if (departamentos?.length > 1) return ` en ${departamentos.map((d) => d.nombre).join(' + ')}`
   return departamento ? ` en ${departamento.nombre}` : ''
 }
 
@@ -251,12 +255,12 @@ function selectorDeTarea(pendientes, { label = '¿Cuál?' } = {}) {
 // El envio del formulario vuelve como buttonClickedPayload con los valores en
 // commonEventObject.formInputs, y FUNCIONA -- verificado en produccion una vez
 // corregido que action.function tiene que ser la URL del endpoint.
-export function dialogoAsignar(pendientes, { departamento, porFallback, modoTodo } = {}) {
+export function dialogoAsignar(pendientes, { departamento, departamentos, porFallback, modoTodo } = {}) {
   // Siempre se nombra el ambito: un "no hay nada pendiente 🎉" sin decir DONDE
   // resulta enganoso -- paso de verdad al probar en un Space sin vincular, que
   // cae al departamento propio de quien escribe.
-  const deQuien = deQuienDialogo({ departamento, modoTodo })
-  const subtitulo = subtituloDialogo({ departamento, modoTodo })
+  const deQuien = deQuienDialogo({ departamento, departamentos, modoTodo })
+  const subtitulo = subtituloDialogo({ departamento, departamentos, modoTodo })
   if (!pendientes.length) {
     return tarjetaDialogoVacia(
       'Tomar una tarea',
@@ -297,9 +301,9 @@ export const CAMPO_PERSONA = 'persona'
 // evita un payload gigante si la nomina crece mucho sin que nadie lo note.
 const MAX_PERSONAS_POR_DIALOGO = 100
 
-export function dialogoPasar(pendientes, personas, { departamento, porFallback, modoTodo } = {}) {
-  const deQuien = deQuienDialogo({ departamento, modoTodo })
-  const subtitulo = subtituloDialogo({ departamento, modoTodo })
+export function dialogoPasar(pendientes, personas, { departamento, departamentos, porFallback, modoTodo } = {}) {
+  const deQuien = deQuienDialogo({ departamento, departamentos, modoTodo })
+  const subtitulo = subtituloDialogo({ departamento, departamentos, modoTodo })
   if (!pendientes.length) {
     return tarjetaDialogoVacia(
       'Pasar una tarea',
@@ -352,9 +356,9 @@ export function dialogoPasar(pendientes, personas, { departamento, porFallback, 
 export const ACCION_NOTA_SUBMIT = 'nota_submit'
 export const CAMPO_NOTA_TEXTO = 'nota_texto'
 
-export function dialogoApuntar(pendientes, { departamento, porFallback, modoTodo } = {}) {
-  const deQuien = deQuienDialogo({ departamento, modoTodo })
-  const subtitulo = subtituloDialogo({ departamento, modoTodo })
+export function dialogoApuntar(pendientes, { departamento, departamentos, porFallback, modoTodo } = {}) {
+  const deQuien = deQuienDialogo({ departamento, departamentos, modoTodo })
+  const subtitulo = subtituloDialogo({ departamento, departamentos, modoTodo })
   if (!pendientes.length) {
     return tarjetaDialogoVacia(
       'Dejar una nota',
@@ -416,9 +420,9 @@ function selectorMultiple(pendientes, { name, label }) {
   }
 }
 
-export function dialogoTildar(pendientes, { departamento, porFallback, modoTodo, resumen } = {}) {
-  const deQuien = deQuienDialogo({ departamento, modoTodo })
-  const subtitulo = subtituloDialogo({ departamento, modoTodo })
+export function dialogoTildar(pendientes, { departamento, departamentos, porFallback, modoTodo, resumen } = {}) {
+  const deQuien = deQuienDialogo({ departamento, departamentos, modoTodo })
+  const subtitulo = subtituloDialogo({ departamento, departamentos, modoTodo })
 
   if (!pendientes.length) {
     return tarjetaDialogoVacia(
@@ -627,8 +631,8 @@ export function cardVincular(departamentosDisponibles) {
                 {
                   textParagraph: {
                     text: resto
-                      ? `_y ${resto} más — también podés escribir_ \`/vincular\` _y el nombre._`
-                      : '_También podés escribir_ `/vincular` _y el nombre del departamento._'
+                      ? `_y ${resto} más — también podés escribir_ \`/vincular\` _y elegir de una lista con checkbox._`
+                      : '_También podés escribir_ `/vincular` _y elegir de una lista con checkbox (sirve para tildar más de uno)._'
                   }
                 }
               ]
@@ -637,5 +641,56 @@ export function cardVincular(departamentosDisponibles) {
         }
       }
     ]
+  }
+}
+
+// Dialogo (checkbox) de /vincular: que departamento(s) cubre este Space. Un
+// solo formulario reemplaza al /vincular de texto original y a /compartir +
+// /descompartir -- volver a abrir este mismo dialogo y tildar distinto ES la
+// forma de agregar, sacar, o cambiar el dueño (ver vincularDepartamentos en
+// chat-comandos.js). A diferencia de los demas dialogos, el value de cada
+// item es directamente el id del departamento, no una tarea codificada.
+export const ACCION_VINCULAR_SUBMIT = 'vincular_submit'
+export const CAMPO_DEPARTAMENTOS_VINCULAR = 'departamentos_vincular'
+
+export function dialogoVincular(departamentos, { actuales } = {}) {
+  const seleccionados = actuales instanceof Set ? actuales : new Set(actuales || [])
+  return {
+    action: {
+      navigations: [
+        {
+          pushCard: {
+            header: { title: 'Vincular Space', subtitle: '¿Qué departamento(s) cubre este Space?' },
+            sections: [
+              {
+                widgets: [
+                  {
+                    selectionInput: {
+                      name: CAMPO_DEPARTAMENTOS_VINCULAR,
+                      label: `Departamentos (${departamentos.length})`,
+                      type: 'CHECK_BOX',
+                      items: departamentos.map((d) => ({
+                        text: d.nombre,
+                        value: d.id,
+                        selected: seleccionados.has(d.id)
+                      }))
+                    }
+                  },
+                  {
+                    textParagraph: {
+                      text:
+                        '_El primero que quede tildado (o el que ya era dueño) recibe el recordatorio diario ' +
+                        'automático; el resto comparte la consulta y la operación, pero no ese aviso puntual. ' +
+                        'Sin nada tildado, este Space se desvincula por completo._'
+                    }
+                  },
+                  { buttonList: { buttons: [{ text: 'Guardar', onClick: accionEnEsteEndpoint(ACCION_VINCULAR_SUBMIT) }] } }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
   }
 }

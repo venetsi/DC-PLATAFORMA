@@ -42,6 +42,12 @@ export const COMANDO_HOY = 1
 export const COMANDO_ATRASADAS = 2
 export const COMANDO_MIAS = 3
 export const COMANDO_AYUDA = 4
+// /vincular abre un DIALOGO (checkbox) para elegir que departamentos cubre
+// este Space -- no un argumento de texto. Reusa el MISMO comando para el
+// primer vinculo y para agregar/sacar compartidos despues (decision explicita
+// del usuario 2026-08-27: un solo comando, no /vincular + /compartir +
+// /descompartir por separado). Requiere reconfigurar el comando #5 en la
+// consola de Chat de "barra" a "barra + Diálogo" -- ver CONFIGURAR-CHAT-APP.md.
 export const COMANDO_VINCULAR = 5
 export const COMANDO_DESVINCULAR = 6
 export const COMANDO_TOMAR = 7
@@ -200,7 +206,7 @@ const AYUDA = [
   '_No hace falta escribir el nombre completo de la tarea: con una parte alcanza_',
   '_(`/tomar cierre`). Si hay más de una que coincida, te pregunto cuál._',
   '',
-  '_Solo administradores:_ `/vincular` y el nombre del departamento, para que este Space reciba los recordatorios. `/desvincular` para que dejen de llegar.',
+  '_Solo administradores:_ `/vincular` abre un formulario para tildar qué departamento(s) cubre este Space (podés elegir más de uno). `/desvincular` para que este Space deje de recibir recordatorios y de cubrir ninguno.',
   '',
   '*Pagos de dcsmart* (no dependen de tu departamento)',
   '`/pago tiamo` — elegís un pago reciente de ese local y le asignás una tarea y/o una persona',
@@ -218,34 +224,72 @@ const AVISO_MODO_TODO =
   '`/local`, `/resumen` y `/equipo` traen todo mezclado, y `/tomar`, `/pasar`, `/nota` (y sus diálogos) ' +
   'actúan sobre la tarea de cualquier departamento que encuentren._'
 
+// Mismo aviso que AVISO_MODO_TODO pero para un Space compartido entre un
+// puñado de departamentos concretos (no toda la empresa) -- por eso no puede
+// ser una constante estatica, necesita los nombres reales.
+function avisoModoCompartido(departamentos) {
+  const nombres = departamentos.map((d) => d.nombre).join(', ')
+  return (
+    `\n\n_Este Space cubre varios departamentos (${nombres}): \`/hoy\`, \`/atrasadas\`, \`/mias\`, \`/tarea\`, ` +
+    '`/local`, `/resumen` y `/equipo` traen todo mezclado, y `/tomar`, `/pasar`, `/nota` (y sus diálogos) ' +
+    'actúan sobre la tarea de cualquiera de esos departamentos._'
+  )
+}
+
 function unDia(fechaISO, dias) {
   const [a, m, d] = fechaISO.split('-').map(Number)
   return new Date(Date.UTC(a, m - 1, d + dias)).toISOString().slice(0, 10)
 }
 
-// Puede operar en Chat dentro de este departamento: el caso normal es "es de
-// ese departamento, o es admin" (mismo criterio que el resto de la app, ver
+// Puede operar en Chat dentro de este Space: es de alguno de los
+// departamentos que el Space cubre (el dueño, o los que se agregaron con
+// /compartir), o es admin (mismo criterio que el resto de la app, ver
 // permisos.js). Dirección es la excepcion, y a proposito NO por pertenecer a
 // ese departamento sino por escribir desde SU Space: el usuario eligio de
 // forma explicita que el control de acceso sea "quien este en el grupo que
 // cree y vincule a Dirección", no "quien tenga Dirección en su ficha" -- así
 // que ni siquiera hace falta ser de Dirección para operar ahí, alcanza con
 // ser un ExtUser activo. Ver [[dcsmart_tareas_plataforma]] 2026-08-26.
-export function puedeOperarEnChat(usuario, departamento) {
-  if (departamento?.slug === SLUG_DIRECCION) return !!usuario
-  return puedeGestionarDepartamento(usuario, departamento?.id)
+//
+// `departamentos` es el array COMPLETO que cubre el Space (dueño +
+// compartidos, ver departamentosDelSpace) -- no un departamento suelto, para
+// que un Space compartido entre 2-3 equipos deje operar a cualquiera de
+// ellos, no solo al dueño original.
+export function puedeOperarEnChat(usuario, departamentos) {
+  if (!usuario) return false
+  if (departamentos.some((d) => d?.slug === SLUG_DIRECCION)) return true
+  return departamentos.some((d) => puedeGestionarDepartamento(usuario, d?.id))
 }
 
-// Que departamento mira el comando: el del Space si la persona puede operar
-// ahi (caso normal, el Space ES el del departamento; para el Space de
-// Dirección cualquier activo puede), y si no el propio.
+// Todos los departamentos que cubre un Space: el dueño (chat_space_name) +
+// los que se agregaron con /compartir. Array vacio si el Space no esta
+// vinculado a nadie. La forma es SIEMPRE un array (largo 1 para un Space
+// normal) para que el resto del codigo no tenga que bifurcar segun si es
+// compartido o no.
+export async function departamentosDelSpace(db, space) {
+  const dueño = await db.departamento.findUnique({ where: { chat_space_name: space } })
+  if (!dueño) return []
+  const filas = await db.departamentoCompartidoEnSpace.findMany({
+    where: { chat_space_name: space },
+    include: { departamento: true }
+  })
+  return [dueño, ...filas.map((f) => f.departamento)]
+}
+
+// Que departamento mira el comando: el dueño del Space si la persona puede
+// operar ahi (caso normal, el Space ES del departamento o de alguno de los
+// compartidos; para el Space de Dirección cualquier activo puede), y si no
+// el propio.
 // Nunca devuelve uno que la persona no pueda ver -- un Space puede tener gente
 // de otros equipos.
-// Devuelve { departamento, porFallback }: `porFallback` es true cuando NO se
-// pudo usar el del Space y se cayo al propio. Importa decirlo en la respuesta:
-// sin eso, alguien parado en un Space sin vincular ve las tareas de otro
-// departamento sin ninguna pista de por que -- paso de verdad, y el mensaje
-// "no hay tareas pendientes 🎉" resultaba enganoso.
+// Devuelve { departamento, compartidos, porFallback }: `departamento` es
+// siempre el DUEÑO (el de chat_space_name, para encabezados/`/vincular`),
+// `compartidos` son los adicionales (`[]` para un Space normal), y
+// `porFallback` es true cuando NO se pudo usar el del Space y se cayo al
+// propio. Importa decirlo en la respuesta: sin eso, alguien parado en un
+// Space sin vincular ve las tareas de otro departamento sin ninguna pista de
+// por que -- paso de verdad, y el mensaje "no hay tareas pendientes 🎉"
+// resultaba enganoso.
 //
 // OJO: `porFallback` tambien es la guarda de "modo todo" (ver mas abajo). Si
 // alguien de Dirección escribe en un Space sin vincular, cae por fallback a
@@ -254,20 +298,22 @@ export function puedeOperarEnChat(usuario, departamento) {
 // pertenecer a Dirección (ver puedeOperarEnChat).
 async function resolverDepartamento(db, { space, extUser }) {
   if (space) {
-    const delSpace = await db.departamento.findUnique({ where: { chat_space_name: space } })
-    if (delSpace && puedeOperarEnChat(extUser, delSpace)) {
-      return { departamento: delSpace, porFallback: false }
+    const delEspacio = await departamentosDelSpace(db, space)
+    if (delEspacio.length && puedeOperarEnChat(extUser, delEspacio)) {
+      const [dueño, ...compartidos] = delEspacio
+      return { departamento: dueño, compartidos, porFallback: false }
     }
   }
-  if (!extUser?.id_departamento) return { departamento: null, porFallback: false }
+  if (!extUser?.id_departamento) return { departamento: null, compartidos: [], porFallback: false }
   const propio = await db.departamento.findUnique({ where: { id: extUser.id_departamento } })
-  return { departamento: propio, porFallback: true }
+  return { departamento: propio, compartidos: [], porFallback: true }
 }
 
 // "Modo todo": el Space esta vinculado DIRECTAMENTE a Dirección (no por
 // fallback) -- ver el comentario de resolverDepartamento. En este modo los
 // comandos de lectura mezclan los 11 departamentos y los de accion pueden
-// tomar/pasar/anotar la tarea de cualquiera de ellos.
+// tomar/pasar/anotar la tarea de cualquiera de ellos. Un Space compartido
+// (dueño + /compartir) es un modo DISTINTO, mas chico -- ver ambitoDeChat.
 function esModoTodo(departamento, porFallback) {
   return !porFallback && departamento?.slug === SLUG_DIRECCION
 }
@@ -277,6 +323,17 @@ async function departamentosOperables(db) {
     where: { activo: true, id_calendar_google: { not: null } },
     orderBy: { nombre: 'asc' }
   })
+}
+
+// El conjunto de departamentos que aplica a este contexto de Chat: los 11 en
+// modo todo (Dirección), o el dueño + compartidos para cualquier otro Space
+// (un array de 1 solo elemento si no tiene compartidos -- el caso de
+// siempre). Centraliza una cuenta que se repetia igual en tres lugares
+// (ejecutarComando, pendientesParaAsignar, pendientesParaTildar).
+async function ambitoDeChat(db, { departamento, compartidos, porFallback }) {
+  const modoTodo = esModoTodo(departamento, porFallback)
+  const departamentos = modoTodo ? await departamentosOperables(db) : [departamento, ...compartidos]
+  return { modoTodo, departamentos }
 }
 
 // Aviso que se agrega cuando el departamento no salio del Space.
@@ -291,10 +348,15 @@ function encabezado(titulo, departamento) {
   return `*${titulo} — ${departamento.nombre}*`
 }
 
-// Mismo encabezado de siempre, salvo en modo todo: ahi no hay UN departamento
-// que nombrar.
-function tituloDeAmbito(titulo, { departamento, modoTodo }) {
-  return modoTodo ? `*${titulo} — Todos los departamentos*` : encabezado(titulo, departamento)
+// Mismo encabezado de siempre para un Space normal (un solo departamento).
+// En modo todo no hay UN departamento que nombrar; en un Space compartido
+// (dueño + /compartir) se nombran los dos o tres, con "+" -- distinto de
+// modo todo porque ahi SI tiene sentido decir cuales son (nunca son mas de
+// 2-3, a diferencia de los 11 de Dirección).
+function tituloDeAmbito(titulo, { departamento, departamentos, modoTodo }) {
+  if (modoTodo) return `*${titulo} — Todos los departamentos*`
+  if (departamentos?.length > 1) return `*${titulo} — ${departamentos.map((d) => d.nombre).join(' + ')}*`
+  return encabezado(titulo, departamento)
 }
 
 // Chat no permite encadenar comandos: cada uno es un evento independiente y no
@@ -371,12 +433,12 @@ async function comandoHoy(deps, { departamento, departamentos, modoTodo, nombreL
     ;(hecha ? hechas : pendientes).push({ evento, departamento: deptoDelEvento, dias: 0 })
   }
 
-  const titulo = tituloDeAmbito('Hoy', { departamento, modoTodo })
+  const titulo = tituloDeAmbito('Hoy', { departamento, departamentos, modoTodo })
   if (!pendientes.length && !hechas.length) {
     return `${titulo}\nNo hay tareas agendadas para hoy.`
   }
 
-  const opts = { conDepartamento: modoTodo }
+  const opts = { conDepartamento: departamentos.length > 1 }
   const bloques = [titulo]
   if (pendientes.length) {
     bloques.push(`\n🕒 *Pendientes (${pendientes.length}):*\n${pendientes.map((i) => lineaDeTarea(i, nombreLocal, opts)).join('\n')}`)
@@ -404,7 +466,7 @@ async function comandoAtrasadas(deps, { departamento, departamentos, modoTodo, n
   }
   vencidas.sort((a, b) => b.dias - a.dias)
 
-  const titulo = tituloDeAmbito('Atrasadas', { departamento, modoTodo })
+  const titulo = tituloDeAmbito('Atrasadas', { departamento, departamentos, modoTodo })
   if (!vencidas.length) {
     return `${titulo}\n${sinNada('No hay nada atrasado')}`
   }
@@ -414,7 +476,7 @@ async function comandoAtrasadas(deps, { departamento, departamentos, modoTodo, n
       titulo,
       `${vencidas.length} sin resolver, de más vieja a más nueva:`,
       '',
-      vencidas.map((i) => lineaDeTarea(i, nombreLocal, { conAntiguedad: true, conDepartamento: modoTodo })).join('\n')
+      vencidas.map((i) => lineaDeTarea(i, nombreLocal, { conAntiguedad: true, conDepartamento: departamentos.length > 1 })).join('\n')
     ].join('\n') + sugerirSobreEventos(vencidas)
   )
 }
@@ -435,9 +497,10 @@ async function comandoMias(deps, { departamento, departamentos, modoTodo, nombre
     const props = evento.extendedProperties?.private || {}
     const responsable = String(props.asignado_a || '').toLowerCase().trim()
     // Sin responsable fijo = le toca al equipo, y por lo tanto tambien a esta
-    // persona -- pero eso solo tiene sentido DENTRO de un departamento. En
-    // modo todo (Dirección viendo la empresa entera) "sin dueño" no es "mio",
-    // asi que ahi se pide coincidencia exacta.
+    // persona -- vale tanto para un Space normal como para uno compartido
+    // (es "el equipo" de ese Space, un concepto chico y real). En modo todo
+    // (Dirección viendo la empresa entera) "sin dueño" ya no es "el equipo de
+    // nadie en particular", asi que ahi se pide coincidencia exacta.
     if (modoTodo ? responsable !== email : responsable && responsable !== email) continue
 
     const { hecha, vencida, fechaISO } = clasificarInstancia(evento)
@@ -450,12 +513,12 @@ async function comandoMias(deps, { departamento, departamentos, modoTodo, nombre
   }
   vencidas.sort((a, b) => b.dias - a.dias)
 
-  const titulo = tituloDeAmbito('Mis tareas', { departamento, modoTodo })
+  const titulo = tituloDeAmbito('Mis tareas', { departamento, departamentos, modoTodo })
   if (!vencidas.length && !deHoy.length && !proximas.length) {
     return `${titulo}\n${sinNada('No tenés nada pendiente')}`
   }
 
-  const opts = { conDepartamento: modoTodo }
+  const opts = { conDepartamento: departamentos.length > 1 }
   const bloques = [titulo]
   if (vencidas.length) {
     bloques.push(`\n⚠️ *Atrasadas (${vencidas.length}):*\n${vencidas.map((i) => lineaDeTarea(i, nombreLocal, { ...opts, conAntiguedad: true })).join('\n')}`)
@@ -470,50 +533,97 @@ async function comandoMias(deps, { departamento, departamentos, modoTodo, nombre
   return bloques.join('\n') + sugerirSobreEventos([...vencidas, ...deHoy])
 }
 
-// Vincula el Space donde se escribio el comando a un departamento. Hace lo
-// mismo que la card de botones que manda ADDED_TO_SPACE, para quien prefiera
-// escribirlo -- y sirve cuando hay mas departamentos libres que botones en la
-// card. Entre los dos caminos, nunca hace falta cargar chat_space_name por SQL.
-async function comandoVincular(deps, { space, extUser, argumento }) {
-  const { db, log = console } = deps
+// Lista + estado actual para el formulario (checkbox) de /vincular. Al
+// reves que los demas "pendientesParaX": no exige que quien pregunta ya
+// pueda operar en este Space -- ESTE comando es justamente el que define
+// quien va a poder despues. Solo exige ser administrador.
+export async function departamentosParaVincular(deps, { space, extUser }) {
+  const { db } = deps
+  if (!esAdminGlobal(extUser)) {
+    return { error: '⚠️ Solo un administrador puede vincular este Space a un departamento.' }
+  }
+  if (!space) return { error: '⚠️ No pude identificar este Space.' }
 
+  const departamentos = await db.departamento.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } })
+  const actual = await departamentosDelSpace(db, space)
+  return { departamentos, actuales: new Set(actual.map((d) => d.id)) }
+}
+
+// Fija de una sola vez la lista COMPLETA de departamentos que cubre este
+// Space, a partir de lo tildado en el formulario de /vincular (ver
+// dialogoVincular). Reemplaza tanto al /vincular de texto original como a
+// /compartir + /descompartir -- volver a abrir el formulario y tildar
+// distinto ES la forma de agregar, sacar, o cambiar de dueño. Decision
+// explicita del usuario (2026-08-27): un solo comando reusado con checkbox,
+// no tres comandos de texto separados.
+//
+// El dueño (Departamento.chat_space_name, @unique -- no puede ser dueño de
+// dos Spaces a la vez) se mantiene si sigue tildado, para no reordenar nada
+// solo por agregar o sacar un compartido; si se destildo, el primero por
+// orden alfabetico de los que quedan pasa a ser el nuevo dueño. El resto de
+// los tildados quedan como compartidos (DepartamentoCompartidoEnSpace) --
+// mismo mecanismo que ya usaba /compartir, solo que ahora se recalcula
+// entero en cada envio del formulario en vez de a mano de a uno.
+export async function vincularDepartamentos(deps, { space, extUser, idsDepartamentos }) {
+  const { db, log = console } = deps
   if (!esAdminGlobal(extUser)) {
     return '⚠️ Solo un administrador puede vincular este Space a un departamento.'
   }
   if (!space) return '⚠️ No pude identificar este Space.'
 
-  const yaVinculado = await db.departamento.findUnique({ where: { chat_space_name: space } })
-  if (yaVinculado) {
-    return `Este Space ya está vinculado a *${yaVinculado.nombre}*. Para cambiarlo, desvinculalo primero desde la plataforma.`
+  const ids = [...new Set((Array.isArray(idsDepartamentos) ? idsDepartamentos : [idsDepartamentos]).filter(Boolean))]
+  const actual = await departamentosDelSpace(db, space)
+  const dueñoActual = actual[0] ?? null
+
+  if (!ids.length) {
+    if (!dueñoActual) return 'Este Space no cubre ningún departamento -- no hay nada que desvincular.'
+    const { count } = await db.departamentoCompartidoEnSpace.deleteMany({ where: { chat_space_name: space } })
+    await db.departamento.update({ where: { id: dueñoActual.id }, data: { chat_space_name: null } })
+    log.info?.({ space, compartidosLimpiados: count }, 'chat: space desvinculado por el formulario (sin tildes)')
+    return '✅ Listo. Este Space ya no cubre ningún departamento.\nPara volver a activarlo, escribí `/vincular`.'
   }
 
-  const libres = await db.departamento.findMany({
-    where: { activo: true, chat_space_name: null },
-    select: { id: true, nombre: true, slug: true },
-    orderBy: { nombre: 'asc' }
+  const elegidos = await db.departamento.findMany({ where: { id: { in: ids }, activo: true }, orderBy: { nombre: 'asc' } })
+  if (!elegidos.length) return '⚠️ Ninguno de los departamentos tildados sigue activo. Probá de nuevo.'
+
+  const nuevoDueño = elegidos.find((d) => d.id === dueñoActual?.id) ?? elegidos[0]
+
+  // chat_space_name es @unique en Departamento: no se le puede robar en
+  // silencio el vinculo a un departamento que ya es dueño de OTRO Space.
+  if (nuevoDueño.chat_space_name && nuevoDueño.chat_space_name !== space) {
+    return `⚠️ *${nuevoDueño.nombre}* ya es el dueño de otro Space. Desvinculalo ahí primero (\`/desvincular\` desde ese otro Space) antes de tildarlo acá.`
+  }
+
+  if (nuevoDueño.id !== dueñoActual?.id) {
+    if (dueñoActual) await db.departamento.update({ where: { id: dueñoActual.id }, data: { chat_space_name: null } })
+    await db.departamento.update({ where: { id: nuevoDueño.id }, data: { chat_space_name: space } })
+  }
+
+  const compartidosNuevos = elegidos.filter((d) => d.id !== nuevoDueño.id)
+  const idsCompartidosNuevos = compartidosNuevos.map((d) => d.id)
+  await db.departamentoCompartidoEnSpace.deleteMany({
+    where: {
+      chat_space_name: space,
+      id_departamento: { notIn: idsCompartidosNuevos.length ? idsCompartidosNuevos : ['__ninguno__'] }
+    }
   })
-  const comoElegir = libres.map((d) => `• \`/vincular ${d.slug}\` — ${d.nombre}`).join('\n')
-
-  if (!argumento) {
-    return `¿A qué departamento vinculo este Space?\n\n${comoElegir}`
+  for (const d of compartidosNuevos) {
+    const yaExiste = await db.departamentoCompartidoEnSpace.findFirst({ where: { chat_space_name: space, id_departamento: d.id } })
+    if (!yaExiste) await db.departamentoCompartidoEnSpace.create({ data: { chat_space_name: space, id_departamento: d.id } })
   }
 
-  // Se acepta el slug o el nombre, sin distinguir acentos ni mayusculas: quien
-  // escribe el comando no tiene por que saber cual es el slug exacto.
-  const buscado = sinAcentos(argumento)
-  const elegido = libres.find((d) => sinAcentos(d.slug) === buscado || sinAcentos(d.nombre) === buscado)
+  log.info?.(
+    { space, dueño: nuevoDueño.slug, compartidos: compartidosNuevos.map((d) => d.slug) },
+    'chat: space vinculado por el formulario'
+  )
 
-  if (!elegido) {
-    return `No encontré un departamento libre que se llame "${argumento}".\n\n${comoElegir}`
-  }
-
-  await db.departamento.update({ where: { id: elegido.id }, data: { chat_space_name: space } })
-  log.info?.({ space, departamento: elegido.slug }, 'chat: space vinculado por comando')
-  const nota =
-    elegido.slug === SLUG_DIRECCION
-      ? '\n\n_Este Space va a poder ver y operar sobre CUALQUIER departamento (es Dirección) -- sumá con cuidado a quién agregás acá._'
-      : ''
-  return `✅ Listo. Este Space queda vinculado a *${elegido.nombre}*: acá van a llegar los recordatorios diarios.${nota}`
+  const notaDireccion = elegidos.some((d) => d.slug === SLUG_DIRECCION)
+    ? '\n\n_Este Space va a poder ver y operar sobre CUALQUIER departamento (incluye a Dirección) -- sumá con cuidado a quién agregás acá._'
+    : ''
+  const resumen = compartidosNuevos.length
+    ? `*${nuevoDueño.nombre}* (recibe los recordatorios) + ${compartidosNuevos.map((d) => `*${d.nombre}*`).join(', ')}`
+    : `*${nuevoDueño.nombre}*`
+  return `✅ Listo. Este Space queda vinculado a ${resumen}.${notaDireccion}`
 }
 
 // ── Comandos que operan sobre UNA tarea ───────────────────────────────────
@@ -607,10 +717,10 @@ async function comandoMarcar(deps, { departamentos, modoTodo, email, argumento }
   const hoyISO = hoyEnArgentina()
   const operables = await instanciasOperables(gcal, departamentos, hoyISO)
   const r = buscarPorTexto(operables, argumento, hoyISO)
-  if (!r.una) return pedirPrecision(r, operables, { modoTodo })
+  if (!r.una) return pedirPrecision(r, operables, { modoTodo: departamentos.length > 1 })
 
   const { evento, nombre, departamento } = r.una
-  const etiqueta = modoTodo ? `*${nombre}* (${departamento.nombre})` : `*${nombre}*`
+  const etiqueta = departamentos.length > 1 ? `*${nombre}* (${departamento.nombre})` : `*${nombre}*`
 
   const { evento: eventoFresco, yaEstaba, avisos } = await marcarInstanciaYPropagar(deps, {
     calendarId: departamento.id_calendar_google,
@@ -640,7 +750,7 @@ async function comandoTomar(deps, { departamentos, modoTodo, email, argumento })
   const hoyISO = hoyEnArgentina()
   const operables = await instanciasOperables(gcal, departamentos, hoyISO)
   const r = buscarPorTexto(operables, argumento, hoyISO)
-  if (!r.una) return pedirPrecision(r, operables, { modoTodo })
+  if (!r.una) return pedirPrecision(r, operables, { modoTodo: departamentos.length > 1 })
 
   const { evento, nombre, hecha, departamento } = r.una
   if (hecha) return `*${nombre}* ya está hecha, no hace falta tomarla.`
@@ -654,7 +764,7 @@ async function comandoTomar(deps, { departamentos, modoTodo, email, argumento })
     extendedProperties: { asignado_a: email },
     logLine: `${ahoraISO()} - TOMADA por ${email}${actual ? ` (antes: ${actual})` : ''}`
   })
-  const etiqueta = modoTodo ? `*${nombre}* (${departamento.nombre})` : `*${nombre}*`
+  const etiqueta = departamentos.length > 1 ? `*${nombre}* (${departamento.nombre})` : `*${nombre}*`
   const cierre = sugerir(`/marcar ${nombre}`, `/nota ${nombre}: `, `/tarea ${nombre}`)
   return actual
     ? `✋ ${etiqueta} pasa de ${actual} a vos.${cierre}`
@@ -676,7 +786,7 @@ async function comandoPasar(deps, { departamentos, modoTodo, email, argumento })
   const hoyISO = hoyEnArgentina()
   const operables = await instanciasOperables(gcal, departamentos, hoyISO)
   const r = buscarPorTexto(operables, tarea, hoyISO)
-  if (!r.una) return pedirPrecision(r, operables, { modoTodo })
+  if (!r.una) return pedirPrecision(r, operables, { modoTodo: departamentos.length > 1 })
 
   const { evento, nombre, hecha, departamento } = r.una
   if (hecha) return `*${nombre}* ya está hecha, no hace falta pasarla.`
@@ -695,7 +805,7 @@ async function comandoPasar(deps, { departamentos, modoTodo, email, argumento })
     persona.id_departamento && persona.id_departamento !== departamento.id
       ? `\n⚠️ Ojo: ${persona.nombre} no es de ${departamento.nombre}, así que esta tarea no le va a aparecer en su \`/mias\`. Avisale por las suyas.`
       : ''
-  const etiqueta = modoTodo ? `*${nombre}* (${departamento.nombre})` : `*${nombre}*`
+  const etiqueta = departamentos.length > 1 ? `*${nombre}* (${departamento.nombre})` : `*${nombre}*`
   return `➡️ ${etiqueta} queda a nombre de ${persona.nombre} (${emailDestino}).${aviso}` + sugerir(`/nota ${nombre}: `)
 }
 
@@ -712,7 +822,7 @@ async function comandoNota(deps, { departamentos, modoTodo, email, argumento }) 
   // A diferencia de /tomar y /pasar, aca SI se puede anotar una tarea ya hecha:
   // dejar constancia despues de cerrarla es un caso legitimo.
   const r = buscarPorTexto(operables, tarea, hoyISO)
-  if (!r.una) return pedirPrecision(r, operables, { modoTodo })
+  if (!r.una) return pedirPrecision(r, operables, { modoTodo: departamentos.length > 1 })
 
   const { evento, nombre, departamento } = r.una
   await gcal.marcarInstancia({
@@ -721,7 +831,7 @@ async function comandoNota(deps, { departamentos, modoTodo, email, argumento }) 
     extendedProperties: {},
     logLine: `${ahoraISO()} - NOTA de ${email}: ${nota}`
   })
-  const etiqueta = modoTodo ? `*${nombre}* (${departamento.nombre})` : `*${nombre}*`
+  const etiqueta = departamentos.length > 1 ? `*${nombre}* (${departamento.nombre})` : `*${nombre}*`
   return `📝 Anotado en ${etiqueta}:\n_${nota}_` + sugerir(`/marcar ${nombre}`, `/tarea ${nombre}`)
 }
 
@@ -873,9 +983,14 @@ async function comandoLocal(deps, { departamento, departamentos, modoTodo, argum
     return idLocal && idsElegidos.has(idLocal)
   })
 
-  const encabezadoLocal = modoTodo ? titulo : `${titulo} — ${departamento.nombre}`
+  const varios = departamentos.length > 1
+  const encabezadoLocal = modoTodo
+    ? titulo
+    : varios
+      ? `${titulo} — ${departamentos.map((d) => d.nombre).join(' + ')}`
+      : `${titulo} — ${departamento.nombre}`
   if (!relevantes.length) {
-    const alcance = modoTodo ? 'en la empresa' : 'de este departamento'
+    const alcance = modoTodo ? 'en la empresa' : varios ? 'en esos departamentos' : 'de este departamento'
     return `*${encabezadoLocal}*\nNo hay tareas ${alcance} para ${esGrupo ? 'ese grupo' : 'ese local'} en el último mes.`
   }
 
@@ -887,7 +1002,7 @@ async function comandoLocal(deps, { departamento, departamentos, modoTodo, argum
     const nl = nombrePorId.get(o.evento.extendedProperties?.private?.id_local_ext) || ''
     const partes = []
     if (elegidos.length > 1) partes.push(nl)
-    if (modoTodo) partes.push(o.departamento.nombre)
+    if (varios) partes.push(o.departamento.nombre)
     const sufijo = partes.length ? ` — ${partes.join(' · ')}` : ''
     const atraso = o.vencida ? ` _(hace ${diasHabilesVencida(o.evento, { hoyISO })}d)_` : ''
     return `• ${o.nombre}${sufijo}${atraso}`
@@ -915,7 +1030,12 @@ async function comandoResumen(deps, { departamento, departamentos, modoTodo }) {
     .map((o) => ({ nombre: o.nombre, departamento: o.departamento, dias: diasHabilesVencida(o.evento, { hoyISO }) }))
     .sort((a, b) => b.dias - a.dias)[0]
 
-  const titulo = modoTodo ? 'Resumen — Todos los departamentos' : `Resumen — ${departamento.nombre}`
+  const varios = departamentos.length > 1
+  const titulo = modoTodo
+    ? 'Resumen — Todos los departamentos'
+    : varios
+      ? `Resumen — ${departamentos.map((d) => d.nombre).join(' + ')}`
+      : `Resumen — ${departamento.nombre}`
   const lineas = [
     `*${titulo}*`,
     '',
@@ -929,7 +1049,7 @@ async function comandoResumen(deps, { departamento, departamentos, modoTodo }) {
       : `Cumplimiento del último mes: *${cumplimiento}%* (${hechasPeriodo.length} de ${cerradas})`
   ]
   if (masVieja) {
-    const deQuien = modoTodo ? ` (${masVieja.departamento.nombre})` : ''
+    const deQuien = varios ? ` (${masVieja.departamento.nombre})` : ''
     lineas.push(`\nLa más atrasada: *${masVieja.nombre}*${deQuien}, hace ${masVieja.dias} días hábiles.`)
   }
   if (!vencidas.length && !hoy.filter((o) => !o.hecha).length) lineas.push(`\n${sinNada('Al día')}`)
@@ -945,7 +1065,11 @@ async function comandoEquipo(deps, { departamento, departamentos, modoTodo }) {
   const operables = await instanciasOperables(deps.gcal, departamentos, hoyISO)
   const pendientes = operables.filter((o) => !o.hecha)
 
-  const titulo = modoTodo ? 'Equipo — Todos los departamentos' : `Equipo — ${departamento.nombre}`
+  const titulo = modoTodo
+    ? 'Equipo — Todos los departamentos'
+    : departamentos.length > 1
+      ? `Equipo — ${departamentos.map((d) => d.nombre).join(' + ')}`
+      : `Equipo — ${departamento.nombre}`
   if (!pendientes.length) return `*${titulo}*\n${sinNada('No hay nada pendiente')}`
 
   const SIN_DUENO = '(sin responsable)' // ordena primero y no choca con ningun email
@@ -985,22 +1109,36 @@ async function comandoDepartamentos(deps, { extUser }) {
     return '⚠️ Este comando es solo para administradores.'
   }
 
-  const departamentos = await db.departamento.findMany({
-    where: { activo: true },
-    orderBy: { nombre: 'asc' },
-    include: { _count: { select: { tareas: true } } }
-  })
+  const [departamentos, compartidos] = await Promise.all([
+    db.departamento.findMany({
+      where: { activo: true },
+      orderBy: { nombre: 'asc' },
+      include: { _count: { select: { tareas: true } } }
+    }),
+    db.departamentoCompartidoEnSpace.findMany({ include: { departamento: true } })
+  ])
+
+  // Agrupados por Space, para mostrar en la fila del DUEÑO con quien lo
+  // comparte -- un DepartamentoCompartidoEnSpace no tiene fila propia, es
+  // metadata de OTRO departamento (el dueño de ese chat_space_name).
+  const compartidosPorSpace = new Map()
+  for (const c of compartidos) {
+    if (!compartidosPorSpace.has(c.chat_space_name)) compartidosPorSpace.set(c.chat_space_name, [])
+    compartidosPorSpace.get(c.chat_space_name).push(c.departamento.nombre)
+  }
 
   const lineas = ['*Departamentos*', '']
   for (const d of departamentos) {
     const destino = d.chat_space_name ? '💬 Space' : d.chat_webhook_url ? '🔗 webhook' : '— sin avisos'
     const cal = d.id_calendar_google ? '' : ' ⚠️ sin calendario'
     const modoTodo = d.slug === SLUG_DIRECCION ? ' · 👁️ ve todo' : ''
+    const nombresCompartidos = d.chat_space_name ? compartidosPorSpace.get(d.chat_space_name) : null
+    const compartido = nombresCompartidos?.length ? ` · 🤝 compartido con ${nombresCompartidos.join(', ')}` : ''
     const umbrales =
       d.dias_aviso_departamento || d.dias_aviso_direccion
         ? ` · umbrales ${d.dias_aviso_departamento ?? 'def'}/${d.dias_aviso_direccion ?? 'def'}`
         : ''
-    lineas.push(`• *${d.nombre}* (\`${d.slug}\`) — ${d._count.tareas} tareas · ${destino}${umbrales}${cal}${modoTodo}`)
+    lineas.push(`• *${d.nombre}* (\`${d.slug}\`) — ${d._count.tareas} tareas · ${destino}${umbrales}${cal}${modoTodo}${compartido}`)
   }
 
   const sinDestino = departamentos.filter((d) => !d.chat_space_name && !d.chat_webhook_url).length
@@ -1034,18 +1172,20 @@ function decodificarTarea(valor) {
 }
 
 // Resuelve a que departamento pertenece una tarea codificada por
-// pendientesParaAsignar. Fuera de "modo todo" tiene que coincidir con el
-// departamento del contexto -- si no, alguien podria manipular el value del
-// formulario (viene del cliente) para actuar sobre un departamento ajeno. En
-// modo todo se confia el id codificado, siempre que sea un departamento
-// activo con calendario: ese es justamente el privilegio de ese Space.
+// pendientesParaAsignar. Fuera de "modo todo" tiene que caer dentro del
+// ambito del Space (el dueño MAS sus compartidos) -- si no, alguien podria
+// manipular el value del formulario (viene del cliente) para actuar sobre un
+// departamento ajeno. En modo todo se confia el id codificado, siempre que
+// sea un departamento activo con calendario: ese es justamente el privilegio
+// de ese Space.
 async function departamentoDeTareaCodificada(db, valorCodificado, { space, extUser }) {
   const { idDepartamento, instanceId } = decodificarTarea(valorCodificado)
   if (!idDepartamento || !instanceId) return { instanceId: null }
 
-  const { departamento: contexto, porFallback } = await resolverDepartamento(db, { space, extUser })
+  const { departamento: contexto, compartidos, porFallback } = await resolverDepartamento(db, { space, extUser })
   const modoTodo = esModoTodo(contexto, porFallback)
-  if (!modoTodo && idDepartamento !== contexto?.id) return { instanceId: null }
+  const ambitoIds = [contexto?.id, ...compartidos.map((d) => d.id)]
+  if (!modoTodo && !ambitoIds.includes(idDepartamento)) return { instanceId: null }
 
   const departamento = await db.departamento.findUnique({ where: { id: idDepartamento } })
   if (!departamento?.activo || !departamento.id_calendar_google) return { instanceId: null }
@@ -1067,24 +1207,24 @@ function resumenDelDia(operables, hoyISO) {
   return { semaforo, vencidas, pendientes, realizadas }
 }
 
-// { departamento, pendientes, porFallback, modoTodo } | { error }
+// { departamento, departamentos, pendientes, porFallback, modoTodo } | { error }
 export async function pendientesParaAsignar(deps, { space, extUser }) {
   const { db, gcal } = deps
-  const { departamento, porFallback } = await resolverDepartamento(db, { space, extUser })
+  const { departamento, compartidos, porFallback } = await resolverDepartamento(db, { space, extUser })
   if (!departamento?.id_calendar_google) {
     return { error: '⚠️ No pude resolver un departamento con calendario para este Space. Un administrador puede vincularlo escribiendo `/vincular` y el nombre del departamento.' }
   }
 
-  const modoTodo = esModoTodo(departamento, porFallback)
-  const departamentos = modoTodo ? await departamentosOperables(db) : [departamento]
+  const { modoTodo, departamentos } = await ambitoDeChat(db, { departamento, compartidos, porFallback })
 
   const hoyISO = hoyEnArgentina()
   const operables = await instanciasOperables(gcal, departamentos, hoyISO)
+  const varios = departamentos.length > 1
   const pendientes = operables
     .filter((o) => !o.hecha)
     .sort((a, b) => String(a.fechaISO).localeCompare(String(b.fechaISO)))
     .map((o) => {
-      const deQuien = modoTodo ? ` — ${o.departamento.nombre}` : ''
+      const deQuien = varios ? ` — ${o.departamento.nombre}` : ''
       return {
         instanceId: codificarTarea(o.departamento.id, o.evento.id),
         etiqueta: o.vencida
@@ -1095,7 +1235,7 @@ export async function pendientesParaAsignar(deps, { space, extUser }) {
       }
     })
 
-  return { departamento, pendientes, porFallback, modoTodo }
+  return { departamento, departamentos, pendientes, porFallback, modoTodo }
 }
 
 // Toma una instancia por su id (viene del dialogo). El id se re-verifica
@@ -1204,7 +1344,7 @@ export async function notaPorInstanceId(deps, { space, extUser, email, instanceI
 
 // ── Apoyo del dialogo /tildar (checkbox, varias tareas de una) ────────────
 
-// { departamento, pendientes, porFallback, modoTodo, resumen } | { error }
+// { departamento, departamentos, pendientes, porFallback, modoTodo, resumen } | { error }
 //
 // A diferencia de pendientesParaAsignar (ordenada por fecha, pensada para
 // "cual tomo"), esta lista va ordenada por ATRASO -- la mas vieja primero -- y
@@ -1212,17 +1352,17 @@ export async function notaPorInstanceId(deps, { space, extUser, email, instanceI
 // anticipacion no tiene sentido en un checklist de "esto ya lo hice".
 export async function pendientesParaTildar(deps, { space, extUser }) {
   const { db, gcal } = deps
-  const { departamento, porFallback } = await resolverDepartamento(db, { space, extUser })
+  const { departamento, compartidos, porFallback } = await resolverDepartamento(db, { space, extUser })
   if (!departamento?.id_calendar_google) {
     return { error: '⚠️ No pude resolver un departamento con calendario para este Space. Un administrador puede vincularlo escribiendo `/vincular` y el nombre del departamento.' }
   }
 
-  const modoTodo = esModoTodo(departamento, porFallback)
-  const departamentos = modoTodo ? await departamentosOperables(db) : [departamento]
+  const { modoTodo, departamentos } = await ambitoDeChat(db, { departamento, compartidos, porFallback })
 
   const hoyISO = hoyEnArgentina()
   const operables = await instanciasOperables(gcal, departamentos, hoyISO)
   const resumen = resumenDelDia(operables, hoyISO)
+  const varios = departamentos.length > 1
 
   const pendientes = operables
     .filter((o) => !o.hecha && (o.vencida || o.fechaISO === hoyISO))
@@ -1235,14 +1375,14 @@ export async function pendientesParaTildar(deps, { space, extUser }) {
       // que la pantalla de oficina que esto imita.
       const color = o.vencida ? '🔴' : '🟡'
       const antiguedad = o.vencida ? ` — hace ${o.dias}d` : ' — hoy'
-      const deQuien = modoTodo ? ` [${o.departamento.nombre}]` : ''
+      const deQuien = varios ? ` [${o.departamento.nombre}]` : ''
       return {
         instanceId: codificarTarea(o.departamento.id, o.evento.id),
         etiqueta: `${color} ${o.nombre}${deQuien}${antiguedad}`
       }
     })
 
-  return { departamento, pendientes, porFallback, modoTodo, resumen }
+  return { departamento, departamentos, pendientes, porFallback, modoTodo, resumen }
 }
 
 // Marca VARIAS instancias codificadas de una sola vez (vienen del checkbox
@@ -1462,9 +1602,15 @@ async function comandoDesvincular(deps, { space, extUser }) {
   const actual = await db.departamento.findUnique({ where: { chat_space_name: space } })
   if (!actual) return 'Este Space no está vinculado a ningún departamento.'
 
+  // Los compartidos (/compartir) se limpian ACA, no despues: si quedaran
+  // huerfanos apuntando a este mismo string de Space, un futuro /vincular a
+  // un departamento DISTINTO los "reactivaria" solos, aplicando a un par
+  // equivocado sin que nadie lo haya pedido.
+  const { count } = await db.departamentoCompartidoEnSpace.deleteMany({ where: { chat_space_name: space } })
   await db.departamento.update({ where: { id: actual.id }, data: { chat_space_name: null } })
-  log.info?.({ space, departamento: actual.slug }, 'chat: space desvinculado por comando')
-  return `✅ Listo. Este Space ya no recibe los recordatorios de *${actual.nombre}*.\nPara volver a activarlo: \`/vincular ${actual.slug}\``
+  log.info?.({ space, departamento: actual.slug, compartidosLimpiados: count }, 'chat: space desvinculado por comando')
+  const nota = count ? ` (y se sacaron los ${count} departamento${count === 1 ? '' : 's'} que lo compartían)` : ''
+  return `✅ Listo. Este Space ya no recibe los recordatorios de *${actual.nombre}*${nota}.\nPara volver a activarlo: \`/vincular ${actual.slug}\``
 }
 
 // Comandos que necesitan resolver un departamento con calendario antes de
@@ -1495,21 +1641,29 @@ export async function ejecutarComando(deps, { comandoId, texto, space, extUser, 
 
   const comando = resolverComando({ comandoId, texto })
 
-  if (comando === COMANDO_VINCULAR || comando === COMANDO_DESVINCULAR) {
-    const esVincular = comando === COMANDO_VINCULAR
+  // En el flujo real, /vincular abre un dialogo (checkbox, ver
+  // departamentosParaVincular/dialogoVincular) y nunca llega hasta aca -- lo
+  // intercepta manejarComando en routes/chat.js antes de este punto, igual
+  // que /asignar o /tildar. Esta rama es solo una red de seguridad.
+  if (comando === COMANDO_VINCULAR) {
+    return 'Escribí `/vincular` y elegí de la lista con checkbox que se abre.'
+  }
+
+  if (comando === COMANDO_DESVINCULAR) {
     try {
-      return esVincular
-        ? await comandoVincular({ db, log }, { space, extUser, argumento: argumentoDeComando(texto) })
-        : await comandoDesvincular({ db, log }, { space, extUser })
+      return await comandoDesvincular({ db, log }, { space, extUser })
     } catch (err) {
-      log.error?.({ err: err.message, comando }, 'chat: fallo el (des)vinculado')
-      return `⚠️ No pude ${esVincular ? 'vincular' : 'desvincular'} el Space. Probá de nuevo.`
+      log.error?.({ err: err.message, comando }, 'chat: fallo el desvinculado')
+      return '⚠️ No pude desvincular el Space. Probá de nuevo.'
     }
   }
 
   if (comando === COMANDO_AYUDA) {
-    const { departamento, porFallback } = await resolverDepartamento(db, { space, extUser })
-    return esModoTodo(departamento, porFallback) ? `${AYUDA}${AVISO_MODO_TODO}` : AYUDA
+    const { departamento, compartidos, porFallback } = await resolverDepartamento(db, { space, extUser })
+    const { modoTodo, departamentos } = await ambitoDeChat(db, { departamento, compartidos, porFallback })
+    if (modoTodo) return `${AYUDA}${AVISO_MODO_TODO}`
+    if (departamentos.length > 1) return `${AYUDA}${avisoModoCompartido(departamentos)}`
+    return AYUDA
   }
 
   // Un Pago no tiene departamento -- antes de la resolucion de mas abajo, que
@@ -1530,7 +1684,7 @@ export async function ejecutarComando(deps, { comandoId, texto, space, extUser, 
     return `No conozco ese comando.\n\n${AYUDA}`
   }
 
-  const { departamento, porFallback } = await resolverDepartamento(db, { space, extUser })
+  const { departamento, compartidos, porFallback } = await resolverDepartamento(db, { space, extUser })
   if (!departamento) {
     return '⚠️ Tu usuario todavía no tiene departamento asignado. Pedile a un administrador que te lo cargue.'
   }
@@ -1538,8 +1692,7 @@ export async function ejecutarComando(deps, { comandoId, texto, space, extUser, 
     return `⚠️ ${departamento.nombre} todavía no tiene calendario configurado.`
   }
 
-  const modoTodo = esModoTodo(departamento, porFallback)
-  const departamentos = modoTodo ? await departamentosOperables(db) : [departamento]
+  const { modoTodo, departamentos } = await ambitoDeChat(db, { departamento, compartidos, porFallback })
 
   try {
     const locales = await db.extLocal.findMany({ select: { id: true, nombre: true } })

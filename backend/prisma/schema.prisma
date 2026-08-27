@@ -69,8 +69,35 @@ model Departamento {
   tareas                   Tarea[]
   cumplimiento             CumplimientoDiario[]
   asignaciones_compartidas TareaAsignacionDepto[]
+  compartidoEnSpaces       DepartamentoCompartidoEnSpace[]
 
   @@map("departamentos")
+}
+
+// --- Un Space de Chat puede cubrir MAS de un departamento, ademas del dueño
+// (chat_space_name, arriba). Caso real: hay Spaces armados con gente de mas
+// de un equipo (ej. "Administracion + Finanzas") que quieren coordinar
+// tareas de los dos sin que cada uno tenga que escribir desde el Space del
+// otro. Mismo patron que TareaAsignacionDepto ("comparte con departamentos
+// adicionales, ademas del dueño"), aplicado a nivel Space en vez de a nivel
+// asignacion.
+//
+// `chat_space_name` es un string plano, NO una relacion al campo unico de
+// Departamento -- evita una relacion doble (dueño por id, Space por
+// chat_space_name) sobre el mismo modelo. La limpieza si el dueño se
+// desvincula es explicita, en comandoDesvincular (chat-comandos.js), no una
+// cascada del schema. ---
+model DepartamentoCompartidoEnSpace {
+  id              String   @id @default(uuid())
+  chat_space_name String
+  id_departamento String
+  created_at      DateTime @default(now())
+
+  departamento Departamento @relation(fields: [id_departamento], references: [id])
+
+  @@unique([chat_space_name, id_departamento])
+  @@index([chat_space_name])
+  @@map("departamento_compartido_en_spaces")
 }
 
 // --- Catálogo de tipos de tarea ("TAREA -> DEPARTAMENTO" del ejemplo real) ---

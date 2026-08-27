@@ -4,14 +4,17 @@ Todo el código de la Fase C está desplegado. Falta la configuración en la con
 Google Cloud, que **no tiene API pública** — hay que hacerla a mano una vez.
 
 **Estado (2026-08-27): todo funciona** — comandos de barra, botones que resuelven la
-acción dentro de Chat, y diálogos (`/asignar`, `/derivar`, `/apuntar`, `/tildar`).
-Marcar una tarea actualiza la tarjeta en su lugar y los rechazos de un click salen
-privados. El Space de Dirección ve y opera sobre todos los departamentos ("modo todo",
-ver más abajo). Además, `/pago`/`/mispagos`/`/tildarpagos` permiten asignar una tarea
-y/o una persona a un Pago de dcsmart (leído de solo lectura vía BigQuery, ver
-"Seguimiento de Pagos" más abajo) — no depende de departamento ni de modo todo. Hubo un
-bug que costó encontrar y está explicado en "El campo action.function" más abajo: vale
-leerlo antes de tocar cualquier botón.
+acción dentro de Chat, y diálogos (`/asignar`, `/derivar`, `/apuntar`, `/tildar`,
+`/vincular`). Marcar una tarea actualiza la tarjeta en su lugar y los rechazos de un
+click salen privados. El Space de Dirección ve y opera sobre todos los departamentos
+("modo todo", ver más abajo). Además, `/pago`/`/mispagos`/`/tildarpagos` permiten
+asignar una tarea y/o una persona a un Pago de dcsmart (leído de solo lectura vía
+BigQuery, ver "Seguimiento de Pagos" más abajo) — no depende de departamento ni de modo
+todo. Un Space también puede cubrir varios departamentos concretos (no solo el "modo
+todo" de Dirección): `/vincular` abre un checkbox donde se puede tildar más de uno —
+ver "`/vincular` con checkbox" más abajo. Hubo un bug que costó encontrar y está
+explicado en "El campo action.function" más abajo: vale leerlo antes de tocar cualquier
+botón.
 
 > La documentación oficial de Google está incompleta en varios de estos pasos — lo que
 > sigue está confirmado contra la consola real y contra logs de producción, no copiado
@@ -119,7 +122,7 @@ En **Google Chat API → Configuration → sección "Comandos"**, agregar uno po
 | `13` | `resumen` | **rápido** | Cómo viene el departamento |
 | `14` | `equipo` | **rápido** | Quién tiene qué |
 | `15` | `departamentos` | **rápido** | Panorama de los 11 (solo admin) |
-| `5` | `vincular` | barra | Vincular este Space a un departamento |
+| `5` | `vincular` | barra + **Diálogo** | Checkbox de qué departamento(s) cubre este Space (solo admin) |
 | `6` | `desvincular` | barra | Dejar de recibir los recordatorios acá |
 | `18` | `marcar` | barra | Dar una tarea por hecha |
 | `7` | `tomar` | barra | Poner una tarea a mi nombre |
@@ -140,6 +143,15 @@ En **Google Chat API → Configuration → sección "Comandos"**, agregar uno po
 > igual funciona. Un comando rápido no se escribe, así que no trae texto y se resuelve
 > **por ID** — ahí el número de la consola tiene que coincidir con el del código
 > (`backend/src/lib/chat-comandos.js`).
+
+> **`/vincular` cambió de tipo (2026-08-27): de "barra" a "barra + Diálogo".** A
+> diferencia de `/derivar`/`/apuntar`/`/tildar` (que se armaron como comandos NUEVOS
+> para no arriesgar uno ya probado en producción), acá se decidió a propósito reusar
+> el mismo `/vincular` para el checkbox de departamentos — es un comando de uso
+> ocasional, solo de administrador, así que el riesgo de romper una costumbre de
+> escritura es bajo. **Hay que entrar a la consola y cambiarle el tipo al comando `5`**;
+> hasta que no se haga, `/vincular` sigue aceptando el formato de texto viejo tal cual
+> lo tenía Chat configurado (el código ya solo sabe abrir el diálogo).
 
 También hay alias, por si alguien escribe otra palabra: `/tareas` = `/hoy`,
 `/vencidas` = `/atrasadas`, `/estado` = `/resumen`, `/detalle` = `/tarea`,
@@ -237,8 +249,45 @@ Detalle técnico para quien toque `chat-comandos.js`: la tarea que viaja en el `
 un diálogo abierto en modo todo lleva el id de departamento codificado
 (`idDepartamento::instanceId`, ver `codificarTarea`/`decodificarTarea`), porque el mismo
 id de evento de Calendar puede repetirse entre calendarios distintos. Fuera de modo todo
-esa codificación se re-verifica contra el departamento del contexto — no alcanza con
-mandar un `value` manipulado para operar sobre otro departamento.
+esa codificación se re-verifica contra el ámbito del Space (el dueño MAS los
+compartidos, ver abajo) — no alcanza con mandar un `value` manipulado para operar sobre
+un departamento que ese Space no cubre.
+
+### `/vincular` con checkbox: un Space entre varios departamentos concretos
+
+Decisión explícita del usuario (2026-08-27): además del "modo todo" de Dirección, hace
+falta un mecanismo más chico — Spaces armados con gente de 2-3 equipos concretos (ej.
+"Administración + Finanzas") que quieren coordinar tareas de los dos sin que cada uno
+tenga que escribir desde el Space del otro. La primera versión de esto fue un par de
+comandos nuevos (`/compartir`/`/descompartir`); el usuario pidió reusar directamente
+`/vincular`, con un formulario de checkbox, en vez de sumar comandos de texto aparte —
+es lo que quedó.
+
+`/vincular` (ver arriba, ahora "barra + Diálogo") abre un checkbox con los
+departamentos activos, pre-tildados según lo que ya cubre el Space
+(`departamentosParaVincular`). Al guardar, `vincularDepartamentos` recalcula la
+cobertura ENTERA a partir de lo tildado — no hay una operación de "agregar uno", es
+"esto es lo que cubre este Space ahora":
+
+- `Departamento.chat_space_name` (único — un departamento no puede ser dueño de dos
+  Spaces) sigue siendo el **dueño**, el que recibe el recordatorio diario automático.
+  Se mantiene si sigue tildado (para no reordenar nada solo por sumar o sacar un
+  compartido); si se destildó, el primero por orden alfabético de los que quedan pasa a
+  ser el nuevo dueño.
+- La tabla `DepartamentoCompartidoEnSpace` (`chat_space_name`, `id_departamento`) guarda
+  el resto de los tildados como **compartidos**. Se recalcula entera en cada envío
+  (se borran los que ya no están tildados, se crean los que faltan).
+- Sin nada tildado, equivale a `/desvincular`: limpia todo.
+
+`departamentosDelSpace(db, space)` (en `chat-comandos.js`) devuelve siempre un array —
+`[dueño]` para un Space normal, `[dueño, ...compartidos]` para uno compartido — y es la
+base de `resolverDepartamento`/`ambitoDeChat`/`puedeOperarEnChat`. Con eso, un Space
+compartido se comporta como una versión chica de "modo todo": los comandos de lectura
+mezclan sus 2-3 departamentos (con cada línea aclarando de cuál sale, igual que en modo
+todo) y los de acción operan sobre la tarea de cualquiera de ellos — pero el
+recordatorio diario automático (`jobs/avisosChat.js`) sigue yendo solo al dueño, porque
+ese job itera por `chat_space_name` como siempre: tildar más de uno amplía qué se puede
+**consultar y operar** desde el Space, no a quién avisa el job.
 
 ## 6. Verificar
 

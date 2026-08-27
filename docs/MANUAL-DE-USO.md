@@ -244,21 +244,25 @@ Los datos del pago (proveedor, importe, fecha, comprobante) se leen de dcsmart e
 momento de vincularlo y quedan guardados — no hace falta volver a consultar nada para
 verlos en `/mispagos`.
 
-### Vincular el Space de un departamento (administrador)
+### Vincular el Space de uno o varios departamentos (administrador)
 
 1. Creá el Space en Google Chat y agregá el grupo `depto-` + el slug del departamento
    + `@dcsmart.app` (por ejemplo `depto-finanzas@dcsmart.app`) — con eso entran todos
-   los del departamento de una.
+   los del departamento de una. Si el Space va a cubrir más de un departamento (ver
+   abajo), agregá también el grupo del otro.
 2. Agregá la app **DC-PLATAFORMA** al Space. Te va a saludar y listar los
-   departamentos disponibles.
-3. Escribí `/vincular` y el nombre del departamento. Por ejemplo:
+   departamentos disponibles con un botón cada uno — sirve para el caso simple de
+   vincular uno solo.
+3. Para elegir de una lista (o para tildar más de uno), escribí `/vincular`: se abre
+   un formulario con un checkbox por departamento.
 
-   ```
-   /vincular finanzas
-   ```
+Tildá el o los departamentos que este Space va a cubrir y guardá. Desde ese momento
+el recordatorio diario llega a ese Space, y `/hoy`, `/atrasadas`, `/mias`, `/tarea`,
+`/local`, `/resumen`, `/equipo`, `/marcar`, `/tomar`, `/pasar` y `/nota` (con sus
+formularios) operan sobre lo tildado.
 
-Desde ese momento el recordatorio diario llega a ese Space. Para que deje de llegar,
-`/desvincular` (o sacar la app del Space, que también limpia la vinculación).
+Para que el Space deje de recibir avisos y de cubrir departamentos, `/desvincular` —
+o volver a abrir `/vincular` y guardar sin nada tildado, que es lo mismo.
 
 Para cambiar los umbrales de escalamiento de un departamento:
 
@@ -269,6 +273,27 @@ PATCH /api/departamentos/:id/notificaciones
 
 Un departamento **sin** Space se sigue evaluando igual — sus tareas atrasadas llegan a
 Dirección — pero no recibe su propio recordatorio hasta que se le vincule uno.
+
+### Un Space que cubre varios departamentos
+
+Algunos Spaces reúnen gente de más de un equipo (por ejemplo "Administración +
+Finanzas", o "RRHH + Informes") que quiere coordinar tareas de los dos sin que cada
+uno tenga que escribir desde el Space del otro. Para eso alcanza con tildar más de un
+departamento en el formulario de `/vincular` (ver arriba) — no hace falta ningún
+comando aparte.
+
+Desde ese momento, ese Space cubre **todos** los que quedaron tildados: cualquiera de
+esos equipos puede escribir `/hoy`, `/atrasadas`, `/mias`, `/tarea`, `/local`,
+`/resumen` o `/equipo` y ve la información de todos mezclada (cada línea aclara de
+cuál es), y `/marcar`, `/tomar`, `/pasar`, `/nota` (y sus formularios) actúan sobre la
+tarea de cualquiera de ellos. El recordatorio diario automático sigue yendo solo al
+primero que haya quedado tildado (el que ya era dueño se mantiene si lo dejás tildado,
+para no reordenar nada) — tildar más departamentos amplía lo que se puede **consultar
+y operar** desde ese Space, no a quién avisa el job.
+
+Para agregar o sacar un departamento más adelante, volvé a abrir `/vincular`: el
+formulario ya viene con lo actual tildado, así que solo hay que ajustar la selección y
+guardar de nuevo.
 
 ### El Space de Dirección ve todos los departamentos
 
@@ -302,7 +327,8 @@ Sí, esa es la idea — cada asignación (tarea + local) tiene su propia agenda.
 
 **Mi departamento no recibe los avisos de Chat.**
 Le falta vincular el Space. Sus tareas atrasadas igual escalan a Dirección; pedile a un
-administrador que escriba `/vincular` y el nombre del departamento en ese Space.
+administrador que escriba `/vincular` en ese Space y tilde el departamento en el
+formulario que se abre.
 
 **No veo el menú de "Tareas" ni "Agenda".**
 Son solo para administradores. Pedí acceso a quien administra la plataforma.

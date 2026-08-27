@@ -30,6 +30,7 @@ import {
   dialogoTildar,
   dialogoPago,
   dialogoTildarPagos,
+  dialogoVincular,
   cerrarDialogo,
   ACCION_MARCAR,
   ACCION_VINCULAR,
@@ -39,6 +40,7 @@ import {
   ACCION_TILDAR_SUBMIT,
   ACCION_PAGO_SUBMIT,
   ACCION_TILDARPAGOS_SUBMIT,
+  ACCION_VINCULAR_SUBMIT,
   CAMPO_TAREA,
   CAMPO_PERSONA,
   CAMPO_NOTA_TEXTO,
@@ -46,6 +48,7 @@ import {
   CAMPO_PAGO,
   CAMPO_TAREA_PAGO,
   CAMPO_PAGOS,
+  CAMPO_DEPARTAMENTOS_VINCULAR,
   CAMPO_ACCION
 } from '../lib/chat-cards.js'
 import { marcarInstanciaYPropagar } from '../lib/marcar-instancia.js'
@@ -64,6 +67,9 @@ import {
   marcarVarias,
   personasActivas,
   puedeOperarEnChat,
+  departamentosDelSpace,
+  departamentosParaVincular,
+  vincularDepartamentos,
   pagosParaVincular,
   vincularPago,
   pendientesParaTildarPagos,
@@ -72,6 +78,7 @@ import {
   COMANDO_DERIVAR,
   COMANDO_APUNTAR,
   COMANDO_TILDAR,
+  COMANDO_VINCULAR,
   COMANDO_PAGO,
   COMANDO_TILDARPAGOS
 } from '../lib/chat-comandos.js'
@@ -248,29 +255,29 @@ async function manejarComando(fastify, chatEvent) {
   // que comparten la resolucion -- solo cambia que card arma cada uno.
   const comando = resolverComando({ comandoId, texto })
   if (comando === COMANDO_ASIGNAR || comando === COMANDO_DERIVAR || comando === COMANDO_APUNTAR) {
-    const { departamento, pendientes, porFallback, modoTodo, error } = await pendientesParaAsignar(fastify, { space, extUser })
+    const { departamento, departamentos, pendientes, porFallback, modoTodo, error } = await pendientesParaAsignar(fastify, { space, extUser })
     if (error) return mensajeNuevo({ text: error })
     fastify.log.info(
       { comando, departamento: departamento.slug, pendientes: pendientes.length, porFallback, modoTodo },
       'chat: abriendo diálogo'
     )
-    if (comando === COMANDO_ASIGNAR) return dialogoAsignar(pendientes, { departamento, porFallback, modoTodo })
-    if (comando === COMANDO_APUNTAR) return dialogoApuntar(pendientes, { departamento, porFallback, modoTodo })
+    if (comando === COMANDO_ASIGNAR) return dialogoAsignar(pendientes, { departamento, departamentos, porFallback, modoTodo })
+    if (comando === COMANDO_APUNTAR) return dialogoApuntar(pendientes, { departamento, departamentos, porFallback, modoTodo })
     const personas = await personasActivas(fastify)
-    return dialogoPasar(pendientes, personas, { departamento, porFallback, modoTodo })
+    return dialogoPasar(pendientes, personas, { departamento, departamentos, porFallback, modoTodo })
   }
 
   // /tildar tambien es un dialogo, pero con su propia lista (ordenada por
   // atraso, no por fecha) y su propio resumen del dia -- por eso no comparte
   // el bloque de arriba con pendientesParaAsignar.
   if (comando === COMANDO_TILDAR) {
-    const { departamento, pendientes, porFallback, modoTodo, resumen, error } = await pendientesParaTildar(fastify, { space, extUser })
+    const { departamento, departamentos, pendientes, porFallback, modoTodo, resumen, error } = await pendientesParaTildar(fastify, { space, extUser })
     if (error) return mensajeNuevo({ text: error })
     fastify.log.info(
       { departamento: departamento.slug, pendientes: pendientes.length, porFallback, modoTodo },
       'chat: abriendo diálogo (tildar)'
     )
-    return dialogoTildar(pendientes, { departamento, porFallback, modoTodo, resumen })
+    return dialogoTildar(pendientes, { departamento, departamentos, porFallback, modoTodo, resumen })
   }
 
   // /pago y /tildarpagos: un Pago no tiene departamento, asi que estos dos NO
@@ -286,6 +293,16 @@ async function manejarComando(fastify, chatEvent) {
     const pendientes = await pendientesParaTildarPagos(fastify, { email })
     fastify.log.info({ pendientes: pendientes.length }, 'chat: abriendo diálogo (tildarpagos)')
     return dialogoTildarPagos(pendientes)
+  }
+
+  // /vincular tambien es un dialogo (checkbox de departamentos), no un
+  // comando de texto -- reemplaza al /vincular original y a /compartir +
+  // /descompartir por completo (ver dialogoVincular/vincularDepartamentos).
+  if (comando === COMANDO_VINCULAR) {
+    const { departamentos, actuales, error } = await departamentosParaVincular(fastify, { space, extUser })
+    if (error) return mensajeNuevo({ text: error })
+    fastify.log.info({ space, departamentos: departamentos.length, actuales: actuales.size }, 'chat: abriendo diálogo (vincular)')
+    return dialogoVincular(departamentos, { actuales })
   }
 
   const respuesta = await ejecutarComando(fastify, { comandoId, texto, space, extUser, email })
@@ -382,6 +399,12 @@ async function manejarClick(fastify, chatEvent, common) {
     const texto = await marcarPagos(fastify, { email, ids })
     return cerrarDialogo(texto)
   }
+  if (funcion === ACCION_VINCULAR_SUBMIT) {
+    const idsDepartamentos = leerCampoMultipleDelFormulario(common, CAMPO_DEPARTAMENTOS_VINCULAR)
+    fastify.log.info({ cantidad: idsDepartamentos.length }, 'chat: envío de diálogo recibido (vincular)')
+    const texto = await vincularDepartamentos(fastify, { space, extUser, idsDepartamentos })
+    return cerrarDialogo(texto)
+  }
 
   if (funcion === ACCION_VINCULAR) return vincular(fastify, space, { extUser, usuario, params })
   if (funcion === ACCION_MARCAR) return marcar(fastify, space, { extUser, email, usuario, params })
@@ -422,19 +445,21 @@ async function vincular(fastify, space, { extUser, usuario, params }) {
 
 async function marcar(fastify, space, { extUser, email, usuario, params }) {
   // El departamento sale del SPACE, no de los parametros de la card: es el
-  // unico dato de este request que el cliente no eligio.
-  const departamento = space
-    ? await fastify.db.departamento.findUnique({ where: { chat_space_name: space } })
-    : null
+  // unico dato de este request que el cliente no eligio. departamentosDelSpace
+  // trae el dueño MAS los compartidos (/compartir) -- el primero es el dueño,
+  // que es contra el que se marca la tarea (su calendario).
+  const ambito = space ? await departamentosDelSpace(fastify.db, space) : []
+  const departamento = ambito[0] ?? null
   if (!departamento?.id_calendar_google) {
     return mensajePrivado(usuario, '⚠️ Este Space no está vinculado a ningún departamento.')
   }
 
   // Un Space es semi-publico dentro de la organizacion: que alguien lo vea no
   // significa que pueda cerrar tareas de ese departamento. Excepto el Space de
-  // Dirección: ahi el control de acceso es la membresia del Space en si (ver
-  // puedeOperarEnChat), no pertenecer a ese departamento.
-  if (!puedeOperarEnChat(extUser, departamento)) {
+  // Dirección, y los Spaces compartidos con /compartir: ahi el control de
+  // acceso es la membresia del Space en si (ver puedeOperarEnChat), no
+  // pertenecer puntualmente al departamento dueño.
+  if (!puedeOperarEnChat(extUser, ambito)) {
     return mensajePrivado(usuario, `⚠️ No tenés permiso para marcar tareas de ${departamento.nombre}.`)
   }
 
