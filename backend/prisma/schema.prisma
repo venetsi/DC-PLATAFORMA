@@ -84,8 +84,9 @@ model Tarea {
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
 
-  departamento Departamento      @relation(fields: [id_departamento], references: [id])
-  asignaciones TareaAsignacion[]
+  departamento       Departamento      @relation(fields: [id_departamento], references: [id])
+  asignaciones       TareaAsignacion[]
+  seguimientosDePago PagoSeguimiento[]
 
   @@index([id_departamento, activa])
   @@map("tareas")
@@ -205,4 +206,45 @@ model CumplimientoDiario {
 
   @@unique([id_departamento, id_local_ext, fecha])
   @@map("cumplimiento_diario")
+}
+
+// --- Seguimiento de un Pago puntual de dcsmart (deliberadamente FUERA del
+// modelo Tarea/TareaAsignacion/Calendar). Un pago es un registro de una sola
+// vez de OTRO sistema, no algo que se repita -- forzarlo por el motor de
+// agenda (RRULE, horizonte de 12 meses, evento de Calendar) seria mezclar dos
+// formas de "tarea" que no son lo mismo, y ensuciaria el calendario del
+// departamento con eventos que no son operativos reales. Esta tabla es la
+// unica fuente de verdad de "quien tiene que hacer algo con este pago" -- no
+// hay evento de Calendar equivalente.
+//
+// id_pago referencia Pago.id de dcsmart, leido via BigQuery (CDC), NUNCA
+// escrito -- por eso no es una FK real (dcsmart vive en otra base). El resto
+// de los campos de "identidad" del pago (proveedor/importe/fecha/comprobante)
+// se guardan en SNAPSHOT al vincular, para que listar "mis pagos" no dependa
+// de una llamada a BigQuery por fila, y para que quede registrado como se
+// veia el pago en el momento en que se marco para seguimiento. ---
+model PagoSeguimiento {
+  id           String    @id @default(uuid())
+  id_pago      String    @unique
+  id_local_ext String?
+  comprobante  String?
+  proveedor    String?
+  importe      Decimal?  @db.Decimal(12, 2)
+  fecha_pago   DateTime? @db.Date
+
+  // "Tarea y/o usuario" -- los dos son independientes y opcionales: se puede
+  // clasificar con una tarea del catalogo sin asignarsela a nadie todavia, o
+  // asignarla a alguien sin clasificarla.
+  id_tarea   String?
+  asignado_a String?
+  nota       String?
+  estado     String   @default("PENDIENTE") // PENDIENTE | HECHO
+  created_by String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tarea Tarea? @relation(fields: [id_tarea], references: [id])
+
+  @@index([asignado_a, estado])
+  @@map("pago_seguimientos")
 }

@@ -7,6 +7,7 @@ import 'dotenv/config'
 import dbPlugin from './plugins/db.js'
 import gcalPlugin from './plugins/gcal.js'
 import groupsPlugin from './plugins/groups.js'
+import bigqueryPlugin from './plugins/bigquery.js'
 import authRoutes from './routes/auth.js'
 import departamentosRoutes from './routes/departamentos.js'
 import localesRoutes from './routes/locales.js'
@@ -31,6 +32,7 @@ await app.register(jwt, {
 await app.register(dbPlugin)
 await app.register(gcalPlugin)
 await app.register(groupsPlugin)
+await app.register(bigqueryPlugin)
 
 app.decorate('authenticate', async (request, reply) => {
   try {

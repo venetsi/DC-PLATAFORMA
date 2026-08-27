@@ -2,6 +2,7 @@
 // las postea y el receptor que las actualiza tras un click, para que el
 // mensaje re-renderizado sea el mismo widget y no una version parecida.
 import { lineaDeTarea } from './mensajes-chat.js'
+import { formatearMonto } from './pagos.js'
 
 // Una card no puede llevar un boton por cada tarea de un backlog largo: Chat
 // corta el mensaje. Se muestran las mas viejas -- que son las que importan --
@@ -394,11 +395,14 @@ export function dialogoApuntar(pendientes, { departamento, porFallback, modoTodo
 export const ACCION_TILDAR_SUBMIT = 'tildar_submit'
 export const CAMPO_TAREAS = 'tareas' // plural: CHECK_BOX puede volver con varios values
 
-function selectorMultipleDeTareas(pendientes) {
+// Generico a proposito: lo usan /tildar (tareas de Calendar) y /tildarpagos
+// (PagoSeguimiento, sin Calendar de por medio) -- el widget es identico, solo
+// cambia de que lista viene cada uno.
+function selectorMultiple(pendientes, { name, label }) {
   return {
     selectionInput: {
-      name: CAMPO_TAREAS,
-      label: `¿Cuáles ya están hechas? (${pendientes.length})`,
+      name,
+      label,
       type: 'CHECK_BOX',
       items: pendientes.slice(0, MAX_TAREAS_POR_CARD).map((p) => ({
         text: p.etiqueta,
@@ -441,8 +445,128 @@ export function dialogoTildar(pendientes, { departamento, porFallback, modoTodo,
               {
                 widgets: [
                   ...(encabezado ? [{ textParagraph: { text: `${encabezado}${recorte}` } }] : []),
-                  selectorMultipleDeTareas(pendientes),
+                  selectorMultiple(pendientes, { name: CAMPO_TAREAS, label: `¿Cuáles ya están hechas? (${pendientes.length})` }),
                   { buttonList: { buttons: [{ text: 'Marcar', onClick: accionEnEsteEndpoint(ACCION_TILDAR_SUBMIT) }] } }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+
+// ── /pago, /mispagos, /tildarpagos ─────────────────────────────────────────
+//
+// Distintos de los dialogos de arriba en un punto clave: NO estan acotados a
+// un departamento (Pago no tiene departamento, solo local), asi que no usan
+// resolverDepartamento/modoTodo ni subtituloDialogo/deQuienDialogo -- ver
+// chat-comandos.js#pagosParaVincular.
+
+export const ACCION_PAGO_SUBMIT = 'pago_submit'
+export const CAMPO_PAGO = 'pago'
+export const CAMPO_TAREA_PAGO = 'tarea_pago'
+// Techo de tareas del catalogo en el dropdown de clasificacion -- hoy el
+// catalogo es chico, pero el mismo motivo que MAX_PERSONAS_POR_DIALOGO: no
+// dejar que un payload crezca sin limite si el catalogo crece mucho.
+const MAX_TAREAS_PARA_CLASIFICAR = 100
+
+// pendientes: [{ id, comprobante, proveedor, rubro, categoria, importe, fecha_dia }]
+// (crudo de lib/pagos.js, no pre-formateado -- la etiqueta se arma aca)
+export function dialogoPago(pendientes, tareas, personas, { local } = {}) {
+  if (!pendientes.length) {
+    return tarjetaDialogoVacia(
+      'Vincular un pago',
+      local?.nombre,
+      `No encontré pagos recientes sin vincular para *${local?.nombre}*.`
+    )
+  }
+
+  const etiquetaPago = (p) => {
+    const monto = formatearMonto(p.importe) || '(sin importe)'
+    const fecha = p.fecha_dia || ''
+    return `${p.comprobante || '(sin comprobante)'} — ${p.proveedor} — ${monto} — ${fecha}`
+  }
+
+  return {
+    action: {
+      navigations: [
+        {
+          pushCard: {
+            header: { title: 'Vincular un pago', subtitle: local?.nombre },
+            sections: [
+              {
+                widgets: [
+                  {
+                    selectionInput: {
+                      name: CAMPO_PAGO,
+                      label: `¿Cuál pago? (${pendientes.length})`,
+                      type: 'RADIO_BUTTON',
+                      items: pendientes.slice(0, MAX_TAREAS_POR_CARD).map((p, i) => ({
+                        text: etiquetaPago(p),
+                        value: p.id,
+                        selected: i === 0
+                      }))
+                    }
+                  },
+                  {
+                    // Sin preseleccion real (aparte del placeholder): clasificar
+                    // o asignar es opcional, un default a la primera tarea real
+                    // del catalogo asignaria algo que nadie eligio.
+                    selectionInput: {
+                      name: CAMPO_TAREA_PAGO,
+                      label: 'Clasificar con una tarea (opcional)',
+                      type: 'DROPDOWN',
+                      items: [
+                        { text: '(sin clasificar)', value: '', selected: true },
+                        ...tareas.slice(0, MAX_TAREAS_PARA_CLASIFICAR).map((t) => ({ text: t.nombre, value: t.id }))
+                      ]
+                    }
+                  },
+                  {
+                    selectionInput: {
+                      name: CAMPO_PERSONA,
+                      label: '¿A quién se lo asignás? (opcional)',
+                      type: 'DROPDOWN',
+                      items: [
+                        { text: '(sin asignar)', value: '', selected: true },
+                        ...personas.map((p) => ({ text: `${p.nombre} (${p.email})`, value: p.email }))
+                      ]
+                    }
+                  },
+                  { buttonList: { buttons: [{ text: 'Vincular', onClick: accionEnEsteEndpoint(ACCION_PAGO_SUBMIT) }] } }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+
+// /tildarpagos: version en checkbox de "marcar varios pagos resueltos", mismo
+// widget que /tildar (selectorMultiple) pero sin Calendar ni semaforo de por
+// medio -- PagoSeguimiento vive entero en la base propia.
+export const ACCION_TILDARPAGOS_SUBMIT = 'tildarpagos_submit'
+export const CAMPO_PAGOS = 'pagos'
+
+export function dialogoTildarPagos(pendientes) {
+  if (!pendientes.length) {
+    return tarjetaDialogoVacia('Marcar pagos', undefined, 'No tenés pagos pendientes. 🎉')
+  }
+  return {
+    action: {
+      navigations: [
+        {
+          pushCard: {
+            header: { title: 'Marcar pagos' },
+            sections: [
+              {
+                widgets: [
+                  selectorMultiple(pendientes, { name: CAMPO_PAGOS, label: `¿Cuáles ya resolviste? (${pendientes.length})` }),
+                  { buttonList: { buttons: [{ text: 'Marcar', onClick: accionEnEsteEndpoint(ACCION_TILDARPAGOS_SUBMIT) }] } }
                 ]
               }
             ]

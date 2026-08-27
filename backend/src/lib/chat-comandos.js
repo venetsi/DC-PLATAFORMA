@@ -15,6 +15,7 @@ import { esAdminGlobal, puedeGestionarDepartamento } from './permisos.js'
 import { SLUG_DIRECCION } from './direccion.js'
 import { marcarInstanciaYPropagar } from './marcar-instancia.js'
 import { prerrequisitosPendientes } from './dependencias.js'
+import { pagosRecientesDeLocal, pagoPorId, formatearMonto } from './pagos.js'
 
 // Minusculas y sin acentos, para comparar lo que alguien escribio a mano
 // ("/Mías", "Auditoría") contra un slug. Un solo lugar para no repetir el
@@ -76,6 +77,15 @@ export const COMANDO_MARCAR = 18
 // /apuntar: no arriesgar /marcar, que ya esta probado en produccion.
 export const COMANDO_TILDAR = 19
 
+// Seguimiento de Pagos de dcsmart -- DELIBERADAMENTE fuera del modelo
+// Tarea/TareaAsignacion/Calendar (ver PagoSeguimiento en schema.prisma: un
+// pago es un registro de una sola vez de otro sistema, no algo que recurra).
+// Por eso NO pasan por resolverDepartamento/modoTodo como el resto de los
+// comandos de este archivo -- un Pago no tiene departamento, solo local.
+export const COMANDO_PAGO = 20 // dialogo: vincular un pago a una tarea y/o persona
+export const COMANDO_MISPAGOS = 21 // texto: mis pagos con seguimiento pendiente
+export const COMANDO_TILDARPAGOS = 22 // dialogo: marcar varios como resueltos
+
 // Comandos de status. Los que NO llevan parametro conviene darlos de alta como
 // "Comando rapido" en la consola (se ejecutan con un click desde el menu, sin
 // escribir); los que llevan parametro tienen que ser "Comando de barra".
@@ -103,6 +113,9 @@ const POR_NOMBRE = {
   marcar: COMANDO_MARCAR,
   hecha: COMANDO_MARCAR,
   tildar: COMANDO_TILDAR,
+  pago: COMANDO_PAGO,
+  mispagos: COMANDO_MISPAGOS,
+  tildarpagos: COMANDO_TILDARPAGOS,
   tomar: COMANDO_TOMAR,
   pasar: COMANDO_PASAR,
   nota: COMANDO_NOTA,
@@ -188,6 +201,11 @@ const AYUDA = [
   '_(`/tomar cierre`). Si hay más de una que coincida, te pregunto cuál._',
   '',
   '_Solo administradores:_ `/vincular` y el nombre del departamento, para que este Space reciba los recordatorios. `/desvincular` para que dejen de llegar.',
+  '',
+  '*Pagos de dcsmart* (no dependen de tu departamento)',
+  '`/pago tiamo` — elegís un pago reciente de ese local y le asignás una tarea y/o una persona',
+  '`/mispagos` — los pagos que tenés pendientes de resolver',
+  '`/tildarpagos` — marcás varios como resueltos, con checkbox',
   '',
   '_Los recordatorios llegan solos todas las mañanas._'
 ].join('\n')
@@ -1284,6 +1302,151 @@ export async function marcarVarias(deps, { space, extUser, email, instanceIds })
   return lineas.join('\n') || 'No se marcó nada.'
 }
 
+// ── Apoyo de /pago, /mispagos, /tildarpagos ────────────────────────────────
+//
+// Un Pago no tiene departamento, solo local -- por eso estos tres NO pasan
+// por resolverDepartamento/modoTodo como el resto del archivo. El unico gate
+// es ser un ExtUser activo (ya verificado antes de llegar aca, en
+// routes/chat.js), igual que cualquier comando de lectura.
+
+// { local } | { varios } | { error } -- version simplificada de la
+// resolucion de comandoLocal: aca hace falta UN local puntual (un Pago es de
+// uno solo), no la logica de "o es un grupo" que ese comando necesita.
+async function resolverLocalPorTexto(db, texto) {
+  const buscado = sinAcentos(texto)
+  const locales = await db.extLocal.findMany({ where: { activo: true }, select: { id: true, nombre: true } })
+  const exacto = locales.filter((l) => sinAcentos(l.nombre) === buscado)
+  const candidatos = exacto.length ? exacto : locales.filter((l) => sinAcentos(l.nombre).includes(buscado))
+  if (candidatos.length === 1) return { local: candidatos[0] }
+  if (!candidatos.length) return { error: `No encontré ningún local que coincida con "${texto}".` }
+  return { varios: candidatos }
+}
+
+// { local, pendientes, tareas, personas } | { error }
+export async function pagosParaVincular(deps, { argumento }) {
+  const { db } = deps
+  if (!argumento) return { error: '⚠️ Decime el local. Por ejemplo: `/pago tiamo`' }
+
+  const resuelto = await resolverLocalPorTexto(db, argumento)
+  if (resuelto.error) return { error: `⚠️ ${resuelto.error}` }
+  if (resuelto.varios) {
+    const opciones = resuelto.varios.map((l) => `• ${l.nombre}`).join('\n')
+    return { error: `Hay más de un local que coincide con "${argumento}". ¿Cuál?\n\n${opciones}` }
+  }
+
+  const local = resuelto.local
+  const [yaVinculados, tareas, personas] = await Promise.all([
+    db.pagoSeguimiento.findMany({ where: { id_local_ext: local.id }, select: { id_pago: true } }),
+    db.tarea.findMany({ where: { activa: true }, orderBy: { nombre: 'asc' } }),
+    personasActivas(deps)
+  ])
+  const excluir = new Set(yaVinculados.map((p) => p.id_pago))
+  const pendientes = await pagosRecientesDeLocal(deps, { idLocalExt: local.id, excluir })
+
+  return { local, pendientes, tareas, personas }
+}
+
+// Confirma la vinculacion (viene del dialogo de /pago). El pago se re-lee de
+// BigQuery en este momento -- no se confia en lo que haya en el value de la
+// card, que pudo quedar viejo entre que se abrio el dialogo y se mando.
+export async function vincularPago(deps, { email, idPago, idTarea, asignadoA }) {
+  const { db, log = console } = deps
+  if (!idPago) return '⚠️ No pude identificar el pago.'
+
+  const yaExiste = await db.pagoSeguimiento.findUnique({ where: { id_pago: idPago } })
+  if (yaExiste) return '✓ Ese pago ya tenía seguimiento.'
+
+  const pago = await pagoPorId(deps, { idPago })
+  if (!pago) return '⚠️ No encontré ese pago (puede haberse eliminado o quedar fuera de la ventana reciente).'
+
+  let persona = null
+  const destino = asignadoA ? normalizarEmail(asignadoA) : null
+  if (destino) {
+    persona = await db.extUser.findUnique({ where: { email: destino } })
+    if (!persona?.activo) return '⚠️ Esa persona ya no está activa en la plataforma.'
+  }
+
+  const tarea = idTarea ? await db.tarea.findUnique({ where: { id: idTarea } }) : null
+
+  await db.pagoSeguimiento.create({
+    data: {
+      id_pago: pago.id,
+      id_local_ext: pago.id_local_ext || null,
+      comprobante: pago.comprobante,
+      proveedor: pago.proveedor,
+      importe: pago.importe != null ? String(pago.importe) : null,
+      fecha_pago: pago.fecha_dia ? new Date(pago.fecha_dia) : null,
+      id_tarea: tarea?.id || null,
+      asignado_a: destino,
+      created_by: email
+    }
+  })
+  log.info?.({ idPago: pago.id, idTarea: tarea?.id, destino }, 'chat: pago vinculado desde el diálogo')
+
+  const monto = formatearMonto(pago.importe) || ''
+  const partes = [`✅ Vinculado: ${pago.comprobante || pago.proveedor} ${monto}.`]
+  if (tarea) partes.push(`Clasificado como *${tarea.nombre}*.`)
+  if (persona) partes.push(`Asignado a ${persona.nombre}.`)
+  return partes.join(' ')
+}
+
+// Texto plano, mismo estilo que /mias -- pasa por ejecutarComando pero ANTES
+// de resolverDepartamento (ver ese archivo), porque un pago no tiene uno.
+async function comandoMisPagos(deps, { email }) {
+  const { db } = deps
+  const pendientes = await db.pagoSeguimiento.findMany({
+    where: { asignado_a: email, estado: 'PENDIENTE' },
+    include: { tarea: true },
+    orderBy: { created_at: 'asc' }
+  })
+  if (!pendientes.length) return `*Mis pagos*\n${sinNada('No tenés pagos pendientes')}`
+
+  const lineas = pendientes.map((p) => {
+    const clasificacion = p.tarea ? ` — ${p.tarea.nombre}` : ''
+    const monto = formatearMonto(p.importe) ? ` — ${formatearMonto(p.importe)}` : ''
+    return `• ${p.comprobante || p.proveedor || '(sin comprobante)'}${clasificacion}${monto}`
+  })
+  return `*Mis pagos*\n\n${lineas.join('\n')}` + sugerir('/tildarpagos')
+}
+
+// { pendientes } -- lista para el checkbox de /tildarpagos. Mismo shape
+// {instanceId, etiqueta} que espera selectorMultiple en chat-cards.js, aunque
+// aca "instanceId" sea en realidad el id de PagoSeguimiento -- se llama igual
+// para poder compartir el widget sin que chat-cards.js necesite saber de que
+// dominio viene cada uno.
+export async function pendientesParaTildarPagos(deps, { email }) {
+  const { db } = deps
+  const pendientes = await db.pagoSeguimiento.findMany({
+    where: { asignado_a: email, estado: 'PENDIENTE' },
+    include: { tarea: true },
+    orderBy: { created_at: 'asc' }
+  })
+  return pendientes.map((p) => {
+    const clasificacion = p.tarea ? ` — ${p.tarea.nombre}` : ''
+    const monto = formatearMonto(p.importe) ? ` — ${formatearMonto(p.importe)}` : ''
+    return { instanceId: p.id, etiqueta: `${p.comprobante || p.proveedor || '(sin comprobante)'}${clasificacion}${monto}` }
+  })
+}
+
+// Marca varios PagoSeguimiento como HECHO de una (viene del checkbox de
+// /tildarpagos). El WHERE con asignado_a+estado en el mismo updateMany es la
+// guarda de seguridad: nadie puede marcar un pago que no es suyo manipulando
+// el value de la card, porque esa fila simplemente no matchea el filtro.
+export async function marcarPagos(deps, { email, ids }) {
+  const { db } = deps
+  const valores = (Array.isArray(ids) ? ids : [ids]).filter(Boolean)
+  if (!valores.length) return '⚠️ No tildaste ninguno.'
+
+  const { count } = await db.pagoSeguimiento.updateMany({
+    where: { id: { in: valores }, asignado_a: email, estado: 'PENDIENTE' },
+    data: { estado: 'HECHO' }
+  })
+  const noEncontrados = valores.length - count
+  const partes = [`✅ Marcados ${count} de ${valores.length}.`]
+  if (noEncontrados > 0) partes.push(`${noEncontrados} no se pudieron marcar (ya no eran tuyos, o ya estaban hechos).`)
+  return partes.join(' ')
+}
+
 // Corta el vinculo de este Space. La otra forma de lograr lo mismo es sacar la
 // app del Space (REMOVED_FROM_SPACE tambien limpia), pero eso ademas silencia
 // los comandos -- con esto el Space deja de recibir los recordatorios y sigue
@@ -1347,6 +1510,18 @@ export async function ejecutarComando(deps, { comandoId, texto, space, extUser, 
   if (comando === COMANDO_AYUDA) {
     const { departamento, porFallback } = await resolverDepartamento(db, { space, extUser })
     return esModoTodo(departamento, porFallback) ? `${AYUDA}${AVISO_MODO_TODO}` : AYUDA
+  }
+
+  // Un Pago no tiene departamento -- antes de la resolucion de mas abajo, que
+  // exige uno, o /mispagos quedaria bloqueado para cualquiera sin
+  // departamento propio (o parado en un Space sin vincular).
+  if (comando === COMANDO_MISPAGOS) {
+    try {
+      return await comandoMisPagos({ db }, { email })
+    } catch (err) {
+      log.error?.({ err: err.message }, 'chat: fallo /mispagos')
+      return '⚠️ No pude traer tus pagos. Probá de nuevo.'
+    }
   }
 
   const handler = HANDLERS[comando]

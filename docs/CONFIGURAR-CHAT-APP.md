@@ -3,10 +3,13 @@
 Todo el código de la Fase C está desplegado. Falta la configuración en la consola de
 Google Cloud, que **no tiene API pública** — hay que hacerla a mano una vez.
 
-**Estado (2026-08-26): todo funciona** — comandos de barra, botones que resuelven la
-acción dentro de Chat, y diálogos (`/asignar`, `/derivar`, `/apuntar`). Marcar una tarea
-actualiza la tarjeta en su lugar y los rechazos de un click salen privados. El Space de
-Dirección ve y opera sobre todos los departamentos ("modo todo", ver más abajo). Hubo un
+**Estado (2026-08-27): todo funciona** — comandos de barra, botones que resuelven la
+acción dentro de Chat, y diálogos (`/asignar`, `/derivar`, `/apuntar`, `/tildar`).
+Marcar una tarea actualiza la tarjeta en su lugar y los rechazos de un click salen
+privados. El Space de Dirección ve y opera sobre todos los departamentos ("modo todo",
+ver más abajo). Además, `/pago`/`/mispagos`/`/tildarpagos` permiten asignar una tarea
+y/o una persona a un Pago de dcsmart (leído de solo lectura vía BigQuery, ver
+"Seguimiento de Pagos" más abajo) — no depende de departamento ni de modo todo. Hubo un
 bug que costó encontrar y está explicado en "El campo action.function" más abajo: vale
 leerlo antes de tocar cualquier botón.
 
@@ -128,6 +131,9 @@ En **Google Chat API → Configuration → sección "Comandos"**, agregar uno po
 | `16` | `derivar` | barra + **Diálogo** | Elegir tarea y persona de dos listas (equivale a `/pasar`) |
 | `17` | `apuntar` | barra + **Diálogo** | Elegir la tarea de una lista y escribir la nota en un formulario (equivale a `/nota`) |
 | `19` | `tildar` | barra + **Diálogo** | Checkbox de varias tareas a la vez, ordenadas por atraso (equivale a `/marcar`, pero de a muchas) |
+| `20` | `pago` | barra + **Diálogo** | Vincular un pago de dcsmart a una tarea y/o persona |
+| `21` | `mispagos` | barra | Mis pagos con seguimiento pendiente |
+| `22` | `tildarpagos` | barra + **Diálogo** | Marcar varios pagos como resueltos |
 
 > **Los IDs importan solo para los comandos rápidos.** Un comando de barra se resuelve
 > por su **nombre** (viene en el texto del mensaje), así que si le queda otro número
@@ -250,6 +256,80 @@ cd C:\DEV_ORIG\01-APPS\DC-PLATAFORMA\backend; $env:AVISO_DRY_RUN='1'; npm run jo
 ```
 
 ---
+
+## 7. Seguimiento de Pagos (`/pago`, `/mispagos`, `/tildarpagos`)
+
+Permite asignarle una tarea del catálogo y/o una persona a un **Pago** puntual de
+dcsmart (`Pago` en `dcsmart/backend/prisma/schema.prisma`) — por ejemplo, "hay que
+auditar este comprobante" o "que Juan concilie este pago con el proveedor". Nace de un
+pedido explícito: seguimiento de tareas, aplicado a un pago en vez de a una tarea
+recurrente.
+
+**Deliberadamente NO usa el modelo de Tarea/TareaAsignacion/Calendar.** Un pago es un
+registro de una sola vez de OTRO sistema (dcsmart), no algo que se repita — forzarlo
+por el motor de agenda (RRULE, 12 meses, evento de Calendar) ensuciaría el calendario
+del departamento con eventos que no son operativos reales. Tiene su propia tabla,
+`PagoSeguimiento` (`schema.prisma`), sin Calendar de por medio.
+
+**Tampoco depende de departamento ni de "modo todo"**: `Pago` no tiene departamento,
+solo local, así que estos tres comandos no pasan por `resolverDepartamento` — el único
+requisito es ser un `ExtUser` activo, igual que cualquier comando de lectura.
+
+### De dónde salen los datos
+
+Lectura de **solo lectura** contra el dataset CDC de dcsmart en BigQuery
+(`dcsmart_analytics_cdc`, el mismo que usa `dcsmart-auditoria` — ver
+`backend/src/lib/pagos.js`). **Nunca se escribe en dcsmart**, ni en Postgres ni en
+BigQuery: la única escritura de esta funcionalidad es `PagoSeguimiento`, en la base
+propia de DC-PLATAFORMA.
+
+Requiere que la service account del servicio (`dc-plataforma-api@dc-smart-mvp.iam
+.gserviceaccount.com`) tenga estos dos roles sobre `dc-smart-mvp` — los mismos que ya
+tiene la de `dcsmart-auditoria`, no un permiso nuevo a inventar:
+
+```bash
+gcloud projects add-iam-policy-binding dc-smart-mvp \
+  --member="serviceAccount:dc-plataforma-api@dc-smart-mvp.iam.gserviceaccount.com" \
+  --role="roles/bigquery.dataViewer" --condition=None
+
+gcloud projects add-iam-policy-binding dc-smart-mvp \
+  --member="serviceAccount:dc-plataforma-api@dc-smart-mvp.iam.gserviceaccount.com" \
+  --role="roles/bigquery.jobUser" --condition=None
+```
+
+Sin este grant, `/pago` responde con un error de BigQuery al abrir el diálogo —
+`/mispagos` y `/tildarpagos` funcionan igual (leen `PagoSeguimiento`, no BigQuery).
+
+### Flujo
+
+1. `/pago tiamo` — resuelve el local por texto (mismo criterio que `/local`, pero sin
+   la lógica de grupo: un pago es de un solo local), trae los pagos de los últimos 30
+   días que **todavía no tienen seguimiento** (se excluyen los que ya están en
+   `PagoSeguimiento`), y abre un diálogo: radio button para elegir el pago, dropdown
+   opcional para clasificarlo con una tarea del catálogo, dropdown opcional para
+   asignarlo a alguien.
+2. Al confirmar, el pago se **re-lee de BigQuery en ese momento** (no se confía en lo
+   que haya en el `value` de la card, que pudo quedar viejo) y se guarda un **snapshot**
+   (comprobante, proveedor, importe, fecha) en `PagoSeguimiento` — así `/mispagos` no
+   necesita una llamada a BigQuery por fila.
+3. `/mispagos` lista los pendientes asignados a quien pregunta, `100%` desde Postgres.
+4. `/tildarpagos` abre un checkbox (mismo widget genérico que ya usa `/tildar`, ver
+   `chat-cards.js#selectorMultiple`) con los pendientes de esa persona; el submit hace
+   un `updateMany` con `WHERE id IN (...) AND asignado_a = <email> AND estado =
+   'PENDIENTE'` — la propia condición es la guarda de seguridad: nadie puede marcar un
+   pago ajeno manipulando el `value` de la card.
+
+### Trampa empírica: `types` explícito en el cliente de BigQuery
+
+**No pasar el objeto `types` al `.query()`** (`{ idLocal: 'STRING', desde: 'DATE', ... }`).
+Se probó así primero y la query **corría sin tirar ningún error, pero devolvía 0 filas
+siempre** — para cualquier local, aunque hubiera pagos reales en la ventana. Un mock de
+BigQuery en un test no lo detecta (el mock no valida tipos), así que esto solo salió a
+la luz al probar contra datos reales. Sacando `types` por completo, y dejando que el
+cliente infiera el tipo de cada parámetro por el valor JS que se le pasa, la misma
+query trae los datos correctos. No se investigó la causa raíz dentro de
+`@google-cloud/bigquery` — queda como constancia empírica de qué forma funciona, ver
+`lib/pagos.js`.
 
 ## ⚠️ NUNCA tocar la pantalla de "Google Auth Platform" de este proyecto
 

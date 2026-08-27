@@ -228,6 +228,22 @@ recargar nada ni se acumulan mensajes viejos con botones que ya no sirven.
 - El botón **Ver todas** del pie abre la plataforma cuando hay más tareas de las que
   entran en la tarjeta.
 
+### Seguimiento de pagos
+
+Además de las tareas, podés hacerle seguimiento a un **pago puntual** de dcsmart —
+asignarle una tarea del catálogo y/o una persona, sin salir de Chat. No depende de tu
+departamento: funciona igual desde cualquier Space.
+
+| Comando | Qué hace |
+|---|---|
+| `/pago tiamo` | Elegís un pago reciente de ese local (últimos 30 días) y le asignás una tarea y/o una persona |
+| `/mispagos` | Los pagos que tenés pendientes de resolver |
+| `/tildarpagos` | Marcás varios como resueltos, con checkbox |
+
+Los datos del pago (proveedor, importe, fecha, comprobante) se leen de dcsmart en el
+momento de vincularlo y quedan guardados — no hace falta volver a consultar nada para
+verlos en `/mispagos`.
+
 ### Vincular el Space de un departamento (administrador)
 
 1. Creá el Space en Google Chat y agregá el grupo `depto-` + el slug del departamento

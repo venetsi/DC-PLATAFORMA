@@ -28,6 +28,8 @@ import {
   dialogoPasar,
   dialogoApuntar,
   dialogoTildar,
+  dialogoPago,
+  dialogoTildarPagos,
   cerrarDialogo,
   ACCION_MARCAR,
   ACCION_VINCULAR,
@@ -35,10 +37,15 @@ import {
   ACCION_PASAR_SUBMIT,
   ACCION_NOTA_SUBMIT,
   ACCION_TILDAR_SUBMIT,
+  ACCION_PAGO_SUBMIT,
+  ACCION_TILDARPAGOS_SUBMIT,
   CAMPO_TAREA,
   CAMPO_PERSONA,
   CAMPO_NOTA_TEXTO,
   CAMPO_TAREAS,
+  CAMPO_PAGO,
+  CAMPO_TAREA_PAGO,
+  CAMPO_PAGOS,
   CAMPO_ACCION
 } from '../lib/chat-cards.js'
 import { marcarInstanciaYPropagar } from '../lib/marcar-instancia.js'
@@ -48,6 +55,7 @@ import { construirTarjetaDepartamento, conNotaSuperior } from '../lib/chat-recor
 import {
   ejecutarComando,
   resolverComando,
+  argumentoDeComando,
   pendientesParaAsignar,
   pendientesParaTildar,
   tomarPorInstanceId,
@@ -56,10 +64,16 @@ import {
   marcarVarias,
   personasActivas,
   puedeOperarEnChat,
+  pagosParaVincular,
+  vincularPago,
+  pendientesParaTildarPagos,
+  marcarPagos,
   COMANDO_ASIGNAR,
   COMANDO_DERIVAR,
   COMANDO_APUNTAR,
-  COMANDO_TILDAR
+  COMANDO_TILDAR,
+  COMANDO_PAGO,
+  COMANDO_TILDARPAGOS
 } from '../lib/chat-comandos.js'
 
 // Las dos acciones que devuelve este framework (ver
@@ -259,6 +273,21 @@ async function manejarComando(fastify, chatEvent) {
     return dialogoTildar(pendientes, { departamento, porFallback, modoTodo, resumen })
   }
 
+  // /pago y /tildarpagos: un Pago no tiene departamento, asi que estos dos NO
+  // pasan por resolverDepartamento -- van directo a lib/pagos.js (via
+  // chat-comandos.js) por local o por el email de quien pregunta.
+  if (comando === COMANDO_PAGO) {
+    const { local, pendientes, tareas, personas, error } = await pagosParaVincular(fastify, { argumento: argumentoDeComando(texto) })
+    if (error) return mensajeNuevo({ text: error })
+    fastify.log.info({ local: local.nombre, pendientes: pendientes.length }, 'chat: abriendo diálogo (pago)')
+    return dialogoPago(pendientes, tareas, personas, { local })
+  }
+  if (comando === COMANDO_TILDARPAGOS) {
+    const pendientes = await pendientesParaTildarPagos(fastify, { email })
+    fastify.log.info({ pendientes: pendientes.length }, 'chat: abriendo diálogo (tildarpagos)')
+    return dialogoTildarPagos(pendientes)
+  }
+
   const respuesta = await ejecutarComando(fastify, { comandoId, texto, space, extUser, email })
   return mensajeNuevo({ text: respuesta })
 }
@@ -337,6 +366,20 @@ async function manejarClick(fastify, chatEvent, common) {
     const instanceIds = leerCampoMultipleDelFormulario(common, CAMPO_TAREAS)
     fastify.log.info({ cantidad: instanceIds.length }, 'chat: envío de diálogo recibido (tildar)')
     const texto = await marcarVarias(fastify, { space, extUser, email, instanceIds })
+    return cerrarDialogo(texto)
+  }
+  if (funcion === ACCION_PAGO_SUBMIT) {
+    const idPago = leerCampoDelFormulario(common, CAMPO_PAGO)
+    const idTarea = leerCampoDelFormulario(common, CAMPO_TAREA_PAGO)
+    const asignadoA = leerCampoDelFormulario(common, CAMPO_PERSONA)
+    fastify.log.info({ idPago, idTarea, asignadoA }, 'chat: envío de diálogo recibido (pago)')
+    const texto = await vincularPago(fastify, { email, idPago, idTarea, asignadoA })
+    return cerrarDialogo(texto)
+  }
+  if (funcion === ACCION_TILDARPAGOS_SUBMIT) {
+    const ids = leerCampoMultipleDelFormulario(common, CAMPO_PAGOS)
+    fastify.log.info({ cantidad: ids.length }, 'chat: envío de diálogo recibido (tildarpagos)')
+    const texto = await marcarPagos(fastify, { email, ids })
     return cerrarDialogo(texto)
   }
 
