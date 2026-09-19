@@ -63,15 +63,75 @@ model Departamento {
   // produccion y db push no debe backfillear nada.
   dias_aviso_departamento Int?
   dias_aviso_direccion    Int?
-  activo                  Boolean  @default(true)
-  synced_at               DateTime @default(now())
+
+  // Busqueda con Gemini: store de Gemini File Search de este departamento --
+  // un documento subido/pegado con este departamento vive aca. Se crea
+  // perezosamente en el primer documento (ver asegurarFileSearchStore en
+  // lib/repositorios.js), mismo patron que id_calendar_google/
+  // email_group_google (asegurarDepartamento).
+  gemini_file_search_store String? @unique
+
+  activo    Boolean  @default(true)
+  synced_at DateTime @default(now())
 
   tareas                   Tarea[]
   cumplimiento             CumplimientoDiario[]
   asignaciones_compartidas TareaAsignacionDepto[]
   compartidoEnSpaces       DepartamentoCompartidoEnSpace[]
+  repositorio_documentos   RepositorioDocumento[]
 
   @@map("departamentos")
+}
+
+// --- Documento indexado en Gemini File Search, para el comando /buscar del
+// Chat App. `id_departamento` NULL = repo general (visible desde cualquier
+// Space); si tiene valor, solo lo ven los Spaces que cubran ese departamento
+// (misma maquinaria de ambito que ya usan /hoy, /tarea, etc. -- ver
+// ambitoDeChat en chat-comandos.js). Sin entidad "Repositorio" separada a
+// proposito: un departamento tiene un pool plano de documentos, igual que ya
+// tiene un solo Calendar y un solo Group.
+//
+// El indexado en Gemini es ASINCRONICO (uploadToFileSearchStore devuelve una
+// Operation de larga duracion, no exito/error en el momento) -- por eso
+// `estado` existe: la fila nace PENDIENTE y un polling en background la pasa
+// a INDEXADO (con gemini_file_id resuelto) o ERROR. Sin este campo, un
+// documento recien subido "no aparece" en /buscar por un rato y parece un
+// bug, no un estado transitorio real.
+model RepositorioDocumento {
+  id               String        @id @default(uuid())
+  id_departamento  String?
+  tipo             TipoDocumento
+  // Se usa como displayName al subir a Gemini -> aparece tal cual en las
+  // citas de /buscar, por eso importa que sea legible (no un uuid).
+  nombre           String
+  // URL pegada (tipo URL), o id de archivo de Drive (tipos DRIVE_*). Null
+  // para archivos subidos directo (TXT/MD/PDF).
+  origen           String?
+  gemini_file_id   String?
+  gemini_operacion String?
+  estado           String        @default("PENDIENTE") // PENDIENTE | INDEXADO | ERROR
+  error            String?
+  created_by       String
+  created_at       DateTime      @default(now())
+  updated_at       DateTime      @updatedAt
+
+  departamento Departamento? @relation(fields: [id_departamento], references: [id])
+
+  @@index([id_departamento])
+  @@index([estado])
+  @@map("repositorio_documentos")
+}
+
+enum TipoDocumento {
+  TXT
+  MD
+  PDF
+  URL
+  DRIVE_DOC
+  DRIVE_SHEET
+  DRIVE_SLIDE
+
+  @@map("tipo_documento")
 }
 
 // --- Un Space de Chat puede cubrir MAS de un departamento, ademas del dueño

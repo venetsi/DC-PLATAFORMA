@@ -21,7 +21,9 @@
 // El tipo de evento se infiere por CUAL de esas claves de payload esta
 // presente -- no hay un campo "type" directo.
 import { verificarPeticionDeChat, ChatNoConfigurado, ChatTokenInvalido } from '../lib/chat-verificar.js'
-import { resolverEmail } from '../lib/chat.js'
+import { resolverEmail, postearEnSpace, actualizarMensaje } from '../lib/chat.js'
+import { responderPregunta } from '../lib/gemini-buscar.js'
+import { GEMINI_STORE_GENERAL_ID } from '../plugins/gemini.js'
 import {
   cardVincular,
   dialogoAsignar,
@@ -80,7 +82,9 @@ import {
   COMANDO_TILDAR,
   COMANDO_VINCULAR,
   COMANDO_PAGO,
-  COMANDO_TILDARPAGOS
+  COMANDO_TILDARPAGOS,
+  COMANDO_BUSCAR,
+  ambitoDelSpace
 } from '../lib/chat-comandos.js'
 
 // Las dos acciones que devuelve este framework (ver
@@ -303,6 +307,44 @@ async function manejarComando(fastify, chatEvent) {
     if (error) return mensajeNuevo({ text: error })
     fastify.log.info({ space, departamentos: departamentos.length, actuales: actuales.size }, 'chat: abriendo diálogo (vincular)')
     return dialogoVincular(departamentos, { actuales })
+  }
+
+  // /buscar pregunta algo y Gemini responde anclado SOLO en los documentos
+  // del ambito de este Space (general + los departamentos que cubra, ver
+  // ambitoDelSpace). NO devuelve texto en la respuesta del webhook -- una
+  // consulta a Gemini puede tardar mas que los ~30s que da Chat para
+  // responder. Se postea un placeholder por afuera (misma API que usa el job
+  // de avisos) y se actualiza en background al terminar -- mismo idioma
+  // fire-and-forget que propagarEnBackground en marcar-instancia.js.
+  if (comando === COMANDO_BUSCAR) {
+    const pregunta = argumentoDeComando(texto)
+    if (!pregunta) {
+      return mensajeNuevo({ text: 'Escribí `/buscar` seguido de tu pregunta. Ejemplo: `/buscar cuál es la política de viáticos`' })
+    }
+
+    const { departamentos } = await ambitoDelSpace(fastify.db, { space, extUser })
+    const storeNames = [GEMINI_STORE_GENERAL_ID, ...departamentos.map((d) => d.gemini_file_search_store)].filter(Boolean)
+    if (!storeNames.length) {
+      return mensajeNuevo({ text: 'No hay documentos cargados todavía para este Space. Pedile a un administrador que cargue algo desde la plataforma.' })
+    }
+
+    let mensaje
+    try {
+      mensaje = await postearEnSpace(space, { text: '🔎 Buscando…' })
+    } catch (err) {
+      fastify.log.error({ err: err.message }, 'chat: no se pudo postear el placeholder de /buscar')
+      return mensajeNuevo({ text: '⚠️ No pude iniciar la búsqueda. Probá de nuevo.' })
+    }
+
+    responderPregunta(fastify, { pregunta, storeNames })
+      .then((texto) => actualizarMensaje(mensaje.name, { text: texto }))
+      .catch((err) => {
+        fastify.log.error({ err: err.message }, 'chat: falló /buscar')
+        return actualizarMensaje(mensaje.name, { text: '⚠️ No pude responder eso. Probá de nuevo.' })
+      })
+      .catch((err) => fastify.log.error({ err: err.message }, 'chat: no se pudo ni actualizar el placeholder de /buscar'))
+
+    return {}
   }
 
   const respuesta = await ejecutarComando(fastify, { comandoId, texto, space, extUser, email })

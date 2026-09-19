@@ -244,6 +244,31 @@ Los datos del pago (proveedor, importe, fecha, comprobante) se leen de dcsmart e
 momento de vincularlo y quedan guardados — no hace falta volver a consultar nada para
 verlos en `/mispagos`.
 
+### Preguntar por información con Gemini
+
+`/buscar` le pregunta algo a Gemini y responde basado **solo** en los documentos que un
+administrador haya cargado (manuales, políticas, instructivos) — nunca inventa a partir
+de información externa.
+
+```
+/buscar cuál es la política de viáticos
+```
+
+La respuesta llega en el mismo mensaje (empieza como "🔎 Buscando…" y se actualiza sola
+cuando Gemini termina) y, cuando corresponde, cierra con una línea de "Fuentes" que
+nombra de qué documento salió la información.
+
+Ve los documentos **generales** (cargados para toda la empresa) más los del o los
+departamentos que cubra el Space donde escribís — los mismos que ya ves con `/hoy` o
+`/resumen`. Si todavía no se cargó ningún documento para ese ámbito, te lo dice en vez
+de inventar una respuesta.
+
+**Cargar documentos (administrador):** desde la plataforma, en **Documentos**
+(`/admin/repositorios`) — elegís si es para un departamento puntual o para todos
+("General"), y subís un archivo (.txt, .md o .pdf) o pegás una URL. La carga a Gemini es
+asincrónica: un documento recién subido queda "Indexando…" un rato antes de estar
+disponible para `/buscar`.
+
 ### Vincular el Space de uno o varios departamentos (administrador)
 
 1. Creá el Space en Google Chat y agregá el grupo `depto-` + el slug del departamento

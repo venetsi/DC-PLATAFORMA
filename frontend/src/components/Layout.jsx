@@ -26,6 +26,7 @@ export default function Layout() {
             {departamento && <NavLink to="/mis-tareas" style={linkStyle}>Mis tareas</NavLink>}
             <NavLink to="/reportes" style={linkStyle}>Reportes</NavLink>
             {(esAdminGlobal || departamento) && <NavLink to="/admin/tareas" style={linkStyle}>Tareas</NavLink>}
+            {esAdminGlobal && <NavLink to="/admin/repositorios" style={linkStyle}>Documentos</NavLink>}
           </nav>
         </div>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', fontSize: '0.85rem', color: 'var(--texto-tenue)' }}>

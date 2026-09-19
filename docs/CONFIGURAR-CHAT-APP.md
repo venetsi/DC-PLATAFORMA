@@ -12,9 +12,11 @@ asignar una tarea y/o una persona a un Pago de dcsmart (leído de solo lectura v
 BigQuery, ver "Seguimiento de Pagos" más abajo) — no depende de departamento ni de modo
 todo. Un Space también puede cubrir varios departamentos concretos (no solo el "modo
 todo" de Dirección): `/vincular` abre un checkbox donde se puede tildar más de uno —
-ver "`/vincular` con checkbox" más abajo. Hubo un bug que costó encontrar y está
-explicado en "El campo action.function" más abajo: vale leerlo antes de tocar cualquier
-botón.
+ver "`/vincular` con checkbox" más abajo. `/buscar` responde preguntas con Gemini,
+anclado en documentos cargados desde `/admin/repositorios` (ver "8. Búsqueda con Gemini"
+más abajo) — pendiente el paso manual de crear la API key antes de que funcione de
+verdad. Hubo un bug que costó encontrar y está explicado en "El campo action.function"
+más abajo: vale leerlo antes de tocar cualquier botón.
 
 > La documentación oficial de Google está incompleta en varios de estos pasos — lo que
 > sigue está confirmado contra la consola real y contra logs de producción, no copiado
@@ -379,6 +381,68 @@ cliente infiera el tipo de cada parámetro por el valor JS que se le pasa, la mi
 query trae los datos correctos. No se investigó la causa raíz dentro de
 `@google-cloud/bigquery` — queda como constancia empírica de qué forma funciona, ver
 `lib/pagos.js`.
+
+## 8. Búsqueda con Gemini sobre documentos (`/buscar`)
+
+Permite preguntar algo en el Space y que **Gemini responda anclado solo en los
+documentos cargados** (manuales, políticas, instructivos) — general (cualquier Space) o
+por departamento (solo los Spaces que lo cubran, misma maquinaria de ámbito que
+`/hoy`/`/tarea`/etc.). Los documentos se cargan desde una pantalla nueva de la
+plataforma (`/admin/repositorios`, solo admin), no por comando de Chat.
+
+**Motor: Gemini API File Search** (`ai.google.dev/gemini-api/docs/file-search`, lanzado
+2026) — un RAG totalmente administrado por Google: se suben archivos a un "store", el
+propio Gemini los trocea, indexa y busca, y la respuesta trae citas de qué documento
+salió cada parte. Soporta nativo `.txt`, `.md` y `.pdf`.
+
+### Primera credencial tipo API key de toda la app
+
+A diferencia de TODO lo demás acá (Calendar, Groups, Chat, BigQuery — todo por cuenta de
+servicio/ADC, cero secretos guardados), File Search se autentica con una **API key**
+sobre la Generative Language API — no tiene variante por cuenta de servicio.
+
+1. Google Cloud Console → APIs & Services → Credentials, proyecto `dc-smart-mvp` (ya
+   tiene `generativelanguage.googleapis.com` y `aiplatform.googleapis.com`
+   habilitados) → crear una API key, **restringida** a la Generative Language API.
+2. Guardarla como secret de Cloud Run (`GEMINI_API_KEY`) — **nunca en el repo ni en un
+   `.env` versionado**.
+
+### Store general
+
+No pertenece a ningún departamento, así que no hay dónde persistir su id: se crea UNA
+vez con un script chico y se pega a mano, mismo patrón que `CHAT_AUDIENCE` (paso 4).
+
+```bash
+cd backend
+node scripts/crear-store-general.mjs
+```
+
+Pegar el resource name que imprime como `GEMINI_STORE_GENERAL_ID` en el entorno.
+
+### Cargar el comando
+
+| ID | Nombre | Tipo | Para qué |
+|---|---|---|---|
+| `23` | `buscar` | barra | Preguntar algo, respondido por Gemini con los documentos cargados |
+
+`/buscar` **no** es de tipo Diálogo — responde con texto (actualizado en el mismo
+mensaje mientras Gemini procesa, no en la respuesta síncrona del webhook, porque una
+consulta puede tardar más que los ~30s que da Chat).
+
+### Documentos desde Google Drive (Docs/Sheets/Slides) — pendiente
+
+Todavía no disponible: falta otorgar el scope `drive.readonly` por domain-wide
+delegation, mismo lugar que ya se otorgó `admin.directory.user.readonly` (ver "Opcional:
+el fallback de identidad" más abajo) —
+**Admin Console → Seguridad → Control de datos y acceso → Delegación de dominio**,
+sobre el client ID de `dc-plataforma-api@dc-smart-mvp.iam.gserviceaccount.com`:
+
+```
+https://www.googleapis.com/auth/drive.readonly
+```
+
+El botón "Agregar desde Google Drive" en `/admin/repositorios` queda deshabilitado
+hasta entonces — nunca se simula un éxito que en realidad no pasó nada.
 
 ## ⚠️ NUNCA tocar la pantalla de "Google Auth Platform" de este proyecto
 

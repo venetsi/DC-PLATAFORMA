@@ -46,3 +46,20 @@ export const instanciasApi = {
 export const reportesApi = {
   cumplimiento: (params) => api.get('/reportes/cumplimiento', { params }).then((r) => r.data)
 }
+
+// idDepartamento: undefined/null/"general" -> el pool general; cualquier otro
+// valor, el pool de ese departamento. Ver resolverScope en
+// backend/src/routes/repositorios.js.
+export const repositoriosApi = {
+  listar: (idDepartamento) => api.get('/repositorios', { params: { id_departamento: idDepartamento } }).then((r) => r.data),
+  subir: (archivo, { idDepartamento, nombre } = {}) => {
+    const form = new FormData()
+    form.append('file', archivo)
+    if (idDepartamento) form.append('id_departamento', idDepartamento)
+    if (nombre) form.append('nombre', nombre)
+    return api.post('/repositorios/subir', form, { headers: { 'Content-Type': 'multipart/form-data' } }).then((r) => r.data)
+  },
+  agregarUrl: (url, idDepartamento) =>
+    api.post('/repositorios/url', { url, id_departamento: idDepartamento }).then((r) => r.data),
+  eliminar: (id) => api.delete(`/repositorios/${id}`).then((r) => r.data)
+}

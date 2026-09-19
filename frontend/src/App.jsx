@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { useAuthStore } from './store/authStore.js'
-import { ProtectedRoute, GestionRoute } from './components/ProtectedRoute.jsx'
+import { ProtectedRoute, GestionRoute, AdminRoute } from './components/ProtectedRoute.jsx'
 import Layout from './components/Layout.jsx'
 import Login from './pages/Login.jsx'
 import Sso from './pages/Sso.jsx'
@@ -9,6 +9,7 @@ import Calendario from './pages/Calendario.jsx'
 import MisTareas from './pages/MisTareas.jsx'
 import Reportes from './pages/Reportes.jsx'
 import AdminTareas from './pages/admin/AdminTareas.jsx'
+import AdminRepositorios from './pages/admin/AdminRepositorios.jsx'
 
 export default function App() {
   const cargarSesion = useAuthStore((s) => s.cargarSesion)
@@ -25,6 +26,9 @@ export default function App() {
           <Route path="/reportes" element={<Reportes />} />
           <Route element={<GestionRoute />}>
             <Route path="/admin/tareas" element={<AdminTareas />} />
+          </Route>
+          <Route element={<AdminRoute />}>
+            <Route path="/admin/repositorios" element={<AdminRepositorios />} />
           </Route>
         </Route>
       </Route>

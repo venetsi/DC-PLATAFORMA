@@ -106,6 +106,15 @@ export const COMANDO_RESUMEN = 13
 export const COMANDO_EQUIPO = 14
 export const COMANDO_DEPARTAMENTOS = 15
 
+// Pregunta anclada en los documentos que cubre este Space (general + los
+// departamentos que resuelva ambitoDelSpace), respondida por Gemini File
+// Search. NO pasa por el dispatch generico de ejecutarComando/HANDLERS de
+// abajo -- se especial-casea en manejarComando (routes/chat.js), porque una
+// consulta a Gemini puede tardar mas que los ~30s que da Chat para responder
+// (ver el comentario ahi). Requiere reconfigurar el comando en la consola de
+// Chat de "barra" a "barra" simple (no dialogo) -- ver CONFIGURAR-CHAT-APP.md.
+export const COMANDO_BUSCAR = 23
+
 const POR_NOMBRE = {
   hoy: COMANDO_HOY,
   tareas: COMANDO_HOY,
@@ -136,7 +145,8 @@ const POR_NOMBRE = {
   resumen: COMANDO_RESUMEN,
   estado: COMANDO_RESUMEN,
   equipo: COMANDO_EQUIPO,
-  departamentos: COMANDO_DEPARTAMENTOS
+  departamentos: COMANDO_DEPARTAMENTOS,
+  buscar: COMANDO_BUSCAR
 }
 
 // Separador para los comandos que llevan dos partes:
@@ -202,6 +212,9 @@ const AYUDA = [
   '`/local tiamo` — las tareas de un local (o de todo un grupo)',
   '`/resumen` — cómo viene el departamento',
   '`/equipo` — quién tiene qué',
+  '',
+  '*Para consultar información*',
+  '`/buscar cuál es la política de viáticos` — le preguntás a Gemini, que responde solo con los documentos cargados para tu departamento (manuales, políticas, instructivos)',
   '',
   '_No hace falta escribir el nombre completo de la tarea: con una parte alcanza_',
   '_(`/tomar cierre`). Si hay más de una que coincida, te pregunto cuál._',
@@ -336,11 +349,21 @@ async function ambitoDeChat(db, { departamento, compartidos, porFallback }) {
   return { modoTodo, departamentos }
 }
 
+// Envuelve resolverDepartamento + ambitoDeChat en un solo llamado, para
+// comandos que necesitan el ambito de un Space pero NO pasan por
+// ejecutarComando (hoy solo /buscar, ver routes/chat.js -- resolverDepartamento
+// no esta exportado a proposito, todo lo demas pasa por ejecutarComando).
+export async function ambitoDelSpace(db, { space, extUser }) {
+  const { departamento, compartidos, porFallback } = await resolverDepartamento(db, { space, extUser })
+  if (!departamento) return { departamentos: [], modoTodo: false, porFallback: false }
+  return { ...(await ambitoDeChat(db, { departamento, compartidos, porFallback })), porFallback }
+}
+
 // Aviso que se agrega cuando el departamento no salio del Space.
 function avisoDeFallback(departamento) {
   return (
     `\n\n_Este Space no está vinculado a ningún departamento, así que te muestro las de *${departamento.nombre}* (el tuyo)._` +
-    '\n_Un administrador puede vincularlo escribiendo_ `/vincular` _y el nombre del departamento._'
+    '\n_Un administrador puede vincularlo escribiendo_ `/vincular` _y eligiendo del formulario que se abre._'
   )
 }
 
@@ -1212,7 +1235,7 @@ export async function pendientesParaAsignar(deps, { space, extUser }) {
   const { db, gcal } = deps
   const { departamento, compartidos, porFallback } = await resolverDepartamento(db, { space, extUser })
   if (!departamento?.id_calendar_google) {
-    return { error: '⚠️ No pude resolver un departamento con calendario para este Space. Un administrador puede vincularlo escribiendo `/vincular` y el nombre del departamento.' }
+    return { error: '⚠️ No pude resolver un departamento con calendario para este Space. Un administrador puede vincularlo escribiendo `/vincular` y eligiendo del formulario que se abre.' }
   }
 
   const { modoTodo, departamentos } = await ambitoDeChat(db, { departamento, compartidos, porFallback })
@@ -1354,7 +1377,7 @@ export async function pendientesParaTildar(deps, { space, extUser }) {
   const { db, gcal } = deps
   const { departamento, compartidos, porFallback } = await resolverDepartamento(db, { space, extUser })
   if (!departamento?.id_calendar_google) {
-    return { error: '⚠️ No pude resolver un departamento con calendario para este Space. Un administrador puede vincularlo escribiendo `/vincular` y el nombre del departamento.' }
+    return { error: '⚠️ No pude resolver un departamento con calendario para este Space. Un administrador puede vincularlo escribiendo `/vincular` y eligiendo del formulario que se abre.' }
   }
 
   const { modoTodo, departamentos } = await ambitoDeChat(db, { departamento, compartidos, porFallback })

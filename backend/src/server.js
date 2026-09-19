@@ -8,6 +8,7 @@ import dbPlugin from './plugins/db.js'
 import gcalPlugin from './plugins/gcal.js'
 import groupsPlugin from './plugins/groups.js'
 import bigqueryPlugin from './plugins/bigquery.js'
+import geminiPlugin from './plugins/gemini.js'
 import authRoutes from './routes/auth.js'
 import departamentosRoutes from './routes/departamentos.js'
 import localesRoutes from './routes/locales.js'
@@ -19,6 +20,7 @@ import instanciasRoutes from './routes/instancias.js'
 import reportesRoutes from './routes/reportes.js'
 import tvRoutes from './routes/tv.js'
 import chatRoutes from './routes/chat.js'
+import repositoriosRoutes from './routes/repositorios.js'
 import { esAdminGlobal } from './lib/permisos.js'
 
 const app = Fastify({ logger: true })
@@ -33,6 +35,7 @@ await app.register(dbPlugin)
 await app.register(gcalPlugin)
 await app.register(groupsPlugin)
 await app.register(bigqueryPlugin)
+await app.register(geminiPlugin)
 
 app.decorate('authenticate', async (request, reply) => {
   try {
@@ -61,6 +64,7 @@ await app.register(instanciasRoutes, { prefix: '/api/instancias' })
 await app.register(reportesRoutes, { prefix: '/api/reportes' })
 await app.register(tvRoutes, { prefix: '/api/tv' })
 await app.register(chatRoutes, { prefix: '/api/chat' })
+await app.register(repositoriosRoutes, { prefix: '/api/repositorios' })
 
 try {
   await app.listen({ port: process.env.PORT || 3100, host: '0.0.0.0' })
