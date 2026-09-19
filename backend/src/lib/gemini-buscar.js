@@ -11,7 +11,20 @@
 // blocks a mano. La cita es un objeto PLANO en annotations (no anidada bajo
 // .file_citation como sugeria la doc): { type: "file_citation", file_name,
 // document_uri, start_index, end_index, source }.
+import { buildBuscarSystemPrompt } from './prompts.js'
+
 const MODELO = process.env.GEMINI_MODELO_BUSCAR || 'gemini-flash-latest'
+
+// Centinela que el system prompt le pide a Gemini responder CUANDO NO
+// encuentra la respuesta en los documentos -- igual que NO_INFO_REPLY en el
+// bot hermano de WhatsApp (AUDITOR WSP): el texto que ve la persona en ESE
+// caso puntual es fijo en el codigo, nunca lo redacta el modelo, para que
+// nunca varie ni se le cuele una alucinacion justo donde mas importa ser
+// preciso. Se detecta por inclusion (no igualdad exacta) porque el modelo
+// puede rodearlo de espacios o puntuacion pese a la instruccion de "nada
+// mas antes ni despues".
+const SENTINEL_SIN_INFO = 'SIN_INFORMACION'
+const NO_INFO_REPLY = 'No encontré esa información en los documentos cargados. Probá reformular la pregunta, o pedile a un administrador que cargue el documento correspondiente.'
 
 function extraerTextoYCitas(interaction) {
   const citas = new Set()
@@ -36,11 +49,12 @@ export async function responderPregunta(fastify, { pregunta, storeNames }) {
   const interaction = await fastify.gemini.interactions.create({
     model: MODELO,
     input: pregunta,
+    system_instruction: buildBuscarSystemPrompt(),
     tools: [{ type: 'file_search', file_search_store_names: storeNames }]
   })
 
   const { texto, citas } = extraerTextoYCitas(interaction)
-  if (!texto) return 'No encontré nada en los documentos cargados para responder eso.'
+  if (!texto || texto.includes(SENTINEL_SIN_INFO)) return NO_INFO_REPLY
 
   const fuentes = citas.length ? `\n\n_Fuentes: ${citas.join(', ')}_` : ''
   return `${texto}${fuentes}`
