@@ -1,11 +1,9 @@
 // Documentos indexados en Gemini File Search para el comando /buscar del Chat
-// App. Cada departamento tiene un store propio (se crea perezoso, en el
-// primer documento -- mismo patron que Calendar/Group en
-// asegurarDepartamento, ver lib/departamentos.js), mas un store GENERAL
-// (GEMINI_STORE_GENERAL_ID, ver plugins/gemini.js) que no pertenece a ningun
-// departamento. Sin entidad "Repositorio" separada a proposito: un
-// departamento tiene un pool plano de documentos, igual que ya tiene un solo
-// Calendar y un solo Group.
+// App. Cada Repositorio (entidad con nombre propio, ver schema.prisma) tiene
+// un store propio (se crea perezoso, en el primer documento -- mismo patron
+// que Calendar/Group en asegurarDepartamento, ver lib/departamentos.js). Un
+// Repositorio se asigna a cero o mas departamentos (RepositorioDepartamento);
+// sin ninguno asignado, es general y lo ve cualquier Space.
 //
 // El indexado es ASINCRONICO -- confirmado contra los tipos reales del SDK
 // instalado (@google/genai@2.23.0, ver node_modules/@google/genai/dist/
@@ -21,15 +19,25 @@ import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import os from 'node:os'
 import { load as cargarHtml } from 'cheerio'
-import { GEMINI_STORE_GENERAL_ID } from '../plugins/gemini.js'
+import { getDrive } from './drive-auth.js'
 
 const POLL_INTERVALO_MS = 3000
 const POLL_MAX_INTENTOS = 40 // ~2 minutos -- de sobra para un txt/md/pdf chico
 
+// El mimeType que se le declara a GEMINI, no el de origen -- para
+// DRIVE_SHEET en particular, el CSV exportado de Drive se sube como texto
+// plano a proposito: "text/csv" no esta entre los formatos nativos
+// documentados de File Search (solo text/plain, text/markdown,
+// application/pdf), y un CSV es texto delimitado igual, asi que Gemini lo
+// puede leer perfectamente como plano -- sin parseo de columnas especial,
+// pero sin riesgo de que lo rechace por tipo no soportado.
 const MIME_POR_TIPO = {
   TXT: 'text/plain',
   MD: 'text/markdown',
-  PDF: 'application/pdf'
+  PDF: 'application/pdf',
+  DRIVE_DOC: 'text/plain',
+  DRIVE_SHEET: 'text/plain',
+  DRIVE_SLIDE: 'text/plain'
 }
 
 async function marcarError(db, log, documentoId, error) {
@@ -60,36 +68,78 @@ async function pollHastaIndexado(fastify, documentoId, operacion) {
   return marcarError(db, log, documentoId, 'Se agoto el tiempo de espera del indexado (2 minutos).')
 }
 
-// Store de Gemini File Search de un departamento. Perezoso: si ya tiene uno
-// lo devuelve tal cual, si no lo crea y lo persiste -- idempotente igual que
+// Store de Gemini File Search de un repositorio. Perezoso: si ya tiene uno lo
+// devuelve tal cual, si no lo crea y lo persiste -- idempotente igual que
 // asegurarDepartamento.
-export async function asegurarFileSearchStore(fastify, departamento) {
-  if (departamento.gemini_file_search_store) return departamento.gemini_file_search_store
+export async function asegurarFileSearchStore(fastify, repositorio) {
+  if (repositorio.gemini_file_search_store) return repositorio.gemini_file_search_store
   const store = await fastify.gemini.fileSearchStores.create({
-    config: { displayName: `DC-PLATAFORMA — ${departamento.nombre}` }
+    config: { displayName: `DC-PLATAFORMA — ${repositorio.nombre}` }
   })
-  await fastify.db.departamento.update({
-    where: { id: departamento.id },
+  await fastify.db.repositorio.update({
+    where: { id: repositorio.id },
     data: { gemini_file_search_store: store.name }
   })
   return store.name
 }
 
-// Sube un archivo YA ESCRITO EN DISCO (rutaArchivo) al store que corresponda
-// segun id_departamento (null = general). No bloquea esperando el indexado --
-// ver comentario de arriba. `rutaArchivo` se borra apenas termina la llamada
-// de subida (Gemini ya tiene los bytes; el polling posterior no lo necesita).
-export async function subirDocumento(fastify, { id_departamento, tipo, nombre, rutaArchivo, origen = null, created_by }) {
+// Repositorios visibles para un Space que cubre `idsDepartamentos` (dueño +
+// compartidos, o los 11 en "modo todo" -- lo que ya resuelva ambitoDeChat):
+// los generales (sin ninguna fila en RepositorioDepartamento) MAS los
+// asignados a cualquiera de esos departamentos.
+export async function repositoriosVisibles(db, idsDepartamentos) {
+  return db.repositorio.findMany({
+    where: {
+      activo: true,
+      OR: [{ departamentos: { none: {} } }, { departamentos: { some: { id_departamento: { in: idsDepartamentos } } } }]
+    }
+  })
+}
+
+export async function crearRepositorio(fastify, { nombre, tipo, driveFolderId, idsDepartamentos = [], created_by }) {
+  const repositorio = await fastify.db.repositorio.create({
+    data: {
+      nombre,
+      tipo,
+      drive_folder_id: tipo === 'DRIVE_FOLDER' ? driveFolderId : null,
+      created_by
+    }
+  })
+  for (const id_departamento of idsDepartamentos) {
+    await fastify.db.repositorioDepartamento.create({ data: { id_repositorio: repositorio.id, id_departamento } })
+  }
+  return repositorio
+}
+
+// Recalcula ENTERA la asignacion de departamentos de un repositorio a partir
+// de lo tildado en el formulario -- mismo criterio "esto es lo que hay ahora"
+// que vincularDepartamentos en chat-comandos.js, no un alta de a una.
+export async function actualizarDepartamentosDeRepositorio(fastify, { id_repositorio, idsDepartamentos }) {
+  const { db } = fastify
+  const actuales = await db.repositorioDepartamento.findMany({ where: { id_repositorio } })
+  const idsActuales = new Set(actuales.map((a) => a.id_departamento))
+  const idsNuevos = new Set(idsDepartamentos)
+
+  const aBorrar = actuales.filter((a) => !idsNuevos.has(a.id_departamento))
+  if (aBorrar.length) {
+    await db.repositorioDepartamento.deleteMany({ where: { id: { in: aBorrar.map((a) => a.id) } } })
+  }
+  for (const id_departamento of idsNuevos) {
+    if (!idsActuales.has(id_departamento)) {
+      await db.repositorioDepartamento.create({ data: { id_repositorio, id_departamento } })
+    }
+  }
+}
+
+// Sube un archivo YA ESCRITO EN DISCO (rutaArchivo) al store del repositorio.
+// No bloquea esperando el indexado -- ver comentario de arriba. `rutaArchivo`
+// se borra apenas termina la llamada de subida (Gemini ya tiene los bytes; el
+// polling posterior no lo necesita).
+export async function subirDocumento(fastify, { id_repositorio, tipo, nombre, rutaArchivo, origen = null, created_by }) {
   const { db, gemini, log } = fastify
 
-  let storeName = GEMINI_STORE_GENERAL_ID
-  if (id_departamento) {
-    const departamento = await db.departamento.findUniqueOrThrow({ where: { id: id_departamento } })
-    storeName = await asegurarFileSearchStore(fastify, departamento)
-  }
-  if (!storeName) {
-    throw new Error('No hay store general configurado (falta GEMINI_STORE_GENERAL_ID) -- correr scripts/crear-store-general.mjs')
-  }
+  const repositorio = await db.repositorio.findUniqueOrThrow({ where: { id: id_repositorio } })
+  const storeName = await asegurarFileSearchStore(fastify, repositorio)
 
   let operacion
   try {
@@ -103,7 +153,7 @@ export async function subirDocumento(fastify, { id_departamento, tipo, nombre, r
   }
 
   const documento = await db.repositorioDocumento.create({
-    data: { id_departamento, tipo, nombre, origen, gemini_operacion: operacion.name ?? null, estado: 'PENDIENTE', created_by }
+    data: { id_repositorio, tipo, nombre, origen, gemini_operacion: operacion.name ?? null, estado: 'PENDIENTE', created_by }
   })
 
   pollHastaIndexado(fastify, documento.id, operacion).catch((err) =>
@@ -146,7 +196,7 @@ async function extraerTextoDeUrl(url) {
   return { titulo, texto }
 }
 
-export async function indexarUrl(fastify, { id_departamento, url, created_by }) {
+export async function indexarUrl(fastify, { id_repositorio, url, created_by }) {
   const { titulo, texto } = await extraerTextoDeUrl(url)
   if (!texto) throw new Error('No se pudo extraer texto legible de esa URL.')
 
@@ -155,13 +205,107 @@ export async function indexarUrl(fastify, { id_departamento, url, created_by }) 
   await writeFile(rutaTemporal, contenido, 'utf-8')
 
   return subirDocumento(fastify, {
-    id_departamento,
+    id_repositorio,
     tipo: 'URL',
     nombre: titulo,
     rutaArchivo: rutaTemporal,
     origen: url,
     created_by
   })
+}
+
+// --- Carpeta de Google Drive como repositorio ------------------------------
+//
+// Non-recursiva a proposito (v1): subcarpetas se listan pero se saltean, no
+// se bajan sus archivos. Sync manual via boton "Resincronizar", no push
+// automatico -- Drive push notifications exigirian un canal + endpoint
+// publico de renovacion, infraestructura nueva que no hace falta para el
+// caso real (un puñado de manuales que se actualizan de vez en cuando).
+//
+// Idempotente por archivo: antes de importar un archivo de Drive se chequea
+// si ya existe un RepositorioDocumento con ese `origen` (el fileId) en este
+// repositorio -- si ya esta, se saltea. No hay deteccion de "el archivo
+// CAMBIO desde la ultima sync" en v1: para eso habria que comparar
+// modifiedTime y volver a subir/reemplazar, documentado como limitacion.
+const EXPORTABLES = {
+  'application/vnd.google-apps.document': { tipo: 'DRIVE_DOC', mimeType: 'text/plain' },
+  'application/vnd.google-apps.presentation': { tipo: 'DRIVE_SLIDE', mimeType: 'text/plain' },
+  'application/vnd.google-apps.spreadsheet': { tipo: 'DRIVE_SHEET', mimeType: 'text/csv' }
+}
+const DESCARGABLES = { 'text/plain': 'TXT', 'text/markdown': 'MD', 'application/pdf': 'PDF' }
+
+async function importarArchivoDrive(fastify, { drive, archivo, id_repositorio, created_by }) {
+  const yaExiste = await fastify.db.repositorioDocumento.findFirst({
+    where: { id_repositorio, origen: archivo.id }
+  })
+  if (yaExiste) return { saltado: true }
+
+  const exportable = EXPORTABLES[archivo.mimeType]
+  const tipoDescargable = DESCARGABLES[archivo.mimeType]
+  if (!exportable && !tipoDescargable) return { saltado: true, motivo: `tipo no soportado (${archivo.mimeType})` }
+
+  const ext = exportable ? '.txt' : `.${tipoDescargable.toLowerCase()}`
+  const rutaTemporal = path.join(os.tmpdir(), `repo-drive-${randomUUID()}${ext}`)
+
+  if (exportable) {
+    const { data } = await drive.files.export(
+      { fileId: archivo.id, mimeType: exportable.mimeType },
+      { responseType: 'text' }
+    )
+    await writeFile(rutaTemporal, data, 'utf-8')
+    await subirDocumento(fastify, {
+      id_repositorio, tipo: exportable.tipo, nombre: archivo.name, rutaArchivo: rutaTemporal, origen: archivo.id, created_by
+    })
+  } else {
+    const { data } = await drive.files.get(
+      { fileId: archivo.id, alt: 'media', supportsAllDrives: true },
+      { responseType: 'arraybuffer' }
+    )
+    await writeFile(rutaTemporal, Buffer.from(data))
+    await subirDocumento(fastify, {
+      id_repositorio, tipo: tipoDescargable, nombre: archivo.name, rutaArchivo: rutaTemporal, origen: archivo.id, created_by
+    })
+  }
+  return { saltado: false }
+}
+
+export async function sincronizarCarpetaDrive(fastify, repositorio) {
+  if (repositorio.tipo !== 'DRIVE_FOLDER' || !repositorio.drive_folder_id) {
+    throw new Error('Este repositorio no está vinculado a una carpeta de Drive.')
+  }
+  const drive = await getDrive()
+  // supportsAllDrives + includeItemsFromAllDrives: SIN esto, la API de Drive
+  // v3 solo busca en "Mi unidad" del usuario impersonado e ignora por
+  // completo las Unidades compartidas (Shared Drives) de las que es
+  // miembro -- devuelve 0 resultados en silencio, sin ningun error que lo
+  // delate. Confirmado en produccion (2026-09-19): la carpeta real que se
+  // probo es justamente una Unidad compartida.
+  const { data } = await drive.files.list({
+    q: `'${repositorio.drive_folder_id}' in parents and trashed = false`,
+    fields: 'files(id, name, mimeType)',
+    pageSize: 100,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true
+  })
+  const archivos = data.files || []
+
+  let importados = 0
+  let salteados = 0
+  const errores = []
+  for (const archivo of archivos) {
+    if (archivo.mimeType === 'application/vnd.google-apps.folder') { salteados++; continue }
+    try {
+      const resultado = await importarArchivoDrive(fastify, { drive, archivo, id_repositorio: repositorio.id, created_by: 'drive-sync' })
+      if (resultado.saltado) salteados++
+      else importados++
+    } catch (err) {
+      fastify.log.error?.({ err: err.message, archivo: archivo.name }, 'repositorios: falló importar un archivo de Drive')
+      errores.push({ archivo: archivo.name, error: err.message })
+    }
+  }
+
+  await fastify.db.repositorio.update({ where: { id: repositorio.id }, data: { ultimo_sync: new Date() } })
+  return { total: archivos.length, importados, salteados, errores }
 }
 
 // Borra un documento suelto: primero en Gemini (si ya llegó a indexarse),
@@ -179,18 +323,19 @@ export async function eliminarDocumento(fastify, documento) {
   await fastify.db.repositorioDocumento.delete({ where: { id: documento.id } })
 }
 
-// Vacía por completo el pool de un departamento (o el general, pasando null):
-// borra el store ENTERO en Gemini (force:true, si no tira si quedan
-// documentos) y limpia las filas propias. Pensado para el harness de test y
-// para "reiniciar" un departamento desde admin.
-export async function vaciarStoreDeDepartamento(fastify, departamento) {
-  if (departamento?.gemini_file_search_store) {
+// Borra un repositorio ENTERO: el store en Gemini (force:true, si no tira si
+// quedan documentos), las filas de asignacion a departamentos, sus
+// documentos, y el repositorio en si.
+export async function eliminarRepositorio(fastify, repositorio) {
+  const { db } = fastify
+  if (repositorio.gemini_file_search_store) {
     await fastify.gemini.fileSearchStores
-      .delete({ name: departamento.gemini_file_search_store, config: { force: true } })
+      .delete({ name: repositorio.gemini_file_search_store, config: { force: true } })
       .catch((err) => {
-        fastify.log.warn?.({ err: err.message, departamento: departamento.slug }, 'repositorios: no se pudo borrar el store en Gemini')
+        fastify.log.warn?.({ err: err.message, repositorio: repositorio.nombre }, 'repositorios: no se pudo borrar el store en Gemini')
       })
-    await fastify.db.departamento.update({ where: { id: departamento.id }, data: { gemini_file_search_store: null } })
   }
-  await fastify.db.repositorioDocumento.deleteMany({ where: { id_departamento: departamento?.id ?? null } })
+  await db.repositorioDepartamento.deleteMany({ where: { id_repositorio: repositorio.id } })
+  await db.repositorioDocumento.deleteMany({ where: { id_repositorio: repositorio.id } })
+  await db.repositorio.delete({ where: { id: repositorio.id } })
 }

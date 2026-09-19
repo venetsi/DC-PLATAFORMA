@@ -258,16 +258,24 @@ La respuesta llega en el mismo mensaje (empieza como "🔎 Buscando…" y se act
 cuando Gemini termina) y, cuando corresponde, cierra con una línea de "Fuentes" que
 nombra de qué documento salió la información.
 
-Ve los documentos **generales** (cargados para toda la empresa) más los del o los
-departamentos que cubra el Space donde escribís — los mismos que ya ves con `/hoy` o
-`/resumen`. Si todavía no se cargó ningún documento para ese ámbito, te lo dice en vez
-de inventar una respuesta.
+Ve los **repositorios generales** (sin ningún departamento asignado, para toda la
+empresa) más los asignados al o los departamentos que cubra el Space donde escribís —
+los mismos que ya ves con `/hoy` o `/resumen`. Si todavía no hay ningún documento para
+ese ámbito, te lo dice en vez de inventar una respuesta.
 
-**Cargar documentos (administrador):** desde la plataforma, en **Documentos**
-(`/admin/repositorios`) — elegís si es para un departamento puntual o para todos
-("General"), y subís un archivo (.txt, .md o .pdf) o pegás una URL. La carga a Gemini es
-asincrónica: un documento recién subido queda "Indexando…" un rato antes de estar
-disponible para `/buscar`.
+**Administrar repositorios (administrador):** desde la plataforma, en **Documentos**
+(`/admin/repositorios`). Un repositorio tiene nombre propio y se asigna a uno, varios o
+ningún departamento (podés cambiarlo cuando quieras, sin recrear nada) — así dos
+departamentos pueden compartir la misma fuente de información. Hay dos tipos:
+
+- **Documentos sueltos**: subís un archivo (.txt, .md o .pdf) o pegás una URL, uno por
+  uno. La carga a Gemini es asincrónica: un documento recién subido queda "Indexando…"
+  un rato antes de estar disponible para `/buscar`.
+- **Carpeta de Google Drive**: pegás el link de la carpeta y un botón
+  **"Resincronizar"** importa todo lo que haya adentro (Google Docs, Sheets, Slides,
+  y también `.txt`/`.md`/`.pdf` sueltos). No es automático: para traer archivos nuevos
+  o agregados después, hay que volver a apretar "Resincronizar". No trae el contenido de
+  subcarpetas, y de una planilla de Sheets solo lee la primera hoja.
 
 ### Vincular el Space de uno o varios departamentos (administrador)
 

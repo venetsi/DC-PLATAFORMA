@@ -23,7 +23,7 @@
 import { verificarPeticionDeChat, ChatNoConfigurado, ChatTokenInvalido } from '../lib/chat-verificar.js'
 import { resolverEmail, postearEnSpace, actualizarMensaje } from '../lib/chat.js'
 import { responderPregunta } from '../lib/gemini-buscar.js'
-import { GEMINI_STORE_GENERAL_ID } from '../plugins/gemini.js'
+import { repositoriosVisibles } from '../lib/repositorios.js'
 import {
   cardVincular,
   dialogoAsignar,
@@ -323,7 +323,8 @@ async function manejarComando(fastify, chatEvent) {
     }
 
     const { departamentos } = await ambitoDelSpace(fastify.db, { space, extUser })
-    const storeNames = [GEMINI_STORE_GENERAL_ID, ...departamentos.map((d) => d.gemini_file_search_store)].filter(Boolean)
+    const repositorios = await repositoriosVisibles(fastify.db, departamentos.map((d) => d.id))
+    const storeNames = repositorios.map((r) => r.gemini_file_search_store).filter(Boolean)
     if (!storeNames.length) {
       return mensajeNuevo({ text: 'No hay documentos cargados todavía para este Space. Pedile a un administrador que cargue algo desde la plataforma.' })
     }

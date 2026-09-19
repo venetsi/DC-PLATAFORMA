@@ -64,13 +64,6 @@ model Departamento {
   dias_aviso_departamento Int?
   dias_aviso_direccion    Int?
 
-  // Busqueda con Gemini: store de Gemini File Search de este departamento --
-  // un documento subido/pegado con este departamento vive aca. Se crea
-  // perezosamente en el primer documento (ver asegurarFileSearchStore en
-  // lib/repositorios.js), mismo patron que id_calendar_google/
-  // email_group_google (asegurarDepartamento).
-  gemini_file_search_store String? @unique
-
   activo    Boolean  @default(true)
   synced_at DateTime @default(now())
 
@@ -78,18 +71,74 @@ model Departamento {
   cumplimiento             CumplimientoDiario[]
   asignaciones_compartidas TareaAsignacionDepto[]
   compartidoEnSpaces       DepartamentoCompartidoEnSpace[]
-  repositorio_documentos   RepositorioDocumento[]
+  repositoriosAsignados    RepositorioDepartamento[]
 
   @@map("departamentos")
 }
 
-// --- Documento indexado en Gemini File Search, para el comando /buscar del
-// Chat App. `id_departamento` NULL = repo general (visible desde cualquier
-// Space); si tiene valor, solo lo ven los Spaces que cubran ese departamento
-// (misma maquinaria de ambito que ya usan /hoy, /tarea, etc. -- ver
-// ambitoDeChat en chat-comandos.js). Sin entidad "Repositorio" separada a
-// proposito: un departamento tiene un pool plano de documentos, igual que ya
-// tiene un solo Calendar y un solo Group.
+// --- Repositorio de documentos para el comando /buscar del Chat App
+// (Gemini File Search). Entidad con nombre propio (no un pool anonimo
+// colgado de Departamento, como en la primera version) porque el usuario
+// pidio explicitamente poder asignar un mismo repositorio a VARIOS
+// departamentos -- "quiero del admin poder asignar los repos por
+// multidepartamento, y cuando usan /buscar lea los repos asignados"
+// (2026-09-19). La asignacion es un many-to-many simple via
+// RepositorioDepartamento, SIN dueño (a diferencia de
+// DepartamentoCompartidoEnSpace, que si distingue dueño de compartidos
+// porque ahi importa quien recibe el recordatorio diario -- aca no hay
+// ningun aviso automatico que dependa de "a quien pertenece").
+//
+// Un repositorio SIN ninguna fila en `departamentos` es general: lo ve
+// cualquier Space, sin importar que departamento(s) cubra.
+model Repositorio {
+  id                       String          @id @default(uuid())
+  nombre                   String
+  tipo                     TipoRepositorio @default(MANUAL)
+  // Solo para tipo DRIVE_FOLDER: id de la carpeta de Drive (no la URL
+  // completa) de la que se importan los archivos. Null para MANUAL.
+  drive_folder_id          String?
+  // Ultima vez que se sincronizo la carpeta (boton "Resincronizar" en el
+  // admin) -- null si nunca se corrio, o si es tipo MANUAL.
+  ultimo_sync              DateTime?
+  // Store de Gemini File Search de ESTE repositorio (ya no de un
+  // departamento, ver comentario de arriba). Se crea perezoso en el primer
+  // documento, mismo patron que id_calendar_google en asegurarDepartamento.
+  gemini_file_search_store String?         @unique
+  activo                   Boolean         @default(true)
+  created_by               String
+  created_at               DateTime        @default(now())
+  updated_at               DateTime        @updatedAt
+
+  documentos    RepositorioDocumento[]
+  departamentos RepositorioDepartamento[]
+
+  @@map("repositorios")
+}
+
+enum TipoRepositorio {
+  MANUAL // documentos sueltos: subida de archivo o URL pegada
+  DRIVE_FOLDER // toda una carpeta de Drive, importada con "Resincronizar"
+
+  @@map("tipo_repositorio")
+}
+
+// --- Asignacion many-to-many entre Repositorio y Departamento. Sin fila
+// para un repositorio = general (ver comentario en Repositorio). ---
+model RepositorioDepartamento {
+  id              String   @id @default(uuid())
+  id_repositorio  String
+  id_departamento String
+  created_at      DateTime @default(now())
+
+  repositorio  Repositorio  @relation(fields: [id_repositorio], references: [id])
+  departamento Departamento @relation(fields: [id_departamento], references: [id])
+
+  @@unique([id_repositorio, id_departamento])
+  @@index([id_departamento])
+  @@map("repositorio_departamentos")
+}
+
+// --- Documento indexado en Gemini File Search dentro de un Repositorio.
 //
 // El indexado en Gemini es ASINCRONICO (uploadToFileSearchStore devuelve una
 // Operation de larga duracion, no exito/error en el momento) -- por eso
@@ -99,13 +148,15 @@ model Departamento {
 // bug, no un estado transitorio real.
 model RepositorioDocumento {
   id               String        @id @default(uuid())
-  id_departamento  String?
+  id_repositorio   String
   tipo             TipoDocumento
   // Se usa como displayName al subir a Gemini -> aparece tal cual en las
   // citas de /buscar, por eso importa que sea legible (no un uuid).
   nombre           String
   // URL pegada (tipo URL), o id de archivo de Drive (tipos DRIVE_*). Null
-  // para archivos subidos directo (TXT/MD/PDF).
+  // para archivos subidos directo (TXT/MD/PDF). Para DRIVE_*, ademas sirve
+  // para no reimportar el mismo archivo dos veces al resincronizar la
+  // carpeta (ver sincronizarCarpetaDrive en lib/repositorios.js).
   origen           String?
   gemini_file_id   String?
   gemini_operacion String?
@@ -115,9 +166,9 @@ model RepositorioDocumento {
   created_at       DateTime      @default(now())
   updated_at       DateTime      @updatedAt
 
-  departamento Departamento? @relation(fields: [id_departamento], references: [id])
+  repositorio Repositorio @relation(fields: [id_repositorio], references: [id])
 
-  @@index([id_departamento])
+  @@index([id_repositorio])
   @@index([estado])
   @@map("repositorio_documentos")
 }

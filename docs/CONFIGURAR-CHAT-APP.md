@@ -13,10 +13,12 @@ BigQuery, ver "Seguimiento de Pagos" más abajo) — no depende de departamento 
 todo. Un Space también puede cubrir varios departamentos concretos (no solo el "modo
 todo" de Dirección): `/vincular` abre un checkbox donde se puede tildar más de uno —
 ver "`/vincular` con checkbox" más abajo. `/buscar` responde preguntas con Gemini,
-anclado en documentos cargados desde `/admin/repositorios` (ver "8. Búsqueda con Gemini"
-más abajo) — pendiente el paso manual de crear la API key antes de que funcione de
-verdad. Hubo un bug que costó encontrar y está explicado en "El campo action.function"
-más abajo: vale leerlo antes de tocar cualquier botón.
+anclado en Repositorios (con nombre propio, asignables a varios departamentos a la vez)
+cargados desde `/admin/repositorios` — manuales/URLs sueltas o carpetas enteras de
+Google Drive (ver "8. Búsqueda con Gemini" más abajo). Probado end-to-end en producción
+(2026-09-19) contra datos reales, incluida una carpeta real de Google Drive. Hubo un bug
+que costó encontrar y está explicado en "El campo action.function" más abajo: vale
+leerlo antes de tocar cualquier botón.
 
 > La documentación oficial de Google está incompleta en varios de estos pasos — lo que
 > sigue está confirmado contra la consola real y contra logs de producción, no copiado
@@ -385,15 +387,16 @@ query trae los datos correctos. No se investigó la causa raíz dentro de
 ## 8. Búsqueda con Gemini sobre documentos (`/buscar`)
 
 Permite preguntar algo en el Space y que **Gemini responda anclado solo en los
-documentos cargados** (manuales, políticas, instructivos) — general (cualquier Space) o
-por departamento (solo los Spaces que lo cubran, misma maquinaria de ámbito que
-`/hoy`/`/tarea`/etc.). Los documentos se cargan desde una pantalla nueva de la
-plataforma (`/admin/repositorios`, solo admin), no por comando de Chat.
+documentos cargados** (manuales, políticas, instructivos). Los documentos se organizan
+en **Repositorios** (entidad con nombre propio, `/admin/repositorios`, solo admin): cada
+uno se asigna a cero o más departamentos (misma maquinaria de ámbito que `/hoy`/`/tarea`),
+sin ninguno es general y lo ve cualquier Space. Un mismo repositorio puede asignarse a
+varios departamentos a la vez, para que compartan la misma fuente de información.
 
 **Motor: Gemini API File Search** (`ai.google.dev/gemini-api/docs/file-search`, lanzado
-2026) — un RAG totalmente administrado por Google: se suben archivos a un "store", el
-propio Gemini los trocea, indexa y busca, y la respuesta trae citas de qué documento
-salió cada parte. Soporta nativo `.txt`, `.md` y `.pdf`.
+2026) — un RAG totalmente administrado por Google: se suben archivos a un "store" (uno
+por Repositorio), el propio Gemini los trocea, indexa y busca, y la respuesta trae citas
+de qué documento salió cada parte. Soporta nativo `.txt`, `.md` y `.pdf`.
 
 ### Primera credencial tipo API key de toda la app
 
@@ -407,18 +410,6 @@ sobre la Generative Language API — no tiene variante por cuenta de servicio.
 2. Guardarla como secret de Cloud Run (`GEMINI_API_KEY`) — **nunca en el repo ni en un
    `.env` versionado**.
 
-### Store general
-
-No pertenece a ningún departamento, así que no hay dónde persistir su id: se crea UNA
-vez con un script chico y se pega a mano, mismo patrón que `CHAT_AUDIENCE` (paso 4).
-
-```bash
-cd backend
-node scripts/crear-store-general.mjs
-```
-
-Pegar el resource name que imprime como `GEMINI_STORE_GENERAL_ID` en el entorno.
-
 ### Cargar el comando
 
 | ID | Nombre | Tipo | Para qué |
@@ -429,20 +420,40 @@ Pegar el resource name que imprime como `GEMINI_STORE_GENERAL_ID` en el entorno.
 mensaje mientras Gemini procesa, no en la respuesta síncrona del webhook, porque una
 consulta puede tardar más que los ~30s que da Chat).
 
-### Documentos desde Google Drive (Docs/Sheets/Slides) — pendiente
+### Repositorios de tipo carpeta de Google Drive
 
-Todavía no disponible: falta otorgar el scope `drive.readonly` por domain-wide
-delegation, mismo lugar que ya se otorgó `admin.directory.user.readonly` (ver "Opcional:
-el fallback de identidad" más abajo) —
-**Admin Console → Seguridad → Control de datos y acceso → Delegación de dominio**,
-sobre el client ID de `dc-plataforma-api@dc-smart-mvp.iam.gserviceaccount.com`:
+Un Repositorio puede ser `MANUAL` (archivos sueltos o URLs pegadas) o `DRIVE_FOLDER`
+(toda una carpeta de Drive, con un botón "Resincronizar" en `/admin/repositorios` — la
+sync es manual, no automática: no hay infraestructura de notificaciones push de Drive en
+esta app, y no hace falta para un puñado de manuales que cambian de vez en cuando).
+Docs/Slides se exportan como texto plano; Sheets exporta **solo la primera hoja** como
+CSV (limitación real de la API de Drive, no resuelta). No es recursivo: los archivos de
+subcarpetas no se importan.
+
+**Requiere el scope `drive.readonly` por domain-wide delegation** — otorgado
+2026-09-19, mismo lugar que `admin.directory.user.readonly` (ver "Opcional: el fallback
+de identidad" más abajo), **Admin Console → Seguridad → Control de datos y acceso →
+Delegación de dominio**, sobre el client ID de
+`dc-plataforma-api@dc-smart-mvp.iam.gserviceaccount.com`:
 
 ```
 https://www.googleapis.com/auth/drive.readonly
 ```
 
-El botón "Agregar desde Google Drive" en `/admin/repositorios` queda deshabilitado
-hasta entonces — nunca se simula un éxito que en realidad no pasó nada.
+**Trampa real, encontrada al probar contra una carpeta real**: si la carpeta vive en una
+**Unidad compartida** (Shared Drive, no "Mi unidad"), la API de Drive v3 **NO la ve por
+defecto** — `files.list`/`files.get` devuelven vacío o 404 **sin ningún error que lo
+delate**, aunque la cuenta impersonada (`GOOGLE_WORKSPACE_ADMIN_EMAIL`) sea miembro con
+acceso de administrador. Hace falta pasar `supportsAllDrives: true` (y
+`includeItemsFromAllDrives: true` en el `list`) en cada llamada — ver
+`lib/repositorios.js#sincronizarCarpetaDrive`. Sin esto, un admin puede compartir la
+carpeta perfecto y la sync va a seguir devolviendo "0 archivos" sin pista de por qué.
+
+Verificado end-to-end contra una carpeta real de Unidad compartida con 5 archivos reales
+(2 Google Docs, 2 `.md`, 1 `.pdf`): los 5 se importan, indexan, y una pregunta real sobre
+su contenido combina las tres fuentes en la respuesta con las citas correctas.
+Resincronizar de nuevo no duplica nada (se saltea por `origen` = id del archivo de
+Drive, ya importado).
 
 ## ⚠️ NUNCA tocar la pantalla de "Google Auth Platform" de este proyecto
 

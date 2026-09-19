@@ -10,11 +10,6 @@
 import fp from 'fastify-plugin'
 import { GoogleGenAI } from '@google/genai'
 
-// Store general (documentos visibles desde cualquier Space, sin depender de
-// ningun departamento) -- se crea UNA vez con scripts/crear-store-general.mjs
-// y su resource name se pega aca a mano, mismo patron que CHAT_AUDIENCE.
-export const GEMINI_STORE_GENERAL_ID = process.env.GEMINI_STORE_GENERAL_ID || null
-
 async function geminiPlugin(fastify) {
   if (!process.env.GEMINI_API_KEY) {
     fastify.log.warn('gemini: falta GEMINI_API_KEY -- /buscar y la carga de repositorios van a fallar')
