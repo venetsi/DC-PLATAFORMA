@@ -32,7 +32,7 @@ export default function Sso() {
         {error ? (
           <>
             <p style={{ color: 'var(--rojo)', fontSize: '0.9rem' }}>{error}</p>
-            <a href="/login" style={{ color: 'var(--teal)' }}>Ir al login</a>
+            <a href="/login" style={{ color: 'var(--teal)' }}>Cómo entrar</a>
           </>
         ) : (
           <p style={{ color: 'var(--texto-tenue)' }}>Ingresando...</p>

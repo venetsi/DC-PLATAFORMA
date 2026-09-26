@@ -30,6 +30,15 @@ export default function AdminTareas() {
   const [creandoDepartamento, setCreandoDepartamento] = useState(false)
   const [errorDepartamento, setErrorDepartamento] = useState('')
 
+  // Webhook de Chat y umbrales de escalamiento por departamento -- hasta
+  // ahora solo se podian cargar por PATCH /departamentos/:id/notificaciones
+  // a mano (ver docs/MANUAL-ADMINISTRADOR.md). El webhook es write-only: el
+  // backend nunca devuelve el valor crudo (solo "tiene_webhook"), asi que el
+  // input arranca vacio y "dejarlo en blanco" significa "no tocarlo".
+  const [avisos, setAvisos] = useState({})
+  const [guardandoAviso, setGuardandoAviso] = useState(null)
+  const [errorAviso, setErrorAviso] = useState('')
+
   // Solo admin puede pedir las desactivadas -- son las candidatas a
   // "Eliminar definitivamente" (ver DELETE /tareas/:id).
   const [mostrarInactivas, setMostrarInactivas] = useState(false)
@@ -55,6 +64,23 @@ export default function AdminTareas() {
     localesApi.listar().then(setLocales)
     usuariosApi.listar().then(setUsuarios)
   }, [])
+
+  // Precarga los umbrales ya guardados; el webhook queda siempre vacio (es
+  // write-only, ver arriba). No pisa lo que ya este editando el admin.
+  useEffect(() => {
+    setAvisos((prev) => {
+      const siguiente = { ...prev }
+      for (const d of departamentos) {
+        if (d.id in siguiente) continue
+        siguiente[d.id] = {
+          webhook: '',
+          diasDepartamento: d.dias_aviso_departamento ?? '',
+          diasDireccion: d.dias_aviso_direccion ?? ''
+        }
+      }
+      return siguiente
+    })
+  }, [departamentos])
 
   function toggleMostrarInactivas() {
     const nuevo = !mostrarInactivas
@@ -126,6 +152,46 @@ export default function AdminTareas() {
       setErrorDepartamento(err.response?.data?.error || 'No se pudo crear el departamento')
     } finally {
       setCreandoDepartamento(false)
+    }
+  }
+
+  function actualizarAviso(id, campo, valor) {
+    setAvisos((prev) => ({ ...prev, [id]: { ...prev[id], [campo]: valor } }))
+  }
+
+  async function guardarAviso(id) {
+    setErrorAviso('')
+    setGuardandoAviso(id)
+    const edicion = avisos[id] || { webhook: '', diasDepartamento: '', diasDireccion: '' }
+    const body = {
+      dias_aviso_departamento: edicion.diasDepartamento === '' ? null : Number(edicion.diasDepartamento),
+      dias_aviso_direccion: edicion.diasDireccion === '' ? null : Number(edicion.diasDireccion)
+    }
+    // El webhook solo se manda si escribieron algo -- en blanco significa
+    // "no lo toques", no "borralo" (para eso está el botón Quitar webhook).
+    if (edicion.webhook.trim()) body.chat_webhook_url = edicion.webhook.trim()
+    try {
+      await departamentosApi.notificaciones(id, body)
+      setAvisos((prev) => ({ ...prev, [id]: { ...prev[id], webhook: '' } }))
+      await cargarDepartamentos()
+    } catch (err) {
+      setErrorAviso(err.response?.data?.error || 'No se pudo guardar')
+    } finally {
+      setGuardandoAviso(null)
+    }
+  }
+
+  async function quitarWebhook(id) {
+    if (!confirm('¿Quitar el webhook de Chat de este departamento? (si tiene un Space vinculado por /vincular, ese sigue funcionando igual)')) return
+    setErrorAviso('')
+    setGuardandoAviso(id)
+    try {
+      await departamentosApi.notificaciones(id, { chat_webhook_url: null })
+      await cargarDepartamentos()
+    } catch (err) {
+      setErrorAviso(err.response?.data?.error || 'No se pudo quitar el webhook')
+    } finally {
+      setGuardandoAviso(null)
     }
   }
 
@@ -255,6 +321,85 @@ export default function AdminTareas() {
             <button className="btn" disabled={creandoDepartamento}>Crear</button>
           </form>
           {errorDepartamento && <p style={{ color: 'var(--rojo)', fontSize: '0.85rem' }}>{errorDepartamento}</p>}
+        </div>
+      )}
+
+      {esAdminGlobal && (
+        <div className="card" style={{ marginBottom: '1.5rem' }}>
+          <h3 style={{ marginTop: 0 }}>Avisos por departamento</h3>
+          <p style={{ fontSize: '0.8rem', color: 'var(--texto-tenue)', marginTop: '-0.5rem', marginBottom: '1rem' }}>
+            Webhook de Chat y umbrales de escalamiento (días hábiles). Si el departamento ya tiene un Space
+            vinculado con <code>/vincular</code>, ese gana y el webhook queda solo como respaldo.
+          </p>
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr><th>Departamento</th><th>Webhook de Chat</th><th>Días → depto</th><th>Días → Dirección</th><th></th></tr>
+              </thead>
+              <tbody>
+                {departamentos.map((d) => {
+                  const edicion = avisos[d.id] || { webhook: '', diasDepartamento: '', diasDireccion: '' }
+                  return (
+                    <tr key={d.id}>
+                      <td>
+                        {d.nombre}
+                        {d.chat_space_name && (
+                          <div style={{ fontSize: '0.72rem', color: 'var(--texto-tenue)' }}>vinculado por Space</div>
+                        )}
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          placeholder={d.tiene_webhook ? 'Configurado — dejar en blanco para no tocarlo' : 'Sin configurar'}
+                          value={edicion.webhook}
+                          onChange={(e) => actualizarAviso(d.id, 'webhook', e.target.value)}
+                          style={{ width: '100%', minWidth: 220, padding: '0.3rem' }}
+                        />
+                        {d.tiene_webhook && (
+                          <button
+                            className="btn btn-secondary"
+                            style={{ fontSize: '0.72rem', marginTop: '0.25rem', padding: '0.2rem 0.5rem' }}
+                            disabled={guardandoAviso === d.id}
+                            onClick={() => quitarWebhook(d.id)}
+                          >
+                            Quitar webhook
+                          </button>
+                        )}
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          max="365"
+                          placeholder="default"
+                          value={edicion.diasDepartamento}
+                          onChange={(e) => actualizarAviso(d.id, 'diasDepartamento', e.target.value)}
+                          style={{ width: '5rem', padding: '0.3rem' }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          max="365"
+                          placeholder="default"
+                          value={edicion.diasDireccion}
+                          onChange={(e) => actualizarAviso(d.id, 'diasDireccion', e.target.value)}
+                          style={{ width: '5rem', padding: '0.3rem' }}
+                        />
+                      </td>
+                      <td>
+                        <button className="btn" disabled={guardandoAviso === d.id} onClick={() => guardarAviso(d.id)}>
+                          Guardar
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          {errorAviso && <p style={{ color: 'var(--rojo)', fontSize: '0.85rem' }}>{errorAviso}</p>}
         </div>
       )}
 

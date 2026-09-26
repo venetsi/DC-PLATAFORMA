@@ -6,12 +6,25 @@ export default async function departamentosRoutes(fastify) {
   // select acotado a proposito -- Departamento tambien guarda kiosko_key y
   // chat_webhook_url (secretos), que no tienen nada que hacer en una
   // respuesta que llega a cualquier usuario logueado (no solo admin).
+  // chat_webhook_url se trae solo para derivar tiene_webhook (booleano) y se
+  // descarta antes de responder -- el valor crudo nunca sale de acá, ni para
+  // admin (mismo criterio que el PATCH de notificaciones, mas abajo).
   fastify.get('/', { preHandler: [fastify.authenticate] }, async () => {
-    return fastify.db.departamento.findMany({
+    const departamentos = await fastify.db.departamento.findMany({
       where: { activo: true },
-      select: { id: true, nombre: true, slug: true, id_calendar_google: true },
+      select: {
+        id: true,
+        nombre: true,
+        slug: true,
+        id_calendar_google: true,
+        chat_space_name: true,
+        chat_webhook_url: true,
+        dias_aviso_departamento: true,
+        dias_aviso_direccion: true
+      },
       orderBy: { nombre: 'asc' }
     })
+    return departamentos.map(({ chat_webhook_url, ...d }) => ({ ...d, tiene_webhook: Boolean(chat_webhook_url) }))
   })
 
   // Crear un departamento nuevo (Calendar + Group + clave de kiosko reales,

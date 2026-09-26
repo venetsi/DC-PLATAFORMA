@@ -19,7 +19,8 @@
 export const DEV_ADMIN_EMAIL = 'admin@dcsmart.app'
 
 export function esAdminGlobal(usuario) {
-  return !!usuario?.es_admin_global || usuario?.email === DEV_ADMIN_EMAIL
+  if (usuario?.es_admin_global) return true
+  return process.env.ALLOW_DEV_LOGIN === 'true' && usuario?.email === DEV_ADMIN_EMAIL
 }
 
 export async function usuarioActual(fastify, request) {

@@ -1,0 +1,13 @@
+# Sin este archivo, `gcloud run deploy --source .` y `gcloud builds submit`
+# suben la carpeta entera (incluidos .env y la clave de la cuenta de servicio)
+# al bucket de Cloud Build. Los Dockerfile solo usan package*.json, prisma/ y src/.
+.gcloudignore
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+*-key.json
+*.pem
+node_modules/
+_*.mjs

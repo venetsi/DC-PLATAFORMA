@@ -2,7 +2,8 @@ import { api } from './client.js'
 
 export const departamentosApi = {
   listar: () => api.get('/departamentos').then((r) => r.data),
-  crear: (nombre) => api.post('/departamentos', { nombre }).then((r) => r.data)
+  crear: (nombre) => api.post('/departamentos', { nombre }).then((r) => r.data),
+  notificaciones: (id, body) => api.patch(`/departamentos/${id}/notificaciones`, body).then((r) => r.data)
 }
 
 export const localesApi = {
