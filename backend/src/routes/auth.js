@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import jwt from 'jsonwebtoken'
-import { asegurarDepartamento, sincronizarMembresiaGroup } from '../lib/departamentos.js'
+import { asegurarDepartamento } from '../lib/departamentos.js'
 import { resolverDepartamento } from '../lib/departamento-alias.js'
 import { esAdminGlobal } from '../lib/permisos.js'
 
@@ -46,8 +46,6 @@ export default async function authRoutes(fastify) {
         error: `No existe ExtUser con email ${email} -- sembrar con prisma/seed.js primero`
       })
     }
-
-    await sincronizarMembresiaGroup(fastify, usuario)
 
     const token = signSession(fastify, usuario)
     reply.setCookie('dc_plataforma_token', token, { path: '/', httpOnly: true, sameSite: 'lax' })
@@ -103,8 +101,6 @@ export default async function authRoutes(fastify) {
       create: { id: payload.id_user ?? email, email, nombre, id_departamento: departamento?.id ?? null, es_admin_global: !!es_super_admin },
       update: { nombre, id_departamento: departamento?.id ?? null, es_admin_global: !!es_super_admin }
     })
-
-    await sincronizarMembresiaGroup(fastify, usuario)
 
     // El ticket manda el catalogo COMPLETO de locales activos de dcsmart (no
     // acotado al departamento de quien pidio el ticket) -- por eso, ademas de

@@ -25,18 +25,7 @@ export async function asegurarDepartamento(fastify, { id, nombre, slug }) {
   return departamento
 }
 
-// Nuestra base (ExtUser.id_departamento, que viene de dcsmart) es la fuente
-// de verdad -- esto solo refleja esa membresia hacia el Group. Si falla (ej.
-// el usuario todavia no existe como cuenta real de Workspace en dev), no
-// bloquea el login: el Group es una comodidad de distribucion, no el
-// mecanismo de permisos real de la plataforma.
-export async function sincronizarMembresiaGroup(fastify, usuario) {
-  if (!usuario.id_departamento) return
-  try {
-    const departamento = await fastify.db.departamento.findUnique({ where: { id: usuario.id_departamento } })
-    if (!departamento?.email_group_google) return
-    await fastify.groups.agregarMiembro(departamento.email_group_google, usuario.email)
-  } catch (err) {
-    fastify.log.warn({ err: err.message, usuario: usuario.email }, 'No se pudo sincronizar membresia de Group (no bloqueante)')
-  }
-}
+// La membresia de los Groups depto-* se administra a mano en Workspace (es la
+// fuente de verdad de a que departamento pertenece cada persona). La app ya no
+// agrega a nadie al iniciar sesion: lo hacia en un solo sentido, nunca sacaba, y
+// deshacia los cambios hechos a mano en los grupos.
