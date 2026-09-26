@@ -16,7 +16,7 @@ const VISTAS = [
   { id: 'mes', etiqueta: 'Mes' }
 ]
 
-const COLOR_ESTADO = { pendiente: '#e0b83f', vencida: '#e05c3f', realizada: '#3fb66a' }
+const COLOR_ESTADO = { pendiente: '#e0b83f', vencida: '#e05c3f', realizada: '#3fb66a', no_aplica: '#6b7686' }
 
 // Fecha local (no toISOString, que es UTC: despues de las 21:00 corria el
 // rango un dia).
@@ -83,6 +83,11 @@ export default function Calendario() {
     }
   }
 
+  async function noAplica(instanceId, idDepto, motivo) {
+    await instanciasApi.noAplica(instanceId, idDepto || departamento.id, motivo)
+    await cargar(rango.desde, rango.hasta)
+  }
+
   // Memoizado: FullCalendar recalcula su rango visible cuando `events` cambia
   // de referencia, y eso puede re-disparar datesSet -- sin esto, cada render
   // crea un array nuevo y arriesga un loop con el guard de onDatesSet.
@@ -142,7 +147,7 @@ export default function Calendario() {
       {aviso && <AvisoPrerrequisitos avisos={aviso} onCerrar={() => setAviso(null)} />}
 
       {vista === 'agenda' && (
-        <AgendaAgrupada eventos={eventos} mapaLocales={mapaLocales} onMarcar={marcar} marcando={marcando} />
+        <AgendaAgrupada eventos={eventos} mapaLocales={mapaLocales} onMarcar={marcar} onNoAplica={noAplica} marcando={marcando} />
       )}
 
       {vista === 'semana' && (
@@ -176,7 +181,7 @@ export default function Calendario() {
         </div>
       )}
 
-      {abierta && <DetalleTarea tarea={abierta} onCerrar={() => setAbierta(null)} onMarcar={marcar} />}
+      {abierta && <DetalleTarea tarea={abierta} onCerrar={() => setAbierta(null)} onMarcar={marcar} onNoAplica={noAplica} />}
     </div>
   )
 }

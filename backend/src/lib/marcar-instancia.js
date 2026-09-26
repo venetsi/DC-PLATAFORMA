@@ -1,3 +1,5 @@
+import { estaHecha } from './vencimiento.js'
+
 // Marcar una instancia como realizada + propagarla a las copias de los
 // departamentos con los que se comparte la asignacion.
 //
@@ -19,7 +21,10 @@ export async function marcarInstanciaYPropagar(deps, {
   emailUsuario,
   ahora = new Date(),
   evaluarAvisos = null,
-  propagarEnBackground = false
+  propagarEnBackground = false,
+  // NO_APLICA cierra la instancia sin contarla como hecha (ver lib/vencimiento.js).
+  estado = 'REALIZADA',
+  motivo = null
 }) {
   const { gcal, db, log = console } = deps
   const ahoraISO = ahora.toISOString()
@@ -32,14 +37,14 @@ export async function marcarInstanciaYPropagar(deps, {
   const idAsignacion = propsActuales.id_asignacion
   const fechaISO = actual?.start?.date || String(actual?.start?.dateTime || '').slice(0, 10) || null
 
-  if (propsActuales.estado === 'REALIZADA' || propsActuales.estado === 'APROBADA') {
+  if (estaHecha(propsActuales)) {
     return { evento: actual, yaEstaba: true, propagadas: [], avisos: [] }
   }
 
   // Punto de intercepcion: las dependencias avisan, NO bloquean. El resultado
   // viaja a la respuesta Y al historial del evento, para que quede asentado
   // que se marco fuera de orden.
-  const avisos = evaluarAvisos && idAsignacion && fechaISO
+  const avisos = estado === 'REALIZADA' && evaluarAvisos && idAsignacion && fechaISO
     ? await evaluarAvisos({ idAsignacion, fechaISO })
     : []
 
@@ -47,13 +52,17 @@ export async function marcarInstanciaYPropagar(deps, {
     ? ` (sin: ${avisos.map((a) => `${a.nombre_tarea} — ${a.departamento}`).join('; ')})`
     : ''
 
-  const extendedProperties = {
-    estado: 'REALIZADA',
-    realizada_por: emailUsuario,
-    realizada_en: ahoraISO,
-    ...(avisos.length ? { marcada_fuera_de_orden: '1' } : {})
-  }
-  const logLine = `${ahoraISO} - REALIZADA por ${emailUsuario}${sufijoAviso}`
+  const extendedProperties = estado === 'NO_APLICA'
+    ? { estado, no_aplica_por: emailUsuario, no_aplica_en: ahoraISO, no_aplica_motivo: motivo || '' }
+    : {
+        estado: 'REALIZADA',
+        realizada_por: emailUsuario,
+        realizada_en: ahoraISO,
+        ...(avisos.length ? { marcada_fuera_de_orden: '1' } : {})
+      }
+  const logLine = estado === 'NO_APLICA'
+    ? `${ahoraISO} - NO APLICA por ${emailUsuario}: ${motivo}`
+    : `${ahoraISO} - REALIZADA por ${emailUsuario}${sufijoAviso}`
 
   const evento = await gcal.marcarInstancia({ calendarId, instanceId, extendedProperties, logLine })
 

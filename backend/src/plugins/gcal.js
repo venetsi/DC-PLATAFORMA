@@ -203,8 +203,10 @@ async function gcalPlugin(fastify) {
       const calendar = await getCalendarClient()
       const { data: current } = await withBackoff(() => calendar.events.get({ calendarId, eventId: instanceId }))
       const description = [current.description, logLine].filter(Boolean).join('\n')
-      const esRealizada = extendedProperties?.estado === 'REALIZADA'
-      const summary = esRealizada && !current.summary?.startsWith('✓ ') ? `✓ ${current.summary}` : current.summary
+      // NO_APLICA se distingue igual que REALIZADA (gris), con otro prefijo.
+      const prefijo = { REALIZADA: '✓ ', NO_APLICA: '⊘ ' }[extendedProperties?.estado]
+      const esRealizada = !!prefijo
+      const summary = prefijo && !current.summary?.startsWith(prefijo) ? `${prefijo}${current.summary}` : current.summary
       const { data } = await withBackoff(() =>
         calendar.events.patch({
           calendarId,

@@ -904,7 +904,9 @@ async function comandoTarea(deps, { departamentos, nombreLocal, argumento }) {
   const props = evento.extendedProperties?.private || {}
   const local = props.id_local_ext ? nombreLocal.get(props.id_local_ext) || 'Local sin nombre' : 'Toda la empresa'
 
-  const estado = hecha
+  const estado = props.estado === 'NO_APLICA'
+    ? `⊘ no aplica${props.no_aplica_motivo ? `: ${props.no_aplica_motivo}` : ''}${props.no_aplica_por ? ` (${props.no_aplica_por})` : ''}`
+    : hecha
     ? `✅ hecha${props.realizada_por ? ` por ${props.realizada_por}` : ''}`
     : vencida
       ? `⚠️ atrasada ${diasHabilesVencida(evento, { hoyISO })} días hábiles`
@@ -1071,7 +1073,7 @@ async function comandoResumen(deps, { departamento, departamentos, modoTodo }) {
 
   const hoy = operables.filter((o) => o.fechaISO === hoyISO)
   const vencidas = operables.filter((o) => !o.hecha && o.vencida)
-  const hechasPeriodo = operables.filter((o) => o.hecha)
+  const hechasPeriodo = operables.filter((o) => o.hecha && !o.noAplica)
   const cerradas = hechasPeriodo.length + vencidas.length
   const cumplimiento = cerradas ? Math.round((hechasPeriodo.length / cerradas) * 100) : null
 

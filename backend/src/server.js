@@ -22,6 +22,7 @@ import tvRoutes from './routes/tv.js'
 import chatRoutes from './routes/chat.js'
 import repositoriosRoutes from './routes/repositorios.js'
 import { esAdminGlobal } from './lib/permisos.js'
+import { cargarFeriados } from './lib/feriados.js'
 
 const app = Fastify({ logger: true })
 
@@ -65,6 +66,11 @@ await app.register(reportesRoutes, { prefix: '/api/reportes' })
 await app.register(tvRoutes, { prefix: '/api/tv' })
 await app.register(chatRoutes, { prefix: '/api/chat' })
 await app.register(repositoriosRoutes, { prefix: '/api/repositorios' })
+
+// Feriados para contar dias habiles de atraso; se refrescan dos veces por dia.
+// No bloquea el arranque: si falla, se cuenta lunes a viernes como antes.
+cargarFeriados({ log: app.log })
+setInterval(() => cargarFeriados({ log: app.log }), 12 * 60 * 60 * 1000).unref()
 
 try {
   await app.listen({ port: process.env.PORT || 3100, host: '0.0.0.0' })

@@ -170,6 +170,29 @@ export default async function instanciasRoutes(fastify) {
     return { evento, avisos }
   })
 
+  // "No aplica": cierra la instancia sin contarla como hecha (local cerrado,
+  // feriado, mes sin movimiento). Motivo obligatorio: queda en el historial.
+  // Mismo permiso y misma propagacion a departamentos compartidos que marcar.
+  fastify.post('/:instanceId/no-aplica', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { departamento: idDepartamento, motivo } = request.body || {}
+    if (!idDepartamento) return reply.code(400).send({ error: 'departamento requerido' })
+    const motivoLimpio = String(motivo || '').trim().replace(/\s+/g, ' ').slice(0, 300)
+    if (!motivoLimpio) return reply.code(400).send({ error: 'Contá por qué no aplica' })
+    const departamento = await resolverDepartamentoConAcceso(fastify, request, reply, idDepartamento)
+    if (!departamento) return
+
+    const usuario = await fastify.db.extUser.findUnique({ where: { id: request.user.id } })
+    const { evento, yaEstaba } = await marcarInstanciaYPropagar(fastify, {
+      calendarId: departamento.id_calendar_google,
+      instanceId: request.params.instanceId,
+      emailUsuario: usuario.email,
+      estado: 'NO_APLICA',
+      motivo: motivoLimpio
+    })
+    if (yaEstaba) return reply.code(409).send({ error: 'Esa tarea ya estaba cerrada' })
+    return { evento }
+  })
+
   // Preparados para Fase 9 (aprobacion real) -- no expuestos en la UI de v1.
   fastify.post('/:instanceId/aprobar', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     return reply.code(501).send({ error: 'Aprobacion no activa en v1 (Fase 9)' })

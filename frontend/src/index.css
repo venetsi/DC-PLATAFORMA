@@ -320,3 +320,7 @@ th, td {
 .detalle-historial { margin: 0; padding-left: 1rem; font-size: 0.78rem; color: var(--texto-tenue); display: flex; flex-direction: column; gap: 0.2rem; }
 .detalle-confirmar { display: flex; flex-direction: column; gap: 0.6rem; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 0.75rem; }
 .detalle-accion { min-height: 44px; }
+.tarea-bullets li.no_aplica::before { color: var(--texto-tenue); }
+.tarea-bullets li.no_aplica { color: var(--texto-tenue); font-style: italic; }
+.detalle-datos .estado-no_aplica { color: var(--texto-tenue); }
+.detalle-motivo { width: 100%; min-height: 70px; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--texto-tenue); background: var(--bg-0); color: var(--texto); font: inherit; }

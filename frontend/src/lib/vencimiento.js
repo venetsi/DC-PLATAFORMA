@@ -34,19 +34,23 @@ export function finDeInstancia(evento) {
   return new Date(Date.UTC(a, m - 1, d + 1, 3, 0, 0))
 }
 
+// Mismo criterio que backend/src/lib/vencimiento.js: NO_APLICA cierra la
+// instancia pero no cuenta como hecha.
 export function estaHecha(props) {
-  return props?.estado === 'REALIZADA' || props?.estado === 'APROBADA'
+  return ['REALIZADA', 'APROBADA', 'NO_APLICA'].includes(props?.estado)
 }
 
 export function clasificarInstancia(evento, { referencia = new Date() } = {}) {
   const props = evento?.extendedProperties?.private || {}
   const hecha = estaHecha(props)
+  const noAplica = props?.estado === 'NO_APLICA'
   const fin = finDeInstancia(evento)
   const vencida = !hecha && !!fin && referencia > fin
   return {
     hecha,
+    noAplica,
     vencida,
-    estado: hecha ? 'realizada' : vencida ? 'vencida' : 'pendiente',
+    estado: noAplica ? 'no_aplica' : hecha ? 'realizada' : vencida ? 'vencida' : 'pendiente',
     fechaISO: fechaDeInstancia(evento)
   }
 }

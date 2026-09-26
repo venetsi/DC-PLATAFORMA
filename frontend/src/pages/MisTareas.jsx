@@ -40,6 +40,11 @@ export default function MisTareas() {
 
   // El departamento sale del evento, no del store: es lo que permite reusar
   // esta pantalla el día que muestre tareas de más de un calendario.
+  async function noAplica(instanceId, idDepto, motivo) {
+    await instanciasApi.noAplica(instanceId, idDepto || departamento.id, motivo)
+    await cargar()
+  }
+
   async function marcar(instanceId, idDepto) {
     setMarcando(instanceId)
     try {
@@ -94,7 +99,7 @@ export default function MisTareas() {
       )}
 
       {data && data.items.length > 0 && (
-        <AgendaAgrupada eventos={data.items} mapaLocales={mapaLocales} onMarcar={marcar} marcando={marcando} />
+        <AgendaAgrupada eventos={data.items} mapaLocales={mapaLocales} onMarcar={marcar} onNoAplica={noAplica} marcando={marcando} />
       )}
     </div>
   )

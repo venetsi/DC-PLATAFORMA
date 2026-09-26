@@ -6,6 +6,7 @@ function fechaLarga(iso) {
 }
 
 function textoEstado(t) {
+  if (t.estado === 'no_aplica') return `No aplica${t.noAplicaMotivo ? `: ${t.noAplicaMotivo}` : ''}${t.noAplicaPor ? ` (${t.noAplicaPor})` : ''}`
   if (t.estado === 'realizada') return `Hecha${t.realizadaPor ? ` por ${t.realizadaPor}` : ''}`
   if (t.estado === 'vencida') return `Atrasada, hace ${t.diasVencida} ${t.diasVencida === 1 ? 'día' : 'días'}`
   return 'Pendiente'
@@ -14,8 +15,10 @@ function textoEstado(t) {
 // Detalle de una tarea. Marcar hecha es definitivo (decision del usuario), asi
 // que pasa por un paso de confirmacion explicito: antes un toque sobre la tarea
 // -- incluso en Semana/Mes, donde uno toca para "ver" -- la cerraba en el acto.
-export default function DetalleTarea({ tarea, onCerrar, onMarcar }) {
-  const [confirmando, setConfirmando] = useState(false)
+export default function DetalleTarea({ tarea, onCerrar, onMarcar, onNoAplica }) {
+  // null | 'hecha' | 'no_aplica'
+  const [confirmando, setConfirmando] = useState(null)
+  const [motivo, setMotivo] = useState('')
   const [marcando, setMarcando] = useState(false)
   const [error, setError] = useState('')
 
@@ -26,13 +29,16 @@ export default function DetalleTarea({ tarea, onCerrar, onMarcar }) {
   }, [marcando, onCerrar])
 
   if (!tarea) return null
-  const puedeMarcar = tarea.estado !== 'realizada' && !!onMarcar
+  const abierta = tarea.estado === 'pendiente' || tarea.estado === 'vencida'
+  const puedeMarcar = abierta && !!onMarcar
+  const puedeNoAplica = abierta && !!onNoAplica
 
   async function confirmar() {
     setError('')
     setMarcando(true)
     try {
-      await onMarcar(tarea.id, tarea.idDepartamento)
+      if (confirmando === 'no_aplica') await onNoAplica(tarea.id, tarea.idDepartamento, motivo.trim())
+      else await onMarcar(tarea.id, tarea.idDepartamento)
       onCerrar()
     } catch (err) {
       setError(err.response?.data?.error || 'No se pudo marcar. Probá de nuevo.')
@@ -73,15 +79,28 @@ export default function DetalleTarea({ tarea, onCerrar, onMarcar }) {
 
         {error && <p style={{ color: 'var(--rojo)', fontSize: '0.85rem', margin: 0 }}>{error}</p>}
 
-        {puedeMarcar && !confirmando && (
-          <button className="btn detalle-accion" onClick={() => setConfirmando(true)}>Marcar hecha</button>
+        {!confirmando && (puedeMarcar || puedeNoAplica) && (
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {puedeMarcar && <button className="btn detalle-accion" onClick={() => setConfirmando('hecha')}>Marcar hecha</button>}
+            {puedeNoAplica && <button className="btn btn-secondary detalle-accion" onClick={() => setConfirmando('no_aplica')}>No aplica</button>}
+          </div>
         )}
-        {puedeMarcar && confirmando && (
+        {confirmando === 'no_aplica' && (
+          <div className="detalle-confirmar">
+            <label htmlFor="motivo-no-aplica" style={{ margin: 0 }}>¿Por qué no aplica esta vez? (local cerrado, feriado, sin movimiento…) No cuenta como hecha ni como atrasada, y no se puede deshacer.</label>
+            <textarea id="motivo-no-aplica" className="detalle-motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={300} autoFocus />
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button className="btn detalle-accion" onClick={confirmar} disabled={marcando || !motivo.trim()}>{marcando ? 'Guardando…' : 'Confirmar: no aplica'}</button>
+              <button className="btn btn-secondary detalle-accion" onClick={() => setConfirmando(null)} disabled={marcando}>Volver</button>
+            </div>
+          </div>
+        )}
+        {confirmando === 'hecha' && (
           <div className="detalle-confirmar">
             <p style={{ margin: 0 }}>¿Confirmás que <strong>{tarea.titulo}</strong> ({tarea.local}) está hecha? Queda registrada a tu nombre y no se puede deshacer.</p>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               <button className="btn detalle-accion" onClick={confirmar} disabled={marcando}>{marcando ? 'Marcando…' : 'Sí, marcar hecha'}</button>
-              <button className="btn btn-secondary detalle-accion" onClick={() => setConfirmando(false)} disabled={marcando}>Volver</button>
+              <button className="btn btn-secondary detalle-accion" onClick={() => setConfirmando(null)} disabled={marcando}>Volver</button>
             </div>
           </div>
         )}

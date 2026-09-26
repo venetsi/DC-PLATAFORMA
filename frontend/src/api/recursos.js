@@ -42,7 +42,9 @@ export const instanciasApi = {
   listarRango: ({ departamento, desde, hasta }) =>
     api.get('/instancias', { params: { departamento, desde, hasta } }).then((r) => r.data),
   marcar: (instanceId, idDepartamento) =>
-    api.post(`/instancias/${instanceId}/marcar`, { departamento: idDepartamento }).then((r) => r.data)
+    api.post(`/instancias/${instanceId}/marcar`, { departamento: idDepartamento }).then((r) => r.data),
+  noAplica: (instanceId, idDepartamento, motivo) =>
+    api.post(`/instancias/${instanceId}/no-aplica`, { departamento: idDepartamento, motivo }).then((r) => r.data)
 }
 
 export const reportesApi = {

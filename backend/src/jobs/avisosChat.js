@@ -24,6 +24,7 @@ import { mensajeDepartamento, mensajeDireccion } from '../lib/mensajes-chat.js'
 import { cardDepartamento } from '../lib/chat-cards.js'
 import { DIAS_MINIMOS, desdeHaceNDias, finDeHoyArgentina } from '../lib/ventana-avisos.js'
 import { SLUG_DIRECCION } from '../lib/direccion.js'
+import { cargarFeriados } from '../lib/feriados.js'
 
 // La ventana se deriva de los umbrales en vez de estar hardcodeada: si alguien
 // configura "escalar a los 20 dias", una ventana fija de 14 nunca llegaria a
@@ -34,6 +35,7 @@ function diasDeVentana(departamentos) {
 }
 
 async function correr() {
+  await cargarFeriados()
   // TODOS los activos con calendario, no solo los que tienen webhook: el
   // webhook condiciona el ENVIO, no la evaluacion. Sin esto, un departamento
   // sin Space propio seria invisible tambien para Direccion.

@@ -52,12 +52,21 @@ export function finDeInstancia(evento) {
   return new Date(Date.UTC(a, m - 1, d + 1, 3, 0, 0))
 }
 
-export const ESTADOS_HECHA = ['REALIZADA', 'APROBADA']
+// NO_APLICA: la tarea no correspondia ese dia (local cerrado, feriado, mes sin
+// movimiento). Cierra la instancia como las hechas -- no vence, no se avisa, no
+// frena dependencias -- pero NO cuenta para el % de cumplimiento, ni arriba ni abajo.
+export const ESTADO_NO_APLICA = 'NO_APLICA'
+export const ESTADOS_HECHA = ['REALIZADA', 'APROBADA', ESTADO_NO_APLICA]
 
 // APROBADA es del diseño de la Fase 9 (aprobacion real): todavia no se escribe
 // en ningun lado, pero se lee como sinonimo de hecha desde el dia uno.
+// "Hecha" aca significa "cerrada": incluye NO_APLICA.
 export function estaHecha(props) {
   return ESTADOS_HECHA.includes(props?.estado)
+}
+
+export function noAplica(props) {
+  return props?.estado === ESTADO_NO_APLICA
 }
 
 // Un solo lugar donde se decide el estado de una instancia.
@@ -66,12 +75,14 @@ export function estaHecha(props) {
 export function clasificarInstancia(evento, { referencia = new Date() } = {}) {
   const props = evento?.extendedProperties?.private || {}
   const hecha = estaHecha(props)
+  const na = noAplica(props)
   const fin = finDeInstancia(evento)
   const vencida = !hecha && !!fin && referencia > fin
   return {
     hecha,
+    noAplica: na,
     vencida,
-    estado: hecha ? 'realizada' : vencida ? 'vencida' : 'pendiente',
+    estado: na ? 'no_aplica' : hecha ? 'realizada' : vencida ? 'vencida' : 'pendiente',
     fechaISO: fechaDeInstancia(evento),
     fin
   }
@@ -97,10 +108,16 @@ export function diasVencida(evento, { hoyISO = hoyEnArgentina() } = {}) {
   return dias > 0 ? dias : 0
 }
 
-// Dias HABILES (lunes a viernes) de atraso -- es lo que usan los umbrales de
-// escalamiento. Las tareas de DCSMART van de lunes a viernes: con dias de
-// calendario, una tarea del viernes escalaria sola el lunes solo por haber
-// pasado el fin de semana.
+// Feriados nacionales ('YYYY-MM-DD'), cargados por lib/feriados.js al arrancar
+// el server o un job. Vacio = solo se descuentan sabados y domingos.
+let FERIADOS = new Set()
+export function definirFeriados(fechas) {
+  FERIADOS = new Set(fechas)
+}
+
+// Dias HABILES (lunes a viernes, sin feriados) de atraso -- es lo que usan los
+// umbrales de escalamiento. Con dias de calendario, una tarea del viernes
+// escalaria sola el lunes solo por haber pasado el fin de semana.
 export function diasHabilesVencida(evento, { hoyISO = hoyEnArgentina() } = {}) {
   const fechaISO = fechaDeInstancia(evento)
   if (!fechaISO) return 0
@@ -111,7 +128,7 @@ export function diasHabilesVencida(evento, { hoyISO = hoyEnArgentina() } = {}) {
   while (cursor.getTime() < fin) {
     cursor.setUTCDate(cursor.getUTCDate() + 1)
     const dia = cursor.getUTCDay()
-    if (dia !== 0 && dia !== 6) habiles++
+    if (dia !== 0 && dia !== 6 && !FERIADOS.has(cursor.toISOString().slice(0, 10))) habiles++
   }
   return habiles
 }

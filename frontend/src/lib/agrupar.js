@@ -23,6 +23,8 @@ export function aTarea(ev, mapaLocales, hoyISO = hoyEnArgentina()) {
     asignadoA: props.asignado_a || null,
     realizadaPor: props.realizada_por || null,
     realizadaEn: props.realizada_en || null,
+    noAplicaMotivo: props.no_aplica_motivo || null,
+    noAplicaPor: props.no_aplica_por || null,
     // El departamento del evento, para poder marcar desde una vista que no
     // sea la del departamento propio.
     idDepartamento: props.id_departamento || null,

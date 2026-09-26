@@ -87,7 +87,8 @@ export default async function tvRoutes(fastify) {
     for (const evento of items) {
       const props = evento.extendedProperties?.private || {}
       const idLocal = props.id_local_ext || null
-      const { hecha, vencida, estado, fechaISO: fechaEvento } = clasificarInstancia(evento, { referencia: ahora })
+      const { hecha, vencida, estado, noAplica, fechaISO: fechaEvento } = clasificarInstancia(evento, { referencia: ahora })
+      if (noAplica) continue
       const fechaMs = new Date(`${fechaEvento}T00:00:00Z`).getTime()
 
       if (vencida) vencidasEnVentana++

@@ -58,12 +58,14 @@ async function correr(fechaISO) {
       const idLocal = props.id_local_ext || ''
       const bucket = porLocal.get(idLocal) ?? { total_tareas: 0, realizadas: 0, vencidas_sin_hacer: 0 }
 
-      bucket.total_tareas++
-      total.total_tareas++
       // Mismo criterio que tv.js y avisosChat -- pero la referencia es el
       // cierre del dia snapshoteado, no `now`: el snapshot cierra un dia
       // del pasado y tiene que juzgarlo con el reloj de ese dia.
-      const { hecha, vencida } = clasificarInstancia(evento, { referencia })
+      const { hecha, vencida, noAplica } = clasificarInstancia(evento, { referencia })
+      // "No aplica" no entra en el % de cumplimiento, ni arriba ni abajo.
+      if (noAplica) continue
+      bucket.total_tareas++
+      total.total_tareas++
       if (hecha) {
         bucket.realizadas++
         total.realizadas++

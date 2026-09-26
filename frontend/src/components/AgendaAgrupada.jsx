@@ -8,7 +8,7 @@ const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 // que el kiosko -- ver kiosko/index.html:pintarSemana), cada dia agrupado
 // por local y sus tareas como bullets. Tocar una tarea abre su detalle; marcar
 // hecha se hace desde ahi, con confirmacion (es definitivo).
-export default function AgendaAgrupada({ eventos, mapaLocales, onMarcar, marcando }) {
+export default function AgendaAgrupada({ eventos, mapaLocales, onMarcar, onNoAplica, marcando }) {
   const [abierta, setAbierta] = useState(null)
   const dias = agruparPorDiaYLocal(eventos, mapaLocales)
 
@@ -31,7 +31,9 @@ export default function AgendaAgrupada({ eventos, mapaLocales, onMarcar, marcand
                 {tareas.map((t) => {
                   // Quien la hizo (o quien la tiene a cargo) es la mitad del
                   // seguimiento entre equipos.
-                  const pie = t.estado === 'realizada'
+                  const pie = t.estado === 'no_aplica'
+                    ? 'no aplica'
+                    : t.estado === 'realizada'
                     ? (t.realizadaPor ? `✓ ${t.realizadaPor}` : null)
                     : (t.asignadoA ? `→ ${t.asignadoA}` : null)
                   return (
@@ -69,7 +71,7 @@ export default function AgendaAgrupada({ eventos, mapaLocales, onMarcar, marcand
           ))}
         </div>
       ))}
-      {abierta && <DetalleTarea tarea={abierta} onCerrar={() => setAbierta(null)} onMarcar={onMarcar} />}
+      {abierta && <DetalleTarea tarea={abierta} onCerrar={() => setAbierta(null)} onMarcar={onMarcar} onNoAplica={onNoAplica} />}
     </div>
   )
 }
