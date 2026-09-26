@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { asegurarDepartamento } from '../lib/departamentos.js'
 import { aSlug } from '../lib/slug.js'
+import { sincronizarMembresias } from '../lib/membresias.js'
 
 export default async function departamentosRoutes(fastify) {
   // select acotado a proposito -- Departamento tambien guarda kiosko_key y
@@ -20,11 +21,21 @@ export default async function departamentosRoutes(fastify) {
         chat_space_name: true,
         chat_webhook_url: true,
         dias_aviso_departamento: true,
-        dias_aviso_direccion: true
+        dias_aviso_direccion: true,
+        email_group_google: true,
+        membresia_sync_ok_at: true,
+        membresia_sync_error: true,
+        _count: { select: { membresias: true } }
       },
       orderBy: { nombre: 'asc' }
     })
     return departamentos.map(({ chat_webhook_url, ...d }) => ({ ...d, tiene_webhook: Boolean(chat_webhook_url) }))
+  })
+
+  // Relee ya mismo los Google Groups depto-* (normalmente se refresca solo cada
+  // ~15 min). `forzar` aplica aunque un grupo haya perdido mas de la mitad.
+  fastify.post('/membresias/sincronizar', { preHandler: [fastify.authenticate, fastify.requireAdminGlobal] }, async (request) => {
+    return sincronizarMembresias(fastify, { forzar: request.query.forzar === 'true' })
   })
 
   // Crear un departamento nuevo (Calendar + Group + clave de kiosko reales,

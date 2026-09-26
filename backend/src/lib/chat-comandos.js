@@ -11,7 +11,7 @@
 // Chat API (seccion "Comandos"): hay que usar los mismos numeros de aca.
 import { hoyEnArgentina, clasificarInstancia, diasHabilesVencida, estaHecha } from './vencimiento.js'
 import { lineaDeTarea } from './mensajes-chat.js'
-import { esAdminGlobal, puedeGestionarDepartamento } from './permisos.js'
+import { esAdminGlobal, puedeGestionarDepartamento, conPermisos, departamentosDe } from './permisos.js'
 import { SLUG_DIRECCION } from './direccion.js'
 import { marcarInstanciaYPropagar } from './marcar-instancia.js'
 import { prerrequisitosPendientes } from './dependencias.js'
@@ -317,9 +317,14 @@ async function resolverDepartamento(db, { space, extUser }) {
       return { departamento: dueño, compartidos, porFallback: false }
     }
   }
-  if (!extUser?.id_departamento) return { departamento: null, compartidos: [], porFallback: false }
-  const propio = await db.departamento.findUnique({ where: { id: extUser.id_departamento } })
-  return { departamento: propio, compartidos: [], porFallback: true }
+  // Sin Space vinculado: los departamentos propios (con Groups como fuente, una
+  // persona puede estar en varios; el primero hace de principal).
+  const ids = departamentosDe(extUser)
+  if (!ids.length) return { departamento: null, compartidos: [], porFallback: false }
+  const propios = await db.departamento.findMany({ where: { id: { in: ids }, activo: true }, orderBy: { nombre: 'asc' } })
+  if (!propios.length) return { departamento: null, compartidos: [], porFallback: false }
+  const [principal, ...resto] = propios
+  return { departamento: principal, compartidos: resto, porFallback: true }
 }
 
 // "Modo todo": el Space esta vinculado DIRECTAMENTE a Dirección (no por
@@ -829,7 +834,7 @@ async function comandoPasar(deps, { departamentos, modoTodo, email, argumento })
   }
 
   const emailDestino = normalizarEmail(destino)
-  const persona = await db.extUser.findUnique({ where: { email: emailDestino } })
+  const persona = await conPermisos(db, await db.extUser.findUnique({ where: { email: emailDestino } }))
   if (!persona?.activo) return `No encontré a *${destino}* entre los usuarios activos de la plataforma.`
 
   const hoyISO = hoyEnArgentina()
@@ -851,7 +856,7 @@ async function comandoPasar(deps, { departamentos, modoTodo, email, argumento })
   // el del comando): esa es la comparacion que importa para saber si le va a
   // aparecer en su /mias.
   const aviso =
-    persona.id_departamento && persona.id_departamento !== departamento.id
+    departamentosDe(persona).length > 0 && !departamentosDe(persona).includes(departamento.id)
       ? `\n⚠️ Ojo: ${persona.nombre} no es de ${departamento.nombre}, así que esta tarea no le va a aparecer en su \`/mias\`. Avisale por las suyas.`
       : ''
   const etiqueta = departamentos.length > 1 ? `*${nombre}* (${departamento.nombre})` : `*${nombre}*`
@@ -1335,7 +1340,7 @@ export async function pasarPorInstanceId(deps, { space, extUser, email, instance
 
   const destino = normalizarEmail(emailDestino)
   if (!destino) return '⚠️ Elegí a quién le pasás la tarea.'
-  const persona = await db.extUser.findUnique({ where: { email: destino } })
+  const persona = await conPermisos(db, await db.extUser.findUnique({ where: { email: destino } }))
   if (!persona?.activo) return '⚠️ Esa persona ya no está activa en la plataforma.'
 
   const instancia = await gcal.leerInstancia({ calendarId: departamento.id_calendar_google, instanceId })
@@ -1356,7 +1361,7 @@ export async function pasarPorInstanceId(deps, { space, extUser, email, instance
   // Mismo aviso que comandoPasar: si la persona es de otro departamento, esta
   // tarea no le va a aparecer en su /mias (que mira su propio departamento).
   const aviso =
-    persona.id_departamento && persona.id_departamento !== departamento.id
+    departamentosDe(persona).length > 0 && !departamentosDe(persona).includes(departamento.id)
       ? ` ⚠️ Ojo: ${persona.nombre} no es de ${departamento.nombre}, así que esta tarea no le va a aparecer en su \`/mias\`.`
       : ''
   return `➡️ ${nombre} queda a nombre de ${persona.nombre}.${aviso}`

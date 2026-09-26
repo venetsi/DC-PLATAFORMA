@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import { useAuthStore } from '../store/authStore.js'
-import { instanciasApi, localesApi } from '../api/recursos.js'
+import { instanciasApi, localesApi, departamentosApi } from '../api/recursos.js'
 import AgendaAgrupada from '../components/AgendaAgrupada.jsx'
 import DetalleTarea from '../components/DetalleTarea.jsx'
 import { aTarea } from '../lib/agrupar.js'
@@ -37,7 +37,14 @@ function semanaActualLunesAViernes() {
 }
 
 export default function Calendario() {
-  const departamento = useAuthStore((s) => s.departamento)
+  const propio = useAuthStore((s) => s.departamento)
+  const propios = useAuthStore((s) => s.departamentos)
+  const esAdminGlobal = useAuthStore((s) => s.esAdminGlobal)
+  // Quien esta en varios departamentos elige cual mirar; Direccion (y el admin)
+  // puede elegir cualquiera.
+  const [opciones, setOpciones] = useState(propios)
+  const [idElegido, setIdElegido] = useState(propio?.id || null)
+  const departamento = opciones.find((d) => d.id === idElegido) || propio
   const [vista, setVista] = useState('agenda')
   const [eventos, setEventos] = useState([])
   const [mapaLocales, setMapaLocales] = useState(new Map())
@@ -49,6 +56,14 @@ export default function Calendario() {
   useEffect(() => {
     localesApi.listar().then((locales) => setMapaLocales(new Map(locales.map((l) => [l.id, l.nombre]))))
   }, [])
+
+  useEffect(() => {
+    if (!esAdminGlobal) return setOpciones(propios)
+    departamentosApi.listar().then((todos) => {
+      setOpciones(todos)
+      setIdElegido((actual) => actual || todos[0]?.id || null)
+    })
+  }, [esAdminGlobal, propios])
 
   async function cargar(desde, hasta) {
     if (!departamento) return
@@ -119,7 +134,16 @@ export default function Calendario() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <div>
-          <h2 style={{ margin: 0 }}>Agenda — {departamento.nombre}</h2>
+          <h2 style={{ margin: 0, display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            Agenda —
+            {opciones.length > 1 ? (
+              <select value={departamento.id} onChange={(e) => setIdElegido(e.target.value)} style={{ fontSize: '1rem', padding: '0.25rem' }} aria-label="Departamento">
+                {opciones.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+              </select>
+            ) : (
+              departamento.nombre
+            )}
+          </h2>
           {departamento.id_calendar_google && (
             <a
               href={`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(departamento.id_calendar_google)}`}

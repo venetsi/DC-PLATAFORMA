@@ -6,6 +6,7 @@ import AgendaDeTarea from './AgendaDeTarea.jsx'
 export default function AdminTareas() {
   const esAdminGlobal = useAuthStore((s) => s.esAdminGlobal)
   const departamentoPropio = useAuthStore((s) => s.departamento)
+  const departamentosPropios = useAuthStore((s) => s.departamentos)
 
   const [departamentos, setDepartamentos] = useState([])
   const [tareas, setTareas] = useState([])
@@ -38,6 +39,25 @@ export default function AdminTareas() {
   const [avisos, setAvisos] = useState({})
   const [guardandoAviso, setGuardandoAviso] = useState(null)
   const [errorAviso, setErrorAviso] = useState('')
+  const [sincronizando, setSincronizando] = useState(false)
+  const [resultadoSync, setResultadoSync] = useState('')
+
+  async function resincronizarGrupos() {
+    setSincronizando(true)
+    setResultadoSync('')
+    try {
+      const r = await departamentosApi.sincronizarGrupos()
+      const frenados = r.departamentos.filter((d) => !d.aplicado)
+      setResultadoSync(frenados.length
+        ? `Grupos leídos. Sin aplicar: ${frenados.map((d) => `${d.slug} (${d.error})`).join('; ')}`
+        : `Grupos leídos: ${r.departamentos.map((d) => `${d.slug} ${d.ahora}`).join(', ')}.`)
+      await cargarDepartamentos()
+    } catch (err) {
+      setResultadoSync(err.response?.data?.error || 'No se pudieron leer los grupos')
+    } finally {
+      setSincronizando(false)
+    }
+  }
 
   // Solo admin puede pedir las desactivadas -- son las candidatas a
   // "Eliminar definitivamente" (ver DELETE /tareas/:id).
@@ -96,7 +116,7 @@ export default function AdminTareas() {
   )
 
   function puedeGestionar(idDepartamentoTarea) {
-    return esAdminGlobal || departamentoPropio?.id === idDepartamentoTarea
+    return esAdminGlobal || departamentosPropios.some((d) => d.id === idDepartamentoTarea)
   }
 
   async function onSubmit(e) {
@@ -294,7 +314,7 @@ export default function AdminTareas() {
                 locales={locales}
                 grupos={grupos}
                 departamentos={departamentos}
-                usuarios={usuarios.filter((u) => u.id_departamento === t.id_departamento)}
+                usuarios={usuarios.filter((u) => (u.departamentos || [u.id_departamento]).includes(t.id_departamento))}
                 onCerrar={() => setAgendaAbiertaId(null)}
                 onCambio={cargarAsignaciones}
               />
@@ -326,7 +346,13 @@ export default function AdminTareas() {
 
       {esAdminGlobal && (
         <div className="card" style={{ marginBottom: '1.5rem' }}>
-          <h3 style={{ marginTop: 0 }}>Avisos por departamento</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <h3 style={{ margin: 0 }}>Avisos por departamento</h3>
+            <button className="btn btn-secondary" disabled={sincronizando} onClick={resincronizarGrupos} title="Relee ya los Google Groups depto-*; se refrescan solos cada ~15 min">
+              {sincronizando ? 'Leyendo grupos…' : 'Releer Google Groups'}
+            </button>
+          </div>
+          {resultadoSync && <p style={{ fontSize: '0.8rem', margin: '0.5rem 0 0' }}>{resultadoSync}</p>}
           <p style={{ fontSize: '0.8rem', color: 'var(--texto-tenue)', marginTop: '-0.5rem', marginBottom: '1rem' }}>
             Webhook de Chat y umbrales de escalamiento (días hábiles). Si el departamento ya tiene un Space
             vinculado con <code>/vincular</code>, ese gana y el webhook queda solo como respaldo.
@@ -346,6 +372,9 @@ export default function AdminTareas() {
                         {d.chat_space_name && (
                           <div style={{ fontSize: '0.72rem', color: 'var(--texto-tenue)' }}>vinculado por Space</div>
                         )}
+                        <div style={{ fontSize: '0.72rem', color: d.membresia_sync_error ? 'var(--rojo)' : 'var(--texto-tenue)' }} title={d.membresia_sync_error || d.email_group_google || ''}>
+                          {d.membresia_sync_error ? 'grupo: error al leer' : `grupo: ${d._count?.membresias ?? 0} miembros`}
+                        </div>
                       </td>
                       <td>
                         <input
@@ -416,6 +445,10 @@ export default function AdminTareas() {
           <select value={idDepartamento} onChange={(e) => setIdDepartamento(e.target.value)} required style={{ padding: '0.4rem' }}>
             <option value="">Departamento...</option>
             {departamentos.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+          </select>
+        ) : departamentosPropios.length > 1 ? (
+          <select value={idDepartamento} onChange={(e) => setIdDepartamento(e.target.value)} required style={{ padding: '0.4rem' }}>
+            {departamentosPropios.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
           </select>
         ) : (
           <span style={{ padding: '0.4rem', color: 'var(--texto-tenue)' }}>{departamentoPropio?.nombre}</span>

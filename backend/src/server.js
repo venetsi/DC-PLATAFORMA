@@ -21,7 +21,8 @@ import reportesRoutes from './routes/reportes.js'
 import tvRoutes from './routes/tv.js'
 import chatRoutes from './routes/chat.js'
 import repositoriosRoutes from './routes/repositorios.js'
-import { esAdminGlobal } from './lib/permisos.js'
+import { esAdminGlobal, usuarioActual } from './lib/permisos.js'
+import { asegurarMembresiasFrescas } from './lib/membresias.js'
 import { cargarFeriados } from './lib/feriados.js'
 
 const app = Fastify({ logger: true })
@@ -42,15 +43,17 @@ app.decorate('authenticate', async (request, reply) => {
   try {
     await request.jwtVerify()
   } catch (err) {
-    reply.code(401).send({ error: 'No autenticado' })
+    return reply.code(401).send({ error: 'No autenticado' })
   }
+  // Refresca en segundo plano la copia de los Groups si tiene mas de 15 min.
+  asegurarMembresiasFrescas(app)
 })
 
 // Admin global: es_admin_global viene del ticket SSO real (rol super_admin/
 // dcsmart, Fase 8); el email hardcodeado (lib/permisos.js) sigue andando
 // para el login temporal de dev, que nunca setea esa columna.
 app.decorate('requireAdminGlobal', async (request, reply) => {
-  const usuario = await app.db.extUser.findUnique({ where: { id: request.user.id } })
+  const usuario = await usuarioActual(app, request)
   if (!esAdminGlobal(usuario)) reply.code(403).send({ error: 'Requiere admin global' })
 })
 
@@ -70,6 +73,7 @@ await app.register(repositoriosRoutes, { prefix: '/api/repositorios' })
 // Feriados para contar dias habiles de atraso; se refrescan dos veces por dia.
 // No bloquea el arranque: si falla, se cuenta lunes a viernes como antes.
 cargarFeriados({ log: app.log })
+asegurarMembresiasFrescas(app)
 setInterval(() => cargarFeriados({ log: app.log }), 12 * 60 * 60 * 1000).unref()
 
 try {

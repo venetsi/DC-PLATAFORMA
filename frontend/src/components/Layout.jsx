@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore.js'
 
 export default function Layout() {
-  const { usuario, departamento, esAdminGlobal, logout } = useAuthStore()
+  const { usuario, departamento, departamentos, esDireccion, esAdminGlobal, logout } = useAuthStore()
   const navigate = useNavigate()
 
   async function onLogout() {
@@ -30,7 +30,11 @@ export default function Layout() {
           </nav>
         </div>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', fontSize: '0.85rem', color: 'var(--texto-tenue)' }}>
-          <span>{usuario?.email}{departamento ? ` · ${departamento.nombre}` : ''}</span>
+          <span>
+            {usuario?.email}
+            {departamentos.length ? ` · ${departamentos.map((d) => d.nombre).join(', ')}` : ''}
+            {esDireccion ? ' · ve todo' : ''}
+          </span>
           <button className="btn btn-secondary" onClick={onLogout}>Salir</button>
         </div>
       </header>

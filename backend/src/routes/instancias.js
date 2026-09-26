@@ -1,4 +1,4 @@
-import { usuarioActual, puedeGestionarDepartamento } from '../lib/permisos.js'
+import { usuarioActual, puedeGestionarDepartamento, departamentosDe } from '../lib/permisos.js'
 import { hoyEnArgentina, clasificarInstancia } from '../lib/vencimiento.js'
 import { marcarInstanciaYPropagar } from '../lib/marcar-instancia.js'
 import { prerrequisitosPendientes, mapaPrerrequisitos } from '../lib/dependencias.js'
@@ -59,10 +59,11 @@ async function resolverDepartamentoConAcceso(fastify, request, reply, idDepartam
 export default async function instanciasRoutes(fastify) {
   // Checklist del dia para el departamento del usuario logueado.
   fastify.get('/hoy', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const usuario = await fastify.db.extUser.findUnique({ where: { id: request.user.id } })
-    if (!usuario?.id_departamento) return reply.code(409).send({ error: 'Tu usuario no tiene departamento asignado' })
+    const usuario = await usuarioActual(fastify, request)
+    const [idPrincipal] = departamentosDe(usuario)
+    if (!idPrincipal) return reply.code(409).send({ error: 'Tu usuario no tiene departamento asignado' })
 
-    const departamento = await fastify.db.departamento.findUnique({ where: { id: usuario.id_departamento } })
+    const departamento = await fastify.db.departamento.findUnique({ where: { id: idPrincipal } })
     if (!departamento?.id_calendar_google) return { items: [] }
 
     const items = await fastify.gcal.listarInstancias({
@@ -82,16 +83,19 @@ export default async function instanciasRoutes(fastify) {
   //   - sinResponsable -> asignado_a vacio: le toca al equipo, o sea tambien a mi
   //
   // La persona sale del TOKEN, nunca de un parametro: pedir las tareas de otro
-  // seria una fuga. Y como ExtUser.id_departamento es uno solo, alcanza con
-  // leer el calendario propio -- las tareas compartidas entre departamentos ya
-  // tienen su copia fisica en cada calendario, con el mismo asignado_a.
+  // seria una fuga. Se leen los calendarios de TODOS los departamentos de la
+  // persona (con Groups como fuente, puede estar en varios); una tarea
+  // compartida entre dos de ellos tiene una copia en cada uno y se muestra una vez.
+  // A proposito no incluye a Direccion "todo": son SUS tareas, no las de la empresa.
   fastify.get('/mias', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const usuario = await usuarioActual(fastify, request)
-    if (!usuario?.id_departamento) return reply.code(409).send({ error: 'Tu usuario no tiene departamento asignado' })
+    const ids = departamentosDe(usuario)
+    if (!ids.length) return reply.code(409).send({ error: 'Tu usuario no tiene departamento asignado' })
 
-    const departamento = await fastify.db.departamento.findUnique({ where: { id: usuario.id_departamento } })
-    if (!departamento?.id_calendar_google) {
-      return { departamento: null, items: [], resumen: { vencidas: 0, pendientes: 0, realizadas: 0 } }
+    const departamentos = (await fastify.db.departamento.findMany({ where: { id: { in: ids }, activo: true }, orderBy: { nombre: 'asc' } }))
+      .filter((d) => d.id_calendar_google)
+    if (!departamentos.length) {
+      return { departamento: null, departamentos: [], items: [], resumen: { vencidas: 0, pendientes: 0, realizadas: 0 } }
     }
 
     // Ventana mirando hacia atras a proposito, al reves que la vista Agenda:
@@ -101,10 +105,17 @@ export default async function instanciasRoutes(fastify) {
     const timeMin = desde ? `${desde}T00:00:00Z` : `${correrDias(hoyISO, -60)}T00:00:00Z`
     const timeMax = hasta ? `${hasta}T23:59:59Z` : `${correrDias(hoyISO, 14)}T23:59:59Z`
 
-    const todas = await fastify.gcal.listarInstancias({
-      calendarId: departamento.id_calendar_google,
-      timeMin,
-      timeMax
+    const porCalendario = await Promise.all(
+      departamentos.map((d) => fastify.gcal.listarInstancias({ calendarId: d.id_calendar_google, timeMin, timeMax }))
+    )
+    const vistas = new Set()
+    const todas = porCalendario.flat().filter((evento) => {
+      const props = evento.extendedProperties?.private || {}
+      const fecha = evento.start?.date || String(evento.start?.dateTime || '').slice(0, 10)
+      const clave = props.id_asignacion ? `${props.id_asignacion}|${fecha}` : evento.id
+      if (vistas.has(clave)) return false
+      vistas.add(clave)
+      return true
     })
 
     // Filtrado en JS y no con privateExtendedProperty: multiples valores se
@@ -122,11 +133,13 @@ export default async function instanciasRoutes(fastify) {
     const resumen = { vencidas: 0, pendientes: 0, realizadas: 0 }
     for (const evento of items) {
       const { estado } = clasificarInstancia(evento)
+      if (estado === 'no_aplica') continue
       resumen[estado === 'realizada' ? 'realizadas' : estado === 'vencida' ? 'vencidas' : 'pendientes']++
     }
 
     return {
-      departamento: { id: departamento.id, nombre: departamento.nombre },
+      departamento: { id: departamentos[0].id, nombre: departamentos.map((d) => d.nombre).join(' + ') },
+      departamentos: departamentos.map((d) => ({ id: d.id, nombre: d.nombre })),
       items: await conDependencias(fastify, items, request.query.con_dependencias !== 'false'),
       resumen
     }

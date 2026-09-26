@@ -60,7 +60,10 @@ function TablaSnapshots({ snapshots }) {
 const FILTRO_VACIO = { local: '', desde: '', hasta: '' }
 
 export default function Reportes() {
-  const { departamento, esAdminGlobal } = useAuthStore()
+  const { departamento, departamentos: propios, esAdminGlobal } = useAuthStore()
+  // Quien esta en varios departamentos ve una tarjeta por cada uno, igual que
+  // Direccion/admin con todos.
+  const verGrilla = esAdminGlobal || propios.length > 1
   const [departamentos, setDepartamentos] = useState([])
   const [locales, setLocales] = useState([])
   const [porDepto, setPorDepto] = useState({})
@@ -81,18 +84,18 @@ export default function Reportes() {
   // Admin ve el cumplimiento de TODOS los departamentos activos de una --
   // antes había que elegir uno a ciegas de un desplegable antes de ver nada.
   useEffect(() => {
-    if (!esAdminGlobal) return
-    departamentosApi.listar().then(async (deps) => {
+    if (!verGrilla) return
+    ;(esAdminGlobal ? departamentosApi.listar() : Promise.resolve(propios)).then(async (deps) => {
       setDepartamentos(deps)
       const resultados = await Promise.all(
         deps.map((d) => reportesApi.cumplimiento({ departamento: d.id }).then((r) => [d.id, r]))
       )
       setPorDepto(Object.fromEntries(resultados))
     })
-  }, [esAdminGlobal])
+  }, [verGrilla, esAdminGlobal, propios])
 
   useEffect(() => {
-    if (!esAdminGlobal || !idExpandido) return
+    if (!verGrilla || !idExpandido) return
     reportesApi
       .cumplimiento({
         departamento: idExpandido,
@@ -101,10 +104,10 @@ export default function Reportes() {
         hasta: filtroExpandido.hasta || undefined
       })
       .then(setDetalle)
-  }, [esAdminGlobal, idExpandido, filtroExpandido])
+  }, [verGrilla, idExpandido, filtroExpandido])
 
   useEffect(() => {
-    if (esAdminGlobal || !idDepartamento) return
+    if (verGrilla || !idDepartamento) return
     reportesApi
       .cumplimiento({
         departamento: idDepartamento,
@@ -113,11 +116,11 @@ export default function Reportes() {
         hasta: filtroPropio.hasta || undefined
       })
       .then(setData)
-  }, [esAdminGlobal, idDepartamento, filtroPropio])
+  }, [verGrilla, idDepartamento, filtroPropio])
 
   if (!departamento && !esAdminGlobal) return <SinAsignacion />
 
-  if (esAdminGlobal) {
+  if (verGrilla) {
     const depExpandido = departamentos.find((d) => d.id === idExpandido)
 
     function expandir(id) {
@@ -129,7 +132,7 @@ export default function Reportes() {
 
     return (
       <div>
-        <h2>Reportes de cumplimiento — todos los departamentos</h2>
+        <h2>Reportes de cumplimiento — {esAdminGlobal ? 'todos los departamentos' : 'mis departamentos'}</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '1.5rem' }}>
           {departamentos.map((d) => {
             const r = porDepto[d.id]

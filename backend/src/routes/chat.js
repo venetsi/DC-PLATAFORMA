@@ -55,7 +55,8 @@ import {
 } from '../lib/chat-cards.js'
 import { marcarInstanciaYPropagar } from '../lib/marcar-instancia.js'
 import { prerrequisitosPendientes } from '../lib/dependencias.js'
-import { esAdminGlobal } from '../lib/permisos.js'
+import { esAdminGlobal, conPermisos } from '../lib/permisos.js'
+import { asegurarMembresiasFrescas } from '../lib/membresias.js'
 import { construirTarjetaDepartamento, conNotaSuperior } from '../lib/chat-recordatorio.js'
 import {
   ejecutarComando,
@@ -248,7 +249,8 @@ async function manejarComando(fastify, chatEvent) {
   if (!email) {
     return mensajeNuevo({ text: '⚠️ No pude identificarte. Entrá a la plataforma.' })
   }
-  const extUser = await fastify.db.extUser.findUnique({ where: { email } })
+  asegurarMembresiasFrescas(fastify)
+  const extUser = await conPermisos(fastify.db, await fastify.db.extUser.findUnique({ where: { email } }))
   if (!extUser?.activo) {
     return mensajeNuevo({ text: '⚠️ Tu usuario no está activo en la plataforma.' })
   }
@@ -386,7 +388,8 @@ async function manejarClick(fastify, chatEvent, common) {
     return mensajePrivado(usuario, '⚠️ No pude identificarte. Entrá a la plataforma para marcar la tarea.')
   }
 
-  const extUser = await fastify.db.extUser.findUnique({ where: { email } })
+  asegurarMembresiasFrescas(fastify)
+  const extUser = await conPermisos(fastify.db, await fastify.db.extUser.findUnique({ where: { email } }))
   if (!extUser?.activo) {
     return mensajePrivado(usuario, '⚠️ Tu usuario no está activo en la plataforma.')
   }

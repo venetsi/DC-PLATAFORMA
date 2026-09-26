@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import jwt from 'jsonwebtoken'
+import { OAuth2Client } from 'google-auth-library'
 import { asegurarDepartamento } from '../lib/departamentos.js'
 import { resolverDepartamento } from '../lib/departamento-alias.js'
-import { esAdminGlobal } from '../lib/permisos.js'
+import { esAdminGlobal, conPermisos, departamentosDe, fuenteMembresia } from '../lib/permisos.js'
 
 // Dominios habilitados para entrar via SSO real -- despues de esto, dcsmart
 // ya filtro con sus propias politicas de usuario (activo, rol, etc.); esto
@@ -14,6 +15,8 @@ function dominioPermitido(email) {
   const dominio = String(email || '').split('@')[1]?.toLowerCase()
   return DOMINIOS_PERMITIDOS.includes(dominio)
 }
+
+const clienteGoogle = new OAuth2Client()
 
 function signSession(fastify, { id, email, nombre }) {
   return fastify.jwt.sign({ id, email, nombre }, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' })
@@ -92,9 +95,14 @@ export default async function authRoutes(fastify) {
     // nuevo que nunca se vio -- por eso da igual que acá no exista un id
     // estable del lado de dcsmart, se genera uno nuevo solo si hace falta.
     const resuelto = resolverDepartamento(departamentoRaw)
-    const departamento = resuelto
-      ? await asegurarDepartamento(fastify, { id: randomUUID(), nombre: resuelto.nombre, slug: resuelto.slug })
-      : null
+    // Con Groups como fuente de verdad, el texto de dcsmart ya no decide nada: se
+    // guarda solo como dato heredado y nunca crea un departamento nuevo (un error
+    // de tipeo en dcsmart generaba un Calendar y un Group reales).
+    const departamento = !resuelto
+      ? null
+      : fuenteMembresia(email) === 'groups'
+        ? await fastify.db.departamento.findUnique({ where: { slug: resuelto.slug } })
+        : await asegurarDepartamento(fastify, { id: randomUUID(), nombre: resuelto.nombre, slug: resuelto.slug })
 
     const usuario = await fastify.db.extUser.upsert({
       where: { email },
@@ -128,25 +136,72 @@ export default async function authRoutes(fastify) {
     return { token }
   })
 
+  // --- Entrar con Google ---
+  // Todos usan Google Workspace, y con los Groups como fuente de verdad hay
+  // miembros que no tienen usuario en dcsmart (y por lo tanto no pueden entrar
+  // por el SSO de arriba). Se verifica el ID token de Google Identity Services.
+  fastify.post('/google', async (request, reply) => {
+    const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID
+    if (!clientId) return reply.code(501).send({ error: 'Entrar con Google todavía no está configurado' })
+    const { credential } = request.body || {}
+    if (!credential) return reply.code(400).send({ error: 'credential requerido' })
+
+    let payload
+    try {
+      const ticket = await clienteGoogle.verifyIdToken({ idToken: credential, audience: clientId })
+      payload = ticket.getPayload()
+    } catch {
+      return reply.code(401).send({ error: 'No se pudo verificar la cuenta de Google' })
+    }
+
+    const email = String(payload?.email || '').toLowerCase().trim()
+    if (!email || !payload.email_verified) return reply.code(401).send({ error: 'La cuenta de Google no tiene un email verificado' })
+    if (!dominioPermitido(email)) {
+      return reply.code(403).send({ error: 'Esta cuenta no tiene acceso a DC-PLATAFORMA' })
+    }
+
+    let usuario = await fastify.db.extUser.findUnique({ where: { email } })
+    if (fuenteMembresia(email) === 'groups') {
+      // Entra quien esta en algun grupo depto-* (o es admin de emergencia).
+      const membresias = await fastify.db.membresiaDepartamento.findMany({ where: { email, departamento: { activo: true } } })
+      if (!membresias.length && !usuario?.es_admin_global) {
+        return reply.code(403).send({ error: 'Tu cuenta no está en ningún grupo de departamento. Pedí que te agreguen al grupo depto-<área>@dcsmart.app.' })
+      }
+      if (!usuario) {
+        usuario = await fastify.db.extUser.create({
+          data: { id: email, email, nombre: payload.name || email.split('@')[0], id_departamento: membresias[0]?.id_departamento ?? null, activo: true }
+        })
+      }
+    }
+    if (!usuario?.activo) {
+      return reply.code(403).send({ error: 'Tu cuenta todavía no tiene acceso. Entrá una vez desde dcsmart → Tareas o pedí acceso a un administrador.' })
+    }
+
+    const token = signSession(fastify, usuario)
+    reply.setCookie('dc_plataforma_token', token, { path: '/', httpOnly: true, sameSite: 'lax', secure: true })
+    return { token }
+  })
+
   fastify.get('/me', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const usuario = await fastify.db.extUser.findUnique({ where: { id: request.user.id } })
+    const usuario = await conPermisos(fastify.db, await fastify.db.extUser.findUnique({ where: { id: request.user.id } }))
     if (!usuario) return reply.code(404).send({ error: 'Usuario no encontrado' })
 
     // select acotado a proposito -- Departamento tambien guarda kiosko_key y
     // chat_webhook_url (secretos), que no tienen nada que hacer en una
     // respuesta que llega al navegador del usuario.
-    const departamento = usuario.id_departamento
-      ? await fastify.db.departamento.findUnique({
-          where: { id: usuario.id_departamento },
-          select: { id: true, nombre: true, slug: true, id_calendar_google: true }
-        })
-      : null
+    const departamentos = await fastify.db.departamento.findMany({
+      where: { id: { in: departamentosDe(usuario) }, activo: true },
+      select: { id: true, nombre: true, slug: true, id_calendar_google: true },
+      orderBy: { nombre: 'asc' }
+    })
 
     return {
       usuario: { id: usuario.id, email: usuario.email, nombre: usuario.nombre },
-      departamento,
-      // es_admin_global viene del ticket SSO real (Fase 8); el email hardcodeado
-      // (lib/permisos.js) sigue andando para el login temporal de dev.
+      // `departamento` (el principal) se mantiene para las pantallas que
+      // todavia trabajan con uno solo; `departamentos` trae todos.
+      departamento: departamentos[0] || null,
+      departamentos,
+      esDireccion: !!usuario.esDireccion,
       esAdminGlobal: esAdminGlobal(usuario)
     }
   })

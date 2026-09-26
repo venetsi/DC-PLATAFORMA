@@ -1,10 +1,12 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore.js'
 
 export function ProtectedRoute() {
   const { usuario, cargando } = useAuthStore()
+  const location = useLocation()
   if (cargando) return <p style={{ padding: '2rem' }}>Cargando...</p>
-  if (!usuario) return <Navigate to="/login" replace />
+  // Se conserva el destino (p.ej. el link "Ver todas" de Chat a /mis-tareas).
+  if (!usuario) return <Navigate to={`/login?volver=${encodeURIComponent(location.pathname + location.search)}`} replace />
   return <Outlet />
 }
 

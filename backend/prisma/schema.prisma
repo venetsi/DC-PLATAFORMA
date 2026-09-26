@@ -67,13 +67,37 @@ model Departamento {
   activo    Boolean  @default(true)
   synced_at DateTime @default(now())
 
+  // Ultima lectura buena de los miembros del Group (ver lib/membresias.js) y el
+  // ultimo error, si lo hubo. Nullable: la base es compartida con produccion.
+  membresia_sync_ok_at DateTime?
+  membresia_sync_error String?
+
   tareas                   Tarea[]
   cumplimiento             CumplimientoDiario[]
   asignaciones_compartidas TareaAsignacionDepto[]
   compartidoEnSpaces       DepartamentoCompartidoEnSpace[]
   repositoriosAsignados    RepositorioDepartamento[]
+  membresias               MembresiaDepartamento[]
 
   @@map("departamentos")
+}
+
+// --- Quien pertenece a cada departamento, leido de su Google Group
+// (depto-<slug>@). Groups es la fuente de verdad: esto es una copia que se
+// refresca cada ~15 min y conserva la ultima lectura buena si Workspace falla.
+// Por email y sin FK a ExtUser: hay miembros que nunca entraron a la plataforma.
+model MembresiaDepartamento {
+  id              String   @id @default(uuid())
+  email           String
+  id_departamento String
+  rol_group       String   // OWNER | MANAGER | MEMBER, tal cual members.list
+  synced_at       DateTime @default(now())
+
+  departamento Departamento @relation(fields: [id_departamento], references: [id])
+
+  @@unique([email, id_departamento])
+  @@index([email])
+  @@map("membresia_departamentos")
 }
 
 // --- Repositorio de documentos para el comando /buscar del Chat App
