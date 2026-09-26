@@ -98,7 +98,7 @@ export default async function instanciasRoutes(fastify) {
     // el backlog vencido es el corazon de esta pantalla.
     const { desde, hasta, solo_mias } = request.query
     const hoyISO = hoyEnArgentina()
-    const timeMin = desde ? `${desde}T00:00:00Z` : `${correrDias(hoyISO, -30)}T00:00:00Z`
+    const timeMin = desde ? `${desde}T00:00:00Z` : `${correrDias(hoyISO, -60)}T00:00:00Z`
     const timeMax = hasta ? `${hasta}T23:59:59Z` : `${correrDias(hoyISO, 14)}T23:59:59Z`
 
     const todas = await fastify.gcal.listarInstancias({

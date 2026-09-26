@@ -2,7 +2,7 @@
 // recordatorio. Extraido de jobs/avisosChat.js (que lo uso primero) para que
 // lib/chat-recordatorio.js -- que reconstruye la card de UN departamento
 // despues de un click -- use el mismo criterio y no se desincronicen.
-export const DIAS_MINIMOS = 14 // piso historico de la ventana, aunque los umbrales sean chicos
+export const DIAS_MINIMOS = 60 // antes 14: a los ~10 dias habiles lo mas atrasado salia del aviso y del escalamiento sin avisar
 
 export function desdeHaceNDias(n) {
   const d = new Date()

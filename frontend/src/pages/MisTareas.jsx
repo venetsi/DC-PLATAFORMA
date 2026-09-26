@@ -64,7 +64,7 @@ export default function MisTareas() {
               vista no cruza calendarios, y sin esto se leería como un bug. */}
           <h2 style={{ margin: 0 }}>Mis tareas — {departamento.nombre}</h2>
           <span style={{ fontSize: '0.8rem', color: 'var(--texto-tenue)' }}>
-            Últimos 30 días y las próximas 2 semanas
+            Últimos 60 días y las próximas 2 semanas
           </span>
         </div>
         <label style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', fontSize: '0.85rem', color: 'var(--texto-tenue)' }}>

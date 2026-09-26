@@ -190,7 +190,7 @@ export function resolverComando({ comandoId, texto }) {
 
 // Cuanto para atras mira /atrasadas. Mismo criterio que el kiosko: un mes de
 // backlog alcanza para ver lo que hay que resolver sin arrastrar historia.
-const DIAS_ATRASADAS = 30
+const DIAS_ATRASADAS = 60
 
 const AYUDA = [
   '*Para mirar*',
@@ -663,22 +663,48 @@ async function instanciasOperables(gcal, departamentos, hoyISO) {
     desdeISO: unDia(hoyISO, -DIAS_ATRASADAS),
     hastaISO: unDia(hoyISO, 14)
   })
-  return items.map(({ evento, departamento }) => ({
-    evento,
-    departamento,
-    nombre: evento.extendedProperties?.private?.nombre_tarea || evento.summary || '(sin nombre)',
-    ...clasificarInstancia(evento)
-  }))
+  return items.map(({ evento, departamento }) => {
+    const nombre = evento.extendedProperties?.private?.nombre_tarea || evento.summary || '(sin nombre)'
+    const local = localDeEvento(evento, nombre)
+    return {
+      evento,
+      departamento,
+      nombre,
+      local,
+      // Lo que se muestra y se busca: una tarea asignada por local son N eventos
+      // con el MISMO nombre_tarea, y sin el local /marcar elegia uno al azar.
+      rotulo: local ? `${nombre} — ${local}` : nombre,
+      ...clasificarInstancia(evento)
+    }
+  })
 }
 
-// Clave de "es la misma tarea": nombre + departamento. `Tarea.nombre` es unico
-// global, asi que dos nombres iguales en DOS departamentos son siempre la
-// MISMA tarea compartida (TareaAsignacionDepto) con una copia de evento en
-// cada calendario -- y ahi si conviene pedir que se precise, porque marcar una
-// copia no marca la otra. Fuera de "modo todo" esto no cambia nada (un solo
-// departamento en juego, la clave colapsa al nombre solo).
+// El local no viaja limpio en el evento (solo id_local_ext); se toma del
+// summary, que lo arma lib/titulo.js como "<tarea> — <local> (<grupo>)".
+function localDeEvento(evento, nombre) {
+  if (!evento.extendedProperties?.private?.id_local_ext) return null
+  const summary = String(evento.summary || '').replace(/^✓\s*/, '')
+  const prefijo = `${nombre} — `
+  if (!summary.startsWith(prefijo)) return null
+  return summary.slice(prefijo.length).replace(/\s*\([^)]*\)\s*$/, '') || null
+}
+
+// Clave de "es la misma tarea": rotulo (nombre + local) + departamento. Dos
+// rotulos iguales en DOS departamentos son la MISMA tarea compartida
+// (TareaAsignacionDepto) con una copia de evento en cada calendario -- ahi
+// conviene pedir que se precise, porque marcar una copia no marca la otra.
 function claveDeTarea(operable) {
-  return `${operable.departamento?.id}::${operable.nombre}`
+  return `${operable.departamento?.id}::${operable.rotulo}`
+}
+
+function coincide(operable, q) {
+  const r = sinAcentos(operable.rotulo)
+  if (r.includes(q)) return true
+  // "cmv tiamo" contra "CMV — TI AMO": se compara tambien sin espacios ni signos.
+  const compacto = (t) => t.replace(/[^a-z0-9]/g, '')
+  if (compacto(q) && compacto(r).includes(compacto(q))) return true
+  const palabras = q.split(/\s+/).filter((p) => p && p !== '—' && p !== '-')
+  return palabras.length > 1 && palabras.every((p) => r.includes(p))
 }
 
 // { una } | { varias } | { ninguna }
@@ -686,8 +712,8 @@ function buscarPorTexto(operables, texto, hoyISO) {
   const q = sinAcentos(texto)
   if (!q) return { ninguna: true }
 
-  const exactas = operables.filter((o) => sinAcentos(o.nombre) === q)
-  const candidatas = exactas.length ? exactas : operables.filter((o) => sinAcentos(o.nombre).includes(q))
+  const exactas = operables.filter((o) => sinAcentos(o.rotulo) === q || sinAcentos(o.nombre) === q)
+  const candidatas = exactas.length ? exactas : operables.filter((o) => coincide(o, q))
   if (!candidatas.length) return { ninguna: true }
 
   // Varias instancias de LA MISMA tarea (una recurrente cae muchos dias) no es
@@ -708,7 +734,7 @@ function buscarPorTexto(operables, texto, hoyISO) {
 // por texto. Para ese caso puntual sirve /asignar, /derivar o /apuntar (el
 // dialogo elige por id de instancia, no por nombre).
 function pedirPrecision(resultado, operables, { modoTodo = false } = {}) {
-  const etiqueta = (o) => (modoTodo && o.departamento ? `${o.nombre} (${o.departamento.nombre})` : o.nombre)
+  const etiqueta = (o) => (modoTodo && o.departamento ? `${o.rotulo} (${o.departamento.nombre})` : o.rotulo)
 
   if (resultado.varias) {
     const unicas = [...new Map(resultado.varias.map((c) => [claveDeTarea(c), c])).values()]
@@ -742,7 +768,7 @@ async function comandoMarcar(deps, { departamentos, modoTodo, email, argumento }
   const r = buscarPorTexto(operables, argumento, hoyISO)
   if (!r.una) return pedirPrecision(r, operables, { modoTodo: departamentos.length > 1 })
 
-  const { evento, nombre, departamento } = r.una
+  const { evento, rotulo: nombre, departamento } = r.una
   const etiqueta = departamentos.length > 1 ? `*${nombre}* (${departamento.nombre})` : `*${nombre}*`
 
   const { evento: eventoFresco, yaEstaba, avisos } = await marcarInstanciaYPropagar(deps, {
@@ -775,7 +801,7 @@ async function comandoTomar(deps, { departamentos, modoTodo, email, argumento })
   const r = buscarPorTexto(operables, argumento, hoyISO)
   if (!r.una) return pedirPrecision(r, operables, { modoTodo: departamentos.length > 1 })
 
-  const { evento, nombre, hecha, departamento } = r.una
+  const { evento, rotulo: nombre, hecha, departamento } = r.una
   if (hecha) return `*${nombre}* ya está hecha, no hace falta tomarla.`
 
   const actual = evento.extendedProperties?.private?.asignado_a
@@ -811,7 +837,7 @@ async function comandoPasar(deps, { departamentos, modoTodo, email, argumento })
   const r = buscarPorTexto(operables, tarea, hoyISO)
   if (!r.una) return pedirPrecision(r, operables, { modoTodo: departamentos.length > 1 })
 
-  const { evento, nombre, hecha, departamento } = r.una
+  const { evento, rotulo: nombre, hecha, departamento } = r.una
   if (hecha) return `*${nombre}* ya está hecha, no hace falta pasarla.`
 
   await gcal.marcarInstancia({
@@ -847,7 +873,7 @@ async function comandoNota(deps, { departamentos, modoTodo, email, argumento }) 
   const r = buscarPorTexto(operables, tarea, hoyISO)
   if (!r.una) return pedirPrecision(r, operables, { modoTodo: departamentos.length > 1 })
 
-  const { evento, nombre, departamento } = r.una
+  const { evento, rotulo: nombre, departamento } = r.una
   await gcal.marcarInstancia({
     calendarId: departamento.id_calendar_google,
     instanceId: evento.id,
@@ -1050,7 +1076,7 @@ async function comandoResumen(deps, { departamento, departamentos, modoTodo }) {
   const cumplimiento = cerradas ? Math.round((hechasPeriodo.length / cerradas) * 100) : null
 
   const masVieja = vencidas
-    .map((o) => ({ nombre: o.nombre, departamento: o.departamento, dias: diasHabilesVencida(o.evento, { hoyISO }) }))
+    .map((o) => ({ nombre: o.rotulo, departamento: o.departamento, dias: diasHabilesVencida(o.evento, { hoyISO }) }))
     .sort((a, b) => b.dias - a.dias)[0]
 
   const varios = departamentos.length > 1
@@ -1215,15 +1241,12 @@ async function departamentoDeTareaCodificada(db, valorCodificado, { space, extUs
   return { departamento, instanceId }
 }
 
-// Semaforo + contadores del dia, MISMO criterio que el kiosko
-// (routes/tv.js#estado_general): rojo si algo de hoy quedo vencido, amarillo
-// si hay pendientes de hoy sin vencer todavia, verde si no hay nada de hoy
-// por hacer. Acotado a "hoy" a proposito -- es el mismo alcance que usa el
-// kiosko para este numero, aunque el checklist de /tildar despues muestre
-// todo el backlog.
+// Semaforo + contadores, MISMO criterio que el kiosko (routes/tv.js#estado_general):
+// rojo si hay algo atrasado (de cualquier dia -- una tarea de hoy recien vence a
+// la medianoche), amarillo si quedan pendientes de hoy, verde si no.
 function resumenDelDia(operables, hoyISO) {
   const deHoy = operables.filter((o) => o.fechaISO === hoyISO)
-  const vencidas = deHoy.filter((o) => !o.hecha && o.vencida).length
+  const vencidas = operables.filter((o) => !o.hecha && o.vencida).length
   const pendientes = deHoy.filter((o) => !o.hecha && !o.vencida).length
   const realizadas = deHoy.filter((o) => o.hecha).length
   const semaforo = vencidas > 0 ? '🔴' : pendientes > 0 ? '🟡' : '🟢'
@@ -1251,10 +1274,10 @@ export async function pendientesParaAsignar(deps, { space, extUser }) {
       return {
         instanceId: codificarTarea(o.departamento.id, o.evento.id),
         etiqueta: o.vencida
-          ? `${o.nombre}${deQuien} — atrasada ${diasHabilesVencida(o.evento, { hoyISO })}d`
+          ? `${o.rotulo}${deQuien} — atrasada ${diasHabilesVencida(o.evento, { hoyISO })}d`
           : o.fechaISO === hoyISO
-            ? `${o.nombre}${deQuien} — hoy`
-            : `${o.nombre}${deQuien} — ${o.fechaISO}`
+            ? `${o.rotulo}${deQuien} — hoy`
+            : `${o.rotulo}${deQuien} — ${o.fechaISO}`
       }
     })
 
@@ -1401,7 +1424,7 @@ export async function pendientesParaTildar(deps, { space, extUser }) {
       const deQuien = varios ? ` [${o.departamento.nombre}]` : ''
       return {
         instanceId: codificarTarea(o.departamento.id, o.evento.id),
-        etiqueta: `${color} ${o.nombre}${deQuien}${antiguedad}`
+        etiqueta: `${color} ${o.rotulo}${deQuien}${antiguedad}`
       }
     })
 

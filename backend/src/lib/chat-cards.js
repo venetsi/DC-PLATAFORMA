@@ -433,7 +433,7 @@ export function dialogoTildar(pendientes, { departamento, departamentos, porFall
   }
 
   const encabezado = resumen
-    ? `${resumen.semaforo} *Hoy:* ${resumen.vencidas} vencidas · ${resumen.pendientes} pendientes · ${resumen.realizadas} hechas`
+    ? `${resumen.semaforo} ${resumen.vencidas} atrasadas · *Hoy:* ${resumen.pendientes} pendientes · ${resumen.realizadas} hechas`
     : ''
   const recorte = pendientes.length > MAX_TAREAS_POR_CARD
     ? `\n_y ${pendientes.length - MAX_TAREAS_POR_CARD} más -- marcalas de a una con \`/marcar\`._`

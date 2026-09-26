@@ -130,7 +130,7 @@
     <div class="kpi"><div class="semaforo" id="semaforo-general"></div><div><div class="valor" id="estado-general-texto" style="font-size:16px">—</div><div class="etiqueta">Estado de hoy</div></div></div>
     <div class="kpi"><div class="valor amarillo" id="kpi-pendientes">0</div><div class="etiqueta">Pendientes hoy</div></div>
     <div class="kpi"><div class="valor verde" id="kpi-realizadas">0</div><div class="etiqueta">Realizadas hoy</div></div>
-    <div class="kpi"><div class="valor rojo" id="kpi-vencidas">0</div><div class="etiqueta">Vencidas hoy</div></div>
+    <div class="kpi"><div class="valor rojo" id="kpi-vencidas">0</div><div class="etiqueta">Atrasadas</div></div>
   </div>
 
   <div id="semana"></div>
@@ -300,7 +300,7 @@
 
     var semaforo = document.getElementById('semaforo-general');
     semaforo.className = 'semaforo ' + data.estado_general;
-    var textoEstado = { verde: 'Todo al día', amarillo: 'Con pendientes', rojo: 'Con vencidas' }[data.estado_general] || '—';
+    var textoEstado = { verde: 'Todo al día', amarillo: 'Con pendientes', rojo: 'Con atrasadas' }[data.estado_general] || '—';
     document.getElementById('estado-general-texto').textContent = textoEstado;
 
     pintarSemana(data.eventos, data.atrasadas);

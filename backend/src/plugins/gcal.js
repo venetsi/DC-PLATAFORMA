@@ -60,7 +60,7 @@ async function gcalPlugin(fastify) {
     // la recurrencia cambio el titulo o el responsable de la asignacion.
     // Las instancias ya modificadas (una marcada REALIZADA es una excepcion
     // puntual) conservan lo suyo -- Calendar no las pisa al patchear el maestro.
-    async editarRecurrencia({ calendarId, eventId, recurrence, summary, extendedProperties }) {
+    async editarRecurrencia({ calendarId, eventId, recurrence, summary, extendedProperties, startDate, endDate }) {
       const calendar = await getCalendarClient()
 
       // Merge en vez de reemplazo: un patch con extendedProperties.private
@@ -79,6 +79,9 @@ async function gcalPlugin(fastify) {
           requestBody: {
             ...(recurrence ? { recurrence } : {}),
             ...(summary ? { summary } : {}),
+            // Mover el inicio solo es seguro si la serie no tiene ocurrencias
+            // pasadas (las re-expandiria) -- lo decide la ruta de agenda.
+            ...(startDate ? { start: { date: startDate }, end: { date: endDate } } : {}),
             ...(privateProps ? { extendedProperties: { private: privateProps } } : {})
           }
         })

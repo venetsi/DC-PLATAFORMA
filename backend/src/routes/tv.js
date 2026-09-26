@@ -12,7 +12,7 @@ function clavesCoinciden(a, b) {
 // columna "Atrasadas" -- una tarea que nunca se marca realizada no debe
 // desaparecer del kiosko, pero tampoco tiene sentido arrastrar backlog
 // indefinido: 30 dias alcanza para ver un mes de atraso real.
-const DIAS_ATRASADAS = 30
+const DIAS_ATRASADAS = 60
 
 function lunesDe(fecha) {
   const diaIso = fecha.getUTCDay() === 0 ? 7 : fecha.getUTCDay()
@@ -79,6 +79,10 @@ export default async function tvRoutes(fastify) {
     const finEsta = viernesEsta.getTime()
     const inicioProxima = lunesProxima.getTime()
     const finProxima = viernesProxima.getTime()
+    // Una tarea de hoy recien vence a la medianoche, asi que "vencidas de
+    // hoy" es siempre 0: el rojo tiene que mirar todo lo atrasado de la
+    // ventana, no solo el dia en curso.
+    let vencidasEnVentana = 0
 
     for (const evento of items) {
       const props = evento.extendedProperties?.private || {}
@@ -86,10 +90,11 @@ export default async function tvRoutes(fastify) {
       const { hecha, vencida, estado, fechaISO: fechaEvento } = clasificarInstancia(evento, { referencia: ahora })
       const fechaMs = new Date(`${fechaEvento}T00:00:00Z`).getTime()
 
+      if (vencida) vencidasEnVentana++
       if (fechaEvento === hoyISO) {
-        porLocalHoy[idLocal || '_general'] ??= { pendientes: 0, realizadas: 0, vencidas: 0 }
+        porLocalHoy[idLocal || '_general'] ??= { pendientes: 0, realizadas: 0 }
         if (hecha) porLocalHoy[idLocal || '_general'].realizadas++
-        else porLocalHoy[idLocal || '_general'][vencida ? 'vencidas' : 'pendientes']++
+        else if (!vencida) porLocalHoy[idLocal || '_general'].pendientes++
       }
 
       const item = {
@@ -120,14 +125,10 @@ export default async function tvRoutes(fastify) {
     }
 
     const totalesHoy = Object.values(porLocalHoy).reduce(
-      (acc, l) => ({
-        pendientes: acc.pendientes + l.pendientes,
-        realizadas: acc.realizadas + l.realizadas,
-        vencidas: acc.vencidas + l.vencidas
-      }),
-      { pendientes: 0, realizadas: 0, vencidas: 0 }
+      (acc, l) => ({ ...acc, pendientes: acc.pendientes + l.pendientes, realizadas: acc.realizadas + l.realizadas }),
+      { pendientes: 0, realizadas: 0, vencidas: vencidasEnVentana }
     )
-    const estado_general = totalesHoy.vencidas > 0 ? 'rojo' : totalesHoy.pendientes > 0 ? 'amarillo' : 'verde'
+    const estado_general = vencidasEnVentana > 0 ? 'rojo' : totalesHoy.pendientes > 0 ? 'amarillo' : 'verde'
 
     return {
       actualizado: new Date().toISOString(),

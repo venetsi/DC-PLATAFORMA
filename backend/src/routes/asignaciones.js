@@ -1,12 +1,14 @@
-import { construirRecurrence, primeraFecha } from '../lib/recurrencia.js'
+import { construirRecurrence, primeraFecha, leerRecurrence, mismaRegla } from '../lib/recurrencia.js'
 import { usuarioActual, puedeGestionarDepartamento } from '../lib/permisos.js'
 import { componerTitulo } from '../lib/titulo.js'
+import { hoyEnArgentina } from '../lib/vencimiento.js'
 
-function sumarUnDia(fechaISO) {
+function sumarDias(fechaISO, n) {
   const d = new Date(`${fechaISO}T00:00:00Z`)
-  d.setUTCDate(d.getUTCDate() + 1)
+  d.setUTCDate(d.getUTCDate() + n)
   return d.toISOString().slice(0, 10)
 }
+const sumarUnDia = (fechaISO) => sumarDias(fechaISO, 1)
 
 // CRUD de TareaAsignacion (agenda por local). Crear/editar la agenda
 // (recurrencia) llama a Google Calendar por debajo -- ver docs/superpowers.
@@ -88,6 +90,25 @@ export default async function asignacionesRoutes(fastify) {
     }
   })
 
+  // La agenda vigente, leida del maestro de Calendar (la base no la guarda),
+  // para precargar el formulario: sin esto se abria siempre en "Diaria, desde
+  // hoy" y al guardar se pisaba la frecuencia real.
+  fastify.get('/:id/agenda', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const asignacion = await fastify.db.tareaAsignacion.findUnique({
+      where: { id: request.params.id },
+      include: { tarea: { include: { departamento: true } } }
+    })
+    if (!asignacion) return reply.code(404).send({ error: 'Asignacion no encontrada' })
+    if (!asignacion.id_calendar_event) return { agenda: null }
+
+    const maestro = await fastify.gcal.leerInstancia({
+      calendarId: asignacion.tarea.departamento.id_calendar_google,
+      instanceId: asignacion.id_calendar_event
+    })
+    if (!maestro) return { agenda: null }
+    return { agenda: leerRecurrence(maestro.recurrence, maestro.start?.date) }
+  })
+
   // Define/edita la agenda de una asignacion existente -- crea el evento de
   // Calendar si todavia no tiene, o edita el recurrence del maestro si ya lo
   // tiene. Si la asignacion esta compartida con otros departamentos
@@ -120,8 +141,12 @@ export default async function asignacionesRoutes(fastify) {
 
     // Sin vigencia_hasta explicita, la serie se acota a 12 meses y la renueva
     // reconciliar.js -- nunca infinita (ver lib/recurrencia.js).
-    const recurrence = construirRecurrence(recurrencia_tipo, recurrencia_config, vigencia_hasta, vigencia_desde)
-    const startDate = primeraFecha(recurrencia_tipo, recurrencia_config, vigencia_desde)
+    // Al editar, un cambio de agenda rige desde "desde" pero nunca antes de hoy:
+    // el pasado ya ocurrio (y tiene lo marcado) y no se reescribe.
+    const hoy = hoyEnArgentina()
+    const corte = asignacion.id_calendar_event && vigencia_desde < hoy ? hoy : vigencia_desde
+    const recurrence = construirRecurrence(recurrencia_tipo, recurrencia_config, vigencia_hasta, corte)
+    const startDate = primeraFecha(recurrencia_tipo, recurrencia_config, corte)
     const endDate = sumarUnDia(startDate)
 
     // Titulo con el local/grupo al que aplica -- ver lib/titulo.js. El nombre
@@ -138,19 +163,41 @@ export default async function asignacionesRoutes(fastify) {
         nombre_tarea: asignacion.tarea.nombre,
         asignado_a: responsable
       }
-      if (eventIdActual) {
-        // Tambien se actualizan titulo y responsable, no solo la recurrencia:
-        // sin esto, cambiar el responsable de una tarea ya agendada no tenia
-        // ningun efecto sobre el evento. `estado` queda afuera a proposito --
-        // lo maneja marcarInstancia por instancia, no el maestro.
-        await fastify.gcal.editarRecurrencia({
-          calendarId: calId,
-          eventId: eventIdActual,
-          recurrence: recurrence ?? [],
-          summary: titulo,
-          extendedProperties: props
-        })
-        return eventIdActual
+      const maestro = eventIdActual ? await fastify.gcal.leerInstancia({ calendarId: calId, instanceId: eventIdActual }) : null
+      if (maestro) {
+        const inicioActual = maestro.start?.date
+        const mismaAgenda = recurrence
+          ? mismaRegla(maestro.recurrence, recurrence)
+          : !maestro.recurrence?.length && inicioActual === startDate
+
+        // Solo cambio el titulo o el responsable: no se toca la recurrencia.
+        // `estado` queda afuera a proposito -- lo maneja marcarInstancia.
+        if (mismaAgenda) {
+          await fastify.gcal.editarRecurrencia({ calendarId: calId, eventId: eventIdActual, summary: titulo, extendedProperties: props })
+          return eventIdActual
+        }
+
+        // Cambio de agenda sobre algo que todavia no empezo: se reemplaza entero.
+        if (inicioActual >= corte) {
+          await fastify.gcal.editarRecurrencia({
+            calendarId: calId,
+            eventId: eventIdActual,
+            recurrence: recurrence ?? [],
+            summary: titulo,
+            extendedProperties: props,
+            startDate,
+            endDate
+          })
+          return eventIdActual
+        }
+
+        // Cambio de agenda sobre una serie que ya tiene pasado: se cierra la
+        // vieja el dia anterior al corte y arranca una nueva. Reescribir la
+        // RRULE sobre el DTSTART viejo re-expandia el pasado (aparecian
+        // vencidas retroactivas) o hacia desaparecer vencidas reales.
+        if (maestro.recurrence?.length) {
+          await fastify.gcal.cerrarRecurrencia({ calendarId: calId, eventId: eventIdActual, untilDate: sumarDias(corte, -1) })
+        }
       }
       const evento = await fastify.gcal.crearEventoRecurrente({
         calendarId: calId,

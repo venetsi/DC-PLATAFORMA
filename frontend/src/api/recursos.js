@@ -31,7 +31,8 @@ export const dependenciasApi = {
 export const asignacionesApi = {
   listar: (params) => api.get('/asignaciones', { params }).then((r) => r.data),
   crear: (body) => api.post('/asignaciones', body).then((r) => r.data),
-  definirAgenda: (id, body) => api.put(`/asignaciones/${id}/agenda`, body).then((r) => r.data)
+  definirAgenda: (id, body) => api.put(`/asignaciones/${id}/agenda`, body).then((r) => r.data),
+  leerAgenda: (id) => api.get(`/asignaciones/${id}/agenda`).then((r) => r.data.agenda)
 }
 
 export const instanciasApi = {

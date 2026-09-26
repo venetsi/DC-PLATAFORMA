@@ -1,12 +1,15 @@
+import { useState } from 'react'
 import { agruparPorDiaYLocal } from '../lib/agrupar.js'
+import DetalleTarea from './DetalleTarea.jsx'
 
 const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
 // Vista "Agenda": un dia por columna (mismo agrupamiento y estilo visual
 // que el kiosko -- ver kiosko/index.html:pintarSemana), cada dia agrupado
-// por local y sus tareas como bullets. A diferencia del kiosko (solo
-// lectura), el bullet es clickeable para marcar realizada.
+// por local y sus tareas como bullets. Tocar una tarea abre su detalle; marcar
+// hecha se hace desde ahi, con confirmacion (es definitivo).
 export default function AgendaAgrupada({ eventos, mapaLocales, onMarcar, marcando }) {
+  const [abierta, setAbierta] = useState(null)
   const dias = agruparPorDiaYLocal(eventos, mapaLocales)
 
   if (dias.length === 0) {
@@ -26,21 +29,20 @@ export default function AgendaAgrupada({ eventos, mapaLocales, onMarcar, marcand
               <div className="local-nombre">{local}</div>
               <ul className="tarea-bullets">
                 {tareas.map((t) => {
-                  const accionable = t.estado !== 'realizada' && !!onMarcar
                   // Quien la hizo (o quien la tiene a cargo) es la mitad del
-                  // seguimiento entre equipos -- el dato ya viajaba en el
-                  // evento pero no se mostraba en ningun lado.
+                  // seguimiento entre equipos.
                   const pie = t.estado === 'realizada'
                     ? (t.realizadaPor ? `✓ ${t.realizadaPor}` : null)
                     : (t.asignadoA ? `→ ${t.asignadoA}` : null)
                   return (
                     <li
                       key={t.id}
-                      className={t.estado + (accionable ? ' clickable' : '')}
-                      // Se pasa el departamento del evento (no el del store):
-                      // desde "Mis tareas" puede no ser el mismo.
-                      onClick={accionable ? () => onMarcar(t.id, t.idDepartamento) : undefined}
-                      title={accionable ? 'Marcar realizada' : undefined}
+                      className={t.estado + ' clickable'}
+                      onClick={() => setAbierta(t)}
+                      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setAbierta(t)}
+                      role="button"
+                      tabIndex={0}
+                      title="Ver detalle"
                     >
                       <span className="tarea-texto">
                         <span>
@@ -67,6 +69,7 @@ export default function AgendaAgrupada({ eventos, mapaLocales, onMarcar, marcand
           ))}
         </div>
       ))}
+      {abierta && <DetalleTarea tarea={abierta} onCerrar={() => setAbierta(null)} onMarcar={onMarcar} />}
     </div>
   )
 }

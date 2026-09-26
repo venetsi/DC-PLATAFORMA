@@ -4,6 +4,8 @@ import dayGridPlugin from '@fullcalendar/daygrid'
 import { useAuthStore } from '../store/authStore.js'
 import { instanciasApi, localesApi } from '../api/recursos.js'
 import AgendaAgrupada from '../components/AgendaAgrupada.jsx'
+import DetalleTarea from '../components/DetalleTarea.jsx'
+import { aTarea } from '../lib/agrupar.js'
 import SinAsignacion from './SinAsignacion.jsx'
 import { AvisoPrerrequisitos } from './MisTareas.jsx'
 import { clasificarInstancia } from '../lib/vencimiento.js'
@@ -16,14 +18,22 @@ const VISTAS = [
 
 const COLOR_ESTADO = { pendiente: '#e0b83f', vencida: '#e05c3f', realizada: '#3fb66a' }
 
+// Fecha local (no toISOString, que es UTC: despues de las 21:00 corria el
+// rango un dia).
+function isoLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// "hasta" es EXCLUSIVO en la API de Calendar: se manda el sabado para que
+// entre el viernes (antes la vista inicial no mostraba el viernes).
 function semanaActualLunesAViernes() {
   const hoy = new Date()
   const diaIso = hoy.getDay() === 0 ? 7 : hoy.getDay()
   const lunes = new Date(hoy)
   lunes.setDate(hoy.getDate() - (diaIso - 1))
-  const viernes = new Date(lunes)
-  viernes.setDate(lunes.getDate() + 4)
-  return { desde: lunes.toISOString().slice(0, 10), hasta: viernes.toISOString().slice(0, 10) }
+  const sabado = new Date(lunes)
+  sabado.setDate(lunes.getDate() + 5)
+  return { desde: isoLocal(lunes), hasta: isoLocal(sabado) }
 }
 
 export default function Calendario() {
@@ -34,6 +44,7 @@ export default function Calendario() {
   const [rango, setRango] = useState(semanaActualLunesAViernes())
   const [marcando, setMarcando] = useState(null)
   const [aviso, setAviso] = useState(null)
+  const [abierta, setAbierta] = useState(null)
 
   useEffect(() => {
     localesApi.listar().then((locales) => setMapaLocales(new Map(locales.map((l) => [l.id, l.nombre]))))
@@ -92,6 +103,11 @@ export default function Calendario() {
     [eventos]
   )
 
+  function abrirDetalle(id) {
+    const ev = eventos.find((e) => e.id === id)
+    if (ev) setAbierta(aTarea(ev, mapaLocales))
+  }
+
   if (!departamento) return <SinAsignacion />
 
   return (
@@ -138,7 +154,7 @@ export default function Calendario() {
             eventDisplay="list-item"
             events={fcEventos}
             datesSet={onDatesSet}
-            eventClick={(info) => marcar(info.event.id)}
+            eventClick={(info) => abrirDetalle(info.event.id)}
             height="auto"
             headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
           />
@@ -153,12 +169,14 @@ export default function Calendario() {
             eventDisplay="list-item"
             events={fcEventos}
             datesSet={onDatesSet}
-            eventClick={(info) => marcar(info.event.id)}
+            eventClick={(info) => abrirDetalle(info.event.id)}
             height="auto"
             headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
           />
         </div>
       )}
+
+      {abierta && <DetalleTarea tarea={abierta} onCerrar={() => setAbierta(null)} onMarcar={marcar} />}
     </div>
   )
 }

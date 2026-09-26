@@ -287,3 +287,36 @@ th, td {
   color: var(--rojo);
   white-space: nowrap;
 }
+
+/* Detalle de tarea (components/DetalleTarea.jsx) */
+.detalle-fondo {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 50;
+}
+.detalle-tarea {
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.detalle-encabezado { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
+.detalle-sub { margin: 0; color: var(--texto-tenue); font-size: 0.9rem; }
+.detalle-datos { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 0.9rem; margin: 0; font-size: 0.9rem; }
+.detalle-datos dt { color: var(--texto-tenue); }
+.detalle-datos dd { margin: 0; }
+.detalle-datos .estado-vencida { color: var(--rojo); }
+.detalle-datos .estado-pendiente { color: var(--amarillo); }
+.detalle-datos .estado-realizada { color: var(--verde); }
+.detalle-etiqueta { color: var(--texto-tenue); font-size: 0.8rem; margin-bottom: 0.25rem; }
+.detalle-historial { margin: 0; padding-left: 1rem; font-size: 0.78rem; color: var(--texto-tenue); display: flex; flex-direction: column; gap: 0.2rem; }
+.detalle-confirmar { display: flex; flex-direction: column; gap: 0.6rem; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 0.75rem; }
+.detalle-accion { min-height: 44px; }
