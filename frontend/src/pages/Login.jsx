@@ -66,7 +66,10 @@ export default function Login() {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: '1rem' }}>
       <div className="card" style={{ width: 340, display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
-        <h2 style={{ margin: 0, color: 'var(--gold)' }}>DC-PLATAFORMA</h2>
+        <div className="marca-entrada">
+          <img src="/logo-dcsmart.svg" alt="DCSMART" />
+          <h2>DC-PLATAFORMA</h2>
+        </div>
         {conectandoTv && !GOOGLE_CLIENT_ID && (
           <>
             <p style={{ margin: 0 }}>

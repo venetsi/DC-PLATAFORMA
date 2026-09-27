@@ -31,7 +31,10 @@ export default function Layout() {
     <div>
       <header className="cabecera">
         <div className="cabecera-izq">
-          <strong style={{ color: 'var(--gold)' }}>DC-PLATAFORMA</strong>
+          <strong className="marca">
+            <img src="/favicon.svg" alt="" aria-hidden="true" />
+            DC-PLATAFORMA
+          </strong>
           <nav className="cabecera-nav" ref={navRef}>
             <NavLink to="/" style={linkStyle} end>Mi agenda</NavLink>
             {departamento && <NavLink to="/mis-tareas" style={linkStyle}>Mis tareas</NavLink>}

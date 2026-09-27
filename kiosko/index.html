@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta http-equiv="refresh" content="3600" />
 <title>DC-PLATAFORMA — Agenda</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet" />
 <style>
@@ -37,7 +38,8 @@
 
   header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
   .titulo { display: flex; flex-direction: column; min-width: 0; }
-  .titulo .marca { font-size: 16px; letter-spacing: 3px; color: var(--gold); font-weight: 700; text-transform: uppercase; }
+  .titulo .marca { font-size: 16px; letter-spacing: 3px; color: var(--gold); font-weight: 700; text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
+  .titulo .marca img { height: 30px; width: auto; }
   .titulo .depto { font-size: 38px; font-weight: 800; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .titulo .deptos { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; font-size: 13px; color: var(--texto-tenue); }
 
@@ -119,7 +121,8 @@
   /* --- Modo conexion: la TV todavia no esta conectada. QR grande para
      leerse de lejos, y el codigo para quien prefiere escribirlo. --- */
   #conexion { width: 100%; height: 100%; display: flex; flex-direction: column; padding: 40px 64px; }
-  #conexion .marca { font-size: 16px; letter-spacing: 3px; color: var(--gold); font-weight: 700; text-transform: uppercase; }
+  #conexion .marca { font-size: 28px; letter-spacing: 3px; color: var(--gold); font-weight: 700; text-transform: uppercase; display: flex; align-items: center; gap: 22px; }
+  .conexion-logo { height: 110px; width: auto; }
   .conexion-cuerpo { flex: 1; display: flex; align-items: center; justify-content: center; gap: 72px; min-height: 0; }
   .qr-caja { background: #fff; border-radius: 22px; padding: 22px; width: min(48vh, 40vw); height: min(48vh, 40vw); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 0 60px rgba(63, 182, 189, 0.18); }
   .qr-caja img { width: 100%; height: 100%; image-rendering: pixelated; }
@@ -140,7 +143,7 @@
 
 <!-- Modo conexion (RFC 8628): QR + codigo, hasta que alguien la conecta desde el celular. -->
 <div id="conexion" hidden>
-  <span class="marca">DC-PLATAFORMA</span>
+  <span class="marca"><img class="conexion-logo" src="/logo-dcsmart.svg" alt="DCSMART" />DC-PLATAFORMA</span>
   <div class="conexion-cuerpo">
     <div class="qr-caja" id="qr-caja"><img id="qr" alt="Código QR para conectar esta pantalla" /></div>
     <div class="conexion-texto">
@@ -161,7 +164,7 @@
 <div id="app" hidden>
   <header>
     <div class="titulo">
-      <span class="marca">DC-PLATAFORMA</span>
+      <span class="marca"><img src="/favicon.svg" alt="" aria-hidden="true" />DC-PLATAFORMA</span>
       <span class="depto" id="nombre-pantalla">Cargando…</span>
       <div class="deptos" id="deptos-pantalla"></div>
     </div>

@@ -400,6 +400,13 @@ th, td {
 .cabecera-nav { display: flex; gap: 0.4rem 1rem; flex-wrap: wrap; }
 .cabecera-der { display: flex; gap: 0.75rem; align-items: center; font-size: 0.8rem; color: var(--texto-tenue); min-width: 0; margin-left: auto; }
 .cabecera-usuario { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 34ch; }
+/* Marca DCSMART: el isotipo en la cabecera (el logo principal es vertical y a
+   esta altura no se leeria) y el logo completo en las pantallas de entrada. */
+.marca { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--gold); white-space: nowrap; }
+.marca img { height: 1.9rem; width: auto; display: block; }
+.marca-entrada { display: flex; align-items: center; justify-content: center; gap: 0.9rem; }
+.marca-entrada img { height: 4.5rem; width: auto; flex: 0 0 auto; }
+.marca-entrada h2 { margin: 0; color: var(--gold); font-size: 1.35rem; }
 @media (max-width: 640px) {
   .cabecera { padding: 0.75rem 1rem; }
   main { padding: 1rem !important; }

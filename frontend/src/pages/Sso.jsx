@@ -31,6 +31,10 @@ export default function Sso() {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
       <div className="card" style={{ width: 320, textAlign: 'center' }}>
+        <div className="marca-entrada">
+          <img src="/logo-dcsmart.svg" alt="DCSMART" />
+          <h2>DC-PLATAFORMA</h2>
+        </div>
         {error ? (
           <>
             <p style={{ color: 'var(--rojo)', fontSize: '0.9rem' }}>{error}</p>
