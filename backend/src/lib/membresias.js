@@ -1,4 +1,5 @@
 import { getDirectory, getDirectoryUsuarios } from './directory-auth.js'
+import { fuenteMembresia } from './permisos.js'
 
 // Membresia de departamentos leida de los Google Groups depto-<slug>@, que son
 // la fuente de verdad (se administran a mano en Workspace). Se copia en
@@ -100,6 +101,32 @@ export async function sincronizarMembresias(deps, { forzar = false } = {}) {
 
   ultimaCorrida = Date.now()
   return resultado
+}
+
+// El ExtUser de `email`; si no existe y esa persona ya usa Groups (fuente
+// general o piloto) y esta en algun grupo depto-* activo, se le crea en el
+// momento -- mismo criterio que la sincronizacion, pero sin esperarla.
+export async function usuarioPorEmail(db, email, { nombre } = {}) {
+  const existente = await db.extUser.findUnique({ where: { email } })
+  if (existente || fuenteMembresia(email) !== 'groups') return existente
+  const membresia = await db.membresiaDepartamento.findFirst({
+    where: { email, departamento: { activo: true } },
+    orderBy: { departamento: { nombre: 'asc' } }
+  })
+  if (!membresia) return null
+  return db.extUser.upsert({
+    where: { email },
+    create: { id: email, email, nombre: nombre || email.split('@')[0], id_departamento: membresia.id_departamento, activo: true },
+    update: {}
+  })
+}
+
+// Texto para Chat cuando quien escribe no puede operar: distingue "no existe"
+// de "desactivado" y muestra la cuenta detectada, para que se pueda resolver
+// sin revisar logs.
+export function motivoSinAcceso(usuario, email) {
+  if (usuario && !usuario.activo) return `⚠️ Tu usuario (${email}) está desactivado en la plataforma. Pedile a un administrador que lo reactive.`
+  return `⚠️ No encuentro a ${email} en la plataforma. Pedile a un administrador que te sume al grupo depto-<área>@dcsmart.app de tu departamento, o entrá una vez desde dcsmart → Tareas.`
 }
 
 // Dispara una sincronizacion en segundo plano si la ultima tiene mas de 15

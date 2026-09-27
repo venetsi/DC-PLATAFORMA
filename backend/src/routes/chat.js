@@ -56,7 +56,7 @@ import {
 import { marcarInstanciaYPropagar } from '../lib/marcar-instancia.js'
 import { prerrequisitosPendientes } from '../lib/dependencias.js'
 import { esAdminGlobal, conPermisos } from '../lib/permisos.js'
-import { asegurarMembresiasFrescas } from '../lib/membresias.js'
+import { asegurarMembresiasFrescas, usuarioPorEmail, motivoSinAcceso } from '../lib/membresias.js'
 import { construirTarjetaDepartamento, conNotaSuperior } from '../lib/chat-recordatorio.js'
 import {
   ejecutarComando,
@@ -250,9 +250,10 @@ async function manejarComando(fastify, chatEvent) {
     return mensajeNuevo({ text: '⚠️ No pude identificarte. Entrá a la plataforma.' })
   }
   asegurarMembresiasFrescas(fastify)
-  const extUser = await conPermisos(fastify.db, await fastify.db.extUser.findUnique({ where: { email } }))
+  const extUser = await conPermisos(fastify.db, await usuarioPorEmail(fastify.db, email, { nombre: usuario?.displayName }))
   if (!extUser?.activo) {
-    return mensajeNuevo({ text: '⚠️ Tu usuario no está activo en la plataforma.' })
+    fastify.log.info({ email, existe: !!extUser }, 'chat: usuario sin acceso')
+    return mensajeNuevo({ text: motivoSinAcceso(extUser, email) })
   }
 
   // /asignar, /derivar y /apuntar responden con un DIALOGO, no con un mensaje:
@@ -389,9 +390,10 @@ async function manejarClick(fastify, chatEvent, common) {
   }
 
   asegurarMembresiasFrescas(fastify)
-  const extUser = await conPermisos(fastify.db, await fastify.db.extUser.findUnique({ where: { email } }))
+  const extUser = await conPermisos(fastify.db, await usuarioPorEmail(fastify.db, email, { nombre: usuario?.displayName }))
   if (!extUser?.activo) {
-    return mensajePrivado(usuario, '⚠️ Tu usuario no está activo en la plataforma.')
+    fastify.log.info({ email, existe: !!extUser }, 'chat: usuario sin acceso')
+    return mensajePrivado(usuario, motivoSinAcceso(extUser, email))
   }
 
   // El space de un click de boton viaje dentro del propio payload (mismo

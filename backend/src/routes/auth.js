@@ -87,6 +87,25 @@ export default async function authRoutes(fastify) {
       return reply.code(403).send({ error: 'Este dominio de email no tiene acceso a DC-PLATAFORMA' })
     }
 
+    // Con Groups como fuente de verdad, dcsmart deja de ser el gate de acceso:
+    // el ticket es valido y el dominio esta permitido, pero si la persona no
+    // esta en ningun grupo depto-* activo no entra a Tareas -- mismo criterio
+    // que /google, para que no haya una puerta mas laxa que la otra. Se deja
+    // pasar si el ticket trae es_super_admin (admin de dcsmart) o si ya es
+    // admin global de esta plataforma, para no bloquear a un admin real que
+    // todavia no este cargado en ningun grupo.
+    if (fuenteMembresia(email) === 'groups') {
+      const [membresias, existente] = await Promise.all([
+        fastify.db.membresiaDepartamento.findMany({ where: { email, departamento: { activo: true } } }),
+        fastify.db.extUser.findUnique({ where: { email } })
+      ])
+      if (!membresias.length && !es_super_admin && !existente?.es_admin_global) {
+        return reply.code(403).send({
+          error: 'Tu cuenta no está en ningún grupo de departamento. Pedí que te agreguen al grupo depto-<área>@dcsmart.app.'
+        })
+      }
+    }
+
     // dcsmart no tiene tabla de departamentos propia (es un texto libre en
     // users.departamento) -- se resuelve contra el catalogo real de acá antes
     // de guardar nada, para no heredar mayusculas/nombres sueltos de dcsmart.
