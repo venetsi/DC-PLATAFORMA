@@ -78,7 +78,7 @@ function botonMarcar(evento) {
   }
 }
 
-export const URL_APP_POR_DEFECTO = 'https://dc-plataforma.web.app'
+export const URL_APP_POR_DEFECTO = 'https://dc-plataforma.dcsmart.app'
 
 // Un mensaje de Chat lo abre una persona real desde su telefono o su maquina:
 // un link a localhost NUNCA sirve. Paso de verdad -- correr el job desde una

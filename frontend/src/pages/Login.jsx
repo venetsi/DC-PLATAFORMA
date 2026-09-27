@@ -88,6 +88,9 @@ export default function Login() {
             {GOOGLE_CLIENT_ID ? 'También podés entrar' : 'Para entrar,'} desde dcsmart con el botón <strong>Tareas</strong> del menú lateral.
           </p>
         )}
+        {!(conectandoTv && !GOOGLE_CLIENT_ID) && (
+          <a className="btn" href={DCSMART_URL} style={{ textAlign: 'center', textDecoration: 'none' }}>Ir a dcsmart</a>
+        )}
         {!GOOGLE_CLIENT_ID && (
           <p style={{ color: 'var(--texto-tenue)', fontSize: '0.85rem', margin: 0 }}>
             Si no ves esa opción en dcsmart, pedile acceso a un administrador.

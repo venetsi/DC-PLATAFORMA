@@ -10,8 +10,9 @@ Calendar y se opera desde la plataforma o desde Google Chat.
 ## Cómo entrar
 
 1. En el sistema de dcsmart, tocá **Tareas** en el menú lateral.
-2. Se abre DC-PLATAFORMA en una pestaña nueva, ya con tu sesión. No hay contraseña
-   aparte.
+2. Se abre DC-PLATAFORMA (**dc-plataforma.dcsmart.app**) en una pestaña nueva, ya
+   con tu sesión. No hay contraseña aparte. Si entrás directo a esa dirección sin
+   sesión, el botón **Ir a dcsmart** te lleva a entrar.
 
 Para entrar tenés que estar en el grupo de Google de tu departamento
 (`depto-<área>@dcsmart.app`, por ejemplo `depto-auditoria@dcsmart.app`). Si ves *"Tu
@@ -185,21 +186,39 @@ de la siguiente. Si se corta internet, sigue mostrando lo último y se reconecta
 
 ### Conectar una TV
 
-1. En la TV, abrí **tv.dcsmart.app** (si todavía no abre, **dc-plataforma-tv.web.app**:
-   es la misma pantalla). Aparece un código QR con un código corto (por ejemplo
-   `BCD-FGH`).
-2. Escanealo con tu celular. Si no tenés la sesión abierta, entrá con dcsmart →
-   **Tareas** y volvés solo a la pantalla de conexión. Sin cámara: entrá a
-   **Pantallas** en la plataforma y escribí el código.
-3. Elegí qué agendas muestra, ponele un nombre (por ejemplo, *TV Tesorería*) y
-   tocá **Conectar**. En unos segundos la TV pasa sola a la agenda.
+**En la TV** (una sola vez):
 
-Cualquiera que vea una agenda la puede poner en una TV. La TV muestra lo que **vos**
-podés ver: si dejás de ver un departamento, la TV deja de mostrarlo. Conectala solo
-si tenés la pantalla adelante. Si no reconocés un código, tocá **No reconozco esta
-pantalla**.
+1. Abrí el navegador de la TV y entrá a **tv.dcsmart.app**.
+2. Aparece la pantalla *Conectá esta pantalla*, con un **código QR** grande y un
+   **código de 6 letras** (por ejemplo `BCD-FGH`) abajo.
 
-El código dura 10 minutos. Si nadie lo usa, la TV muestra uno nuevo sola.
+**En tu celular:**
+
+3. Escaneá el QR con la cámara. Se abre **dc-plataforma.dcsmart.app/tv** con el
+   código ya puesto.
+   - Sin cámara: entrá a **dc-plataforma.dcsmart.app/tv** (o a **Pantallas** en el
+     menú) y escribí el código.
+   - Si no tenés la sesión abierta, la plataforma te pide entrar: tocá **Abrir
+     dcsmart**, después **Tareas** en el menú de dcsmart, y volvés solo a la
+     pantalla de conexión.
+4. Revisá que el código y el equipo ("pedida hace 1 min desde Chrome en Android
+   TV") sean los de la TV que tenés adelante.
+5. Elegí qué agendas muestra (una o varias), ponele un nombre (por ejemplo, *TV
+   Tesorería*) y tocá **Conectar**.
+
+**Listo:** en unos segundos la TV deja el QR y pasa sola a la agenda. Queda conectada
+aunque se apague o se recargue.
+
+Cosas a tener en cuenta:
+
+- El código dura 10 minutos. Si nadie lo usa, la TV muestra uno nuevo sola.
+- Si el código que ves en el celular no es el de tu TV, tocá **No reconozco esta
+  pantalla**: se rechaza y la TV pide otro código.
+- Cualquiera que vea una agenda la puede poner en una TV, y la TV muestra lo que
+  **vos** podés ver: si dejás de ver un departamento, la TV deja de mostrarlo. Por eso
+  conectala solo si tenés la pantalla adelante.
+- Si una TV conectada vuelve a mostrar el QR, la desconectaron (o quien la conectó ya
+  no ve esas agendas): conectala de nuevo con estos mismos pasos.
 
 ### Pantallas
 

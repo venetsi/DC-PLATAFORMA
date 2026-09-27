@@ -19,8 +19,8 @@ repositorios de documentos, y lo poco que todavía no tiene pantalla.
 
 | | |
 |---|---|
-| **Plataforma** | `https://dc-plataforma.web.app` |
-| **Kiosko (TV)** | `https://tv.dcsmart.app` (o `https://dc-plataforma-tv.web.app`): muestra un QR para conectarla (§7) |
+| **Plataforma** | `https://dc-plataforma.dcsmart.app` (la vieja `dc-plataforma.web.app` redirige ahí, conservando ruta y `?ticket=`) |
+| **Kiosko (TV)** | `https://tv.dcsmart.app` (también responden `dc-plataforma-tv.dcsmart.app` y `dc-plataforma-tv.web.app`, sin redirigir: cada TV guarda su conexión en el dominio donde se conectó): muestra un QR para conectarla (§7) |
 | **API** | `https://dc-plataforma-api-288069746644.us-central1.run.app` — el frontend la usa a través de `/api/**` del mismo dominio |
 
 ### Cómo se entra
@@ -132,10 +132,10 @@ función `puede(usuario, acción, departamento)`).
 
 Solo hace falta para lo que no tiene pantalla (apéndice). Sirve el token de
 tu propia sesión: F12 → Aplicación → Local Storage →
-`dc-plataforma.web.app` → `dc_plataforma_token`.
+`dc-plataforma.dcsmart.app` → `dc_plataforma_token`.
 
 ```bash
-curl -X POST "https://dc-plataforma.web.app/api/departamentos/membresias/sincronizar?forzar=true" \
+curl -X POST "https://dc-plataforma.dcsmart.app/api/departamentos/membresias/sincronizar?forzar=true" \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -352,8 +352,8 @@ todos los departamentos.
 
 ## 7. Kiosko (pantalla de oficina, sin login)
 
-La TV abre **`https://tv.dcsmart.app`**, o `https://dc-plataforma-tv.web.app`
-(el mismo sitio de Firebase, `hosting:kiosko`). Si no está conectada, muestra
+La TV abre **`https://tv.dcsmart.app`** (sitio de Firebase `dc-plataforma-tv`,
+`hosting:kiosko`; en Hostmar, `tv` es un CNAME a `dc-plataforma-tv.web.app`). Si no está conectada, muestra
 un **QR** y un código corto. Se conecta con el flujo de dispositivo de las
 Smart TV (OAuth 2.0 Device Authorization Grant, RFC 8628):
 
@@ -510,7 +510,7 @@ npm run job:snapshot -- --instancias-desde=2026-08-08   # completar el tablero h
 | `AVISO_SLUG_DIRECCION` | Slug tratado como Dirección | `direccion` |
 | `AVISO_DIAS_DEPARTAMENTO` / `AVISO_DIAS_DIRECCION` | Umbrales globales (la columna del departamento gana) | `2` / `5` |
 | `MEMBRESIA_FUENTE` | `groups` = departamentos desde Google Groups | `groups` en producción |
-| `FRONTEND_URL` | Link a la plataforma en las cards de Chat, y adónde apunta el QR de las TVs (`/tv`) | `https://dc-plataforma.web.app` |
+| `FRONTEND_URL` | Link a la plataforma en las cards de Chat, adónde apunta el QR de las TVs (`/tv`) y origen permitido por CORS. Sin esta variable (el job de avisos no la tiene) se usa el mismo valor por defecto | `https://dc-plataforma.dcsmart.app` |
 
 > **Desde una máquina de desarrollo**: si `gcloud auth application-default
 > login` queda bloqueado por el control de acceso a apps de Workspace, el
