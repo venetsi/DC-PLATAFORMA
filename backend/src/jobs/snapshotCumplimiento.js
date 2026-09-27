@@ -3,10 +3,23 @@
 // unica fuente de reportes historicos/agregados -- /api/reportes SOLO lee
 // esta tabla, nunca recalcula agregando eventos de Calendar en vivo.
 //
-// Uso: node src/jobs/snapshotCumplimiento.js [YYYY-MM-DD]
-// Sin argumento, usa el dia de ayer en Argentina.
+// Ademas escribe CumplimientoInstancia (una fila por tarea x local x dia, ver
+// lib/cumplimiento-instancias.js) re-evaluando los ultimos 60 dias, para que
+// una atrasada que se hizo despues quede como "hecha tarde".
+//
+// Uso: node src/jobs/snapshotCumplimiento.js [YYYY-MM-DD] [--instancias-desde=YYYY-MM-DD]
+// Sin fecha, usa el dia de ayer en Argentina. --instancias-desde completa
+// CumplimientoInstancia hacia atras desde esa fecha (backfill).
 import { prisma, listarInstancias } from './lib.js'
 import { clasificarInstancia, hoyEnArgentina } from '../lib/vencimiento.js'
+import { registrarInstancias } from '../lib/cumplimiento-instancias.js'
+
+const DIAS_REEVALUADOS = 60
+
+function restarDias(fechaISO, dias) {
+  const [a, m, d] = fechaISO.split('-').map(Number)
+  return new Date(Date.UTC(a, m - 1, d - dias)).toISOString().slice(0, 10)
+}
 
 function rangoDelDia(fechaISO) {
   // `inicio` se usa ademas como la clave `fecha` (columna DATE) de
@@ -98,10 +111,15 @@ async function correr(fechaISO) {
   return { fecha: fechaISO, departamentos: departamentos.length, filas_escritas: escritos }
 }
 
-const fechaArg = process.argv[2] || fechaDeAyer()
+const args = process.argv.slice(2)
+const fechaArg = args.find((a) => !a.startsWith('--')) || fechaDeAyer()
+const desdeInstancias = args.find((a) => a.startsWith('--instancias-desde='))?.split('=')[1] || restarDias(fechaArg, DIAS_REEVALUADOS - 1)
+
 correr(fechaArg)
-  .then((r) => {
+  .then(async (r) => {
     console.log('Snapshot de cumplimiento OK:', r)
+    const inst = await registrarInstancias({ db: prisma, listarInstancias }, { desde: desdeInstancias, hasta: fechaArg })
+    console.log('Cumplimiento por instancia OK:', inst)
   })
   .catch((err) => {
     console.error('Snapshot de cumplimiento fallo:', err)

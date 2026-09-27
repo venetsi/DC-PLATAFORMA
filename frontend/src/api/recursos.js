@@ -20,7 +20,8 @@ export const tareasApi = {
     api.get('/tareas', { params: { departamento: idDepartamento, incluirInactivas } }).then((r) => r.data),
   crear: (body) => api.post('/tareas', body).then((r) => r.data),
   editar: (id, body) => api.patch(`/tareas/${id}`, body).then((r) => r.data),
-  eliminar: (id) => api.delete(`/tareas/${id}`).then((r) => r.data)
+  eliminar: (id) => api.delete(`/tareas/${id}`).then((r) => r.data),
+  duplicar: (id, body) => api.post(`/tareas/${id}/duplicar`, body).then((r) => r.data)
 }
 
 export const dependenciasApi = {
@@ -45,11 +46,14 @@ export const instanciasApi = {
   marcar: (instanceId, idDepartamento) =>
     api.post(`/instancias/${instanceId}/marcar`, { departamento: idDepartamento }).then((r) => r.data),
   noAplica: (instanceId, idDepartamento, motivo) =>
-    api.post(`/instancias/${instanceId}/no-aplica`, { departamento: idDepartamento, motivo }).then((r) => r.data)
+    api.post(`/instancias/${instanceId}/no-aplica`, { departamento: idDepartamento, motivo }).then((r) => r.data),
+  reprogramar: (instanceId, idDepartamento, fecha, motivo) =>
+    api.post(`/instancias/${instanceId}/fecha`, { departamento: idDepartamento, fecha, motivo }).then((r) => r.data)
 }
 
 export const reportesApi = {
-  cumplimiento: (params) => api.get('/reportes/cumplimiento', { params }).then((r) => r.data)
+  cumplimiento: (params) => api.get('/reportes/cumplimiento', { params }).then((r) => r.data),
+  tablero: (params) => api.get('/reportes/tablero', { params }).then((r) => r.data)
 }
 
 // Un Repositorio (entidad con nombre, ver schema.prisma) se asigna a cero o
@@ -71,4 +75,15 @@ export const repositoriosApi = {
   sincronizar: (id) => api.post(`/repositorios/${id}/sincronizar`).then((r) => r.data),
   eliminarDocumento: (idDocumento) => api.delete(`/repositorios/documentos/${idDocumento}`).then((r) => r.data),
   eliminar: (id) => api.delete(`/repositorios/${id}`).then((r) => r.data)
+}
+
+// Pantalla Agendas (ver backend routes/agendas.js): todo el departamento en un
+// pedido, crear una tarea completa en un paso, y cambios en lote por local.
+export const agendasApi = {
+  listar: ({ departamento, inactivas } = {}) =>
+    api.get('/agendas', { params: { departamento: departamento || undefined, inactivas: inactivas || undefined } }).then((r) => r.data),
+  crearTarea: (body) => api.post('/agendas/tareas', body).then((r) => r.data),
+  agregarAlcance: (idTarea, body) => api.post(`/agendas/tareas/${idTarea}/alcance`, body).then((r) => r.data),
+  cambiarAgenda: (body) => api.post('/agendas/asignaciones/agenda', body).then((r) => r.data),
+  quitar: (ids) => api.post('/agendas/asignaciones/quitar', { ids }).then((r) => r.data)
 }

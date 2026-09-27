@@ -1,6 +1,7 @@
 import { usuarioActual, puedeGestionarDepartamento, departamentosDe } from '../lib/permisos.js'
 import { hoyEnArgentina, clasificarInstancia } from '../lib/vencimiento.js'
 import { marcarInstanciaYPropagar } from '../lib/marcar-instancia.js'
+import { reprogramarInstanciaYPropagar } from '../lib/reprogramar-instancia.js'
 import { prerrequisitosPendientes, mapaPrerrequisitos } from '../lib/dependencias.js'
 
 // El "hoy" del checklist es el dia en curso en Argentina, no en UTC: antes
@@ -204,6 +205,31 @@ export default async function instanciasRoutes(fastify) {
     })
     if (yaEstaba) return reply.code(409).send({ error: 'Esa tarea ya estaba cerrada' })
     return { evento }
+  })
+
+  // Reprograma UNA instancia puntual a otra fecha (no el resto de la serie).
+  // Mismo permiso y misma propagacion a departamentos compartidos que marcar;
+  // motivo es opcional (a diferencia de "no aplica", esto no cierra nada).
+  fastify.post('/:instanceId/fecha', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { departamento: idDepartamento, fecha, motivo } = request.body || {}
+    if (!idDepartamento) return reply.code(400).send({ error: 'departamento requerido' })
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha || '')) || Number.isNaN(Date.parse(fecha))) {
+      return reply.code(400).send({ error: 'fecha inválida (formato AAAA-MM-DD)' })
+    }
+    const departamento = await resolverDepartamentoConAcceso(fastify, request, reply, idDepartamento)
+    if (!departamento) return
+
+    const usuario = await fastify.db.extUser.findUnique({ where: { id: request.user.id } })
+    const { evento, noExiste, yaEstaba, propagadas } = await reprogramarInstanciaYPropagar(fastify, {
+      calendarId: departamento.id_calendar_google,
+      instanceId: request.params.instanceId,
+      emailUsuario: usuario.email,
+      nuevaFecha: fecha,
+      motivo: motivo ? String(motivo).trim().replace(/\s+/g, ' ').slice(0, 300) : null
+    })
+    if (noExiste) return reply.code(404).send({ error: 'La tarea no existe' })
+    if (yaEstaba) return reply.code(409).send({ error: 'Esa tarea ya está cerrada, no se puede reprogramar' })
+    return { evento, propagadas }
   })
 
   // Preparados para Fase 9 (aprobacion real) -- no expuestos en la UI de v1.

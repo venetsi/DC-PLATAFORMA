@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import { useAuthStore } from '../store/authStore.js'
@@ -52,6 +52,13 @@ export default function Calendario() {
   const [marcando, setMarcando] = useState(null)
   const [aviso, setAviso] = useState(null)
   const [abierta, setAbierta] = useState(null)
+  const [cargando, setCargando] = useState(false)
+  // Cache por departamento+rango: volver a un departamento ya visto es
+  // instantaneo (y se revalida en segundo plano). Y un contador de pedidos
+  // para descartar respuestas viejas: antes, cambiar rapido de departamento o
+  // de mes dejaba que una respuesta atrasada pisara a la ultima.
+  const cache = useRef(new Map())
+  const ultimoPedido = useRef(0)
 
   useEffect(() => {
     localesApi.listar().then((locales) => setMapaLocales(new Map(locales.map((l) => [l.id, l.nombre]))))
@@ -65,15 +72,37 @@ export default function Calendario() {
     })
   }, [esAdminGlobal, propios])
 
-  async function cargar(desde, hasta) {
-    if (!departamento) return
-    const { items } = await instanciasApi.listarRango({ departamento: departamento.id, desde, hasta })
-    setEventos(items)
+  const idDepartamento = departamento?.id
+
+  async function cargar(desde, hasta, { forzar = false } = {}) {
+    if (!idDepartamento) return
+    const clave = `${idDepartamento}|${desde}|${hasta}`
+    const pedido = ++ultimoPedido.current
+    const enCache = cache.current.get(clave)
+    if (enCache && !forzar) setEventos(enCache)
+    else if (!enCache) setEventos([]) // nunca mostrar las tareas de OTRO departamento mientras carga
+    setCargando(true)
+    try {
+      const { items } = await instanciasApi.listarRango({ departamento: idDepartamento, desde, hasta })
+      cache.current.set(clave, items)
+      if (pedido === ultimoPedido.current) setEventos(items)
+    } finally {
+      if (pedido === ultimoPedido.current) setCargando(false)
+    }
+  }
+  // Despues de marcar/reprogramar: lo cacheado de ese departamento (otros
+  // rangos, Semana/Mes) quedo viejo -- se descarta entero, no solo el rango visible.
+  function recargar() {
+    for (const clave of cache.current.keys()) if (clave.startsWith(`${idDepartamento}|`)) cache.current.delete(clave)
+    return cargar(rango.desde, rango.hasta, { forzar: true })
   }
 
+  // Depende del id y no del objeto: para Direccion la lista de departamentos
+  // llega despues y cambia la referencia del mismo departamento -- eso hacia
+  // que cada carga pidiera dos veces lo mismo.
   useEffect(() => {
-    if (departamento && rango) cargar(rango.desde, rango.hasta)
-  }, [departamento, rango])
+    if (idDepartamento && rango) cargar(rango.desde, rango.hasta)
+  }, [idDepartamento, rango?.desde, rango?.hasta])
 
   function onDatesSet(info) {
     const desde = info.startStr.slice(0, 10)
@@ -92,7 +121,7 @@ export default function Calendario() {
     try {
       const r = await instanciasApi.marcar(instanceId, idDepto || departamento.id)
       setAviso(r?.avisos?.length ? r.avisos : null)
-      await cargar(rango.desde, rango.hasta)
+      await recargar()
     } finally {
       setMarcando(null)
     }
@@ -100,7 +129,12 @@ export default function Calendario() {
 
   async function noAplica(instanceId, idDepto, motivo) {
     await instanciasApi.noAplica(instanceId, idDepto || departamento.id, motivo)
-    await cargar(rango.desde, rango.hasta)
+    await recargar()
+  }
+
+  async function reprogramar(instanceId, idDepto, fecha, motivo) {
+    await instanciasApi.reprogramar(instanceId, idDepto || departamento.id, fecha, motivo)
+    await recargar()
   }
 
   // Memoizado: FullCalendar recalcula su rango visible cuando `events` cambia
@@ -144,6 +178,7 @@ export default function Calendario() {
               departamento.nombre
             )}
           </h2>
+          {cargando && <span className="cargando-chip" role="status">Actualizando…</span>}
           {departamento.id_calendar_google && (
             <a
               href={`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(departamento.id_calendar_google)}`}
@@ -171,7 +206,14 @@ export default function Calendario() {
       {aviso && <AvisoPrerrequisitos avisos={aviso} onCerrar={() => setAviso(null)} />}
 
       {vista === 'agenda' && (
-        <AgendaAgrupada eventos={eventos} mapaLocales={mapaLocales} onMarcar={marcar} onNoAplica={noAplica} marcando={marcando} />
+        <AgendaAgrupada
+          eventos={eventos}
+          mapaLocales={mapaLocales}
+          onMarcar={marcar}
+          onNoAplica={noAplica}
+          onReprogramar={reprogramar}
+          marcando={marcando}
+        />
       )}
 
       {vista === 'semana' && (
@@ -205,7 +247,9 @@ export default function Calendario() {
         </div>
       )}
 
-      {abierta && <DetalleTarea tarea={abierta} onCerrar={() => setAbierta(null)} onMarcar={marcar} onNoAplica={noAplica} />}
+      {abierta && (
+        <DetalleTarea tarea={abierta} onCerrar={() => setAbierta(null)} onMarcar={marcar} onNoAplica={noAplica} onReprogramar={reprogramar} />
+      )}
     </div>
   )
 }

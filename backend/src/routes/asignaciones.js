@@ -1,14 +1,6 @@
-import { construirRecurrence, primeraFecha, leerRecurrence, mismaRegla } from '../lib/recurrencia.js'
+import { leerRecurrence } from '../lib/recurrencia.js'
 import { usuarioActual, puedeGestionarDepartamento } from '../lib/permisos.js'
-import { componerTitulo } from '../lib/titulo.js'
-import { hoyEnArgentina } from '../lib/vencimiento.js'
-
-function sumarDias(fechaISO, n) {
-  const d = new Date(`${fechaISO}T00:00:00Z`)
-  d.setUTCDate(d.getUTCDate() + n)
-  return d.toISOString().slice(0, 10)
-}
-const sumarUnDia = (fechaISO) => sumarDias(fechaISO, 1)
+import { definirAgenda } from '../lib/agenda.js'
 
 // CRUD de TareaAsignacion (agenda por local). Crear/editar la agenda
 // (recurrencia) llama a Google Calendar por debajo -- ver docs/superpowers.
@@ -136,103 +128,12 @@ export default async function asignacionesRoutes(fastify) {
       return reply.code(400).send({ error: 'recurrencia_tipo y vigencia_desde son requeridos' })
     }
 
-    const calendarId = asignacion.tarea.departamento.id_calendar_google
-    if (!calendarId) return reply.code(409).send({ error: 'El departamento todavia no tiene calendario propio' })
-
-    // Sin vigencia_hasta explicita, la serie se acota a 12 meses y la renueva
-    // reconciliar.js -- nunca infinita (ver lib/recurrencia.js).
-    // Al editar, un cambio de agenda rige desde "desde" pero nunca antes de hoy:
-    // el pasado ya ocurrio (y tiene lo marcado) y no se reescribe.
-    const hoy = hoyEnArgentina()
-    const corte = asignacion.id_calendar_event && vigencia_desde < hoy ? hoy : vigencia_desde
-    const recurrence = construirRecurrence(recurrencia_tipo, recurrencia_config, vigencia_hasta, corte)
-    const startDate = primeraFecha(recurrencia_tipo, recurrencia_config, corte)
-    const endDate = sumarUnDia(startDate)
-
-    // Titulo con el local/grupo al que aplica -- ver lib/titulo.js. El nombre
-    // limpio ademas viaja en extendedProperties.nombre_tarea para que el
-    // kiosko/app no repitan el local en cada bullet (ya agrupan por local).
-    const titulo = componerTitulo(asignacion.tarea.nombre, asignacion.local)
-    const responsable = (asignado_a ?? asignacion.asignado_a) || ''
-
-    async function escribirEvento({ calendarId: calId, eventIdActual, idDepartamentoEvento }) {
-      const props = {
-        id_asignacion: asignacion.id,
-        id_departamento: idDepartamentoEvento,
-        id_local_ext: asignacion.id_local_ext ?? '',
-        nombre_tarea: asignacion.tarea.nombre,
-        asignado_a: responsable
-      }
-      const maestro = eventIdActual ? await fastify.gcal.leerInstancia({ calendarId: calId, instanceId: eventIdActual }) : null
-      if (maestro) {
-        const inicioActual = maestro.start?.date
-        const mismaAgenda = recurrence
-          ? mismaRegla(maestro.recurrence, recurrence)
-          : !maestro.recurrence?.length && inicioActual === startDate
-
-        // Solo cambio el titulo o el responsable: no se toca la recurrencia.
-        // `estado` queda afuera a proposito -- lo maneja marcarInstancia.
-        if (mismaAgenda) {
-          await fastify.gcal.editarRecurrencia({ calendarId: calId, eventId: eventIdActual, summary: titulo, extendedProperties: props })
-          return eventIdActual
-        }
-
-        // Cambio de agenda sobre algo que todavia no empezo: se reemplaza entero.
-        if (inicioActual >= corte) {
-          await fastify.gcal.editarRecurrencia({
-            calendarId: calId,
-            eventId: eventIdActual,
-            recurrence: recurrence ?? [],
-            summary: titulo,
-            extendedProperties: props,
-            startDate,
-            endDate
-          })
-          return eventIdActual
-        }
-
-        // Cambio de agenda sobre una serie que ya tiene pasado: se cierra la
-        // vieja el dia anterior al corte y arranca una nueva. Reescribir la
-        // RRULE sobre el DTSTART viejo re-expandia el pasado (aparecian
-        // vencidas retroactivas) o hacia desaparecer vencidas reales.
-        if (maestro.recurrence?.length) {
-          await fastify.gcal.cerrarRecurrencia({ calendarId: calId, eventId: eventIdActual, untilDate: sumarDias(corte, -1) })
-        }
-      }
-      const evento = await fastify.gcal.crearEventoRecurrente({
-        calendarId: calId,
-        summary: titulo,
-        startDate,
-        endDate,
-        recurrence: recurrence ?? undefined,
-        extendedProperties: { ...props, estado: 'PENDIENTE' }
-      })
-      return evento.id
+    if (!asignacion.tarea.departamento.id_calendar_google) {
+      return reply.code(409).send({ error: 'El departamento todavia no tiene calendario propio' })
     }
 
-    const eventId = await escribirEvento({
-      calendarId,
-      eventIdActual: asignacion.id_calendar_event,
-      idDepartamentoEvento: asignacion.tarea.id_departamento
-    })
-
-    for (const compartida of asignacion.compartidas) {
-      const calIdCompartida = compartida.departamento.id_calendar_google
-      if (!calIdCompartida) continue
-      const eventIdCompartida = await escribirEvento({
-        calendarId: calIdCompartida,
-        eventIdActual: compartida.id_calendar_event,
-        idDepartamentoEvento: compartida.id_departamento
-      })
-      if (eventIdCompartida !== compartida.id_calendar_event) {
-        await fastify.db.tareaAsignacionDepto.update({ where: { id: compartida.id }, data: { id_calendar_event: eventIdCompartida } })
-      }
-    }
-
-    const actualizada = await fastify.db.tareaAsignacion.update({
-      where: { id: asignacion.id },
-      data: { id_calendar_event: eventId, asignado_a: responsable || null }
-    })
-    return actualizada
+    // La escritura en Calendar (y en las copias de los departamentos compartidos)
+    // vive en lib/agenda.js -- la comparte "duplicar tarea".
+    return definirAgenda(fastify, asignacion, { recurrencia_tipo, recurrencia_config, vigencia_desde, vigencia_hasta, asignado_a })
   })
 }

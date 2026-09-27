@@ -18,6 +18,7 @@ import asignacionesRoutes from './routes/asignaciones.js'
 import dependenciasRoutes from './routes/dependencias.js'
 import instanciasRoutes from './routes/instancias.js'
 import reportesRoutes from './routes/reportes.js'
+import agendasRoutes from './routes/agendas.js'
 import tvRoutes from './routes/tv.js'
 import chatRoutes from './routes/chat.js'
 import repositoriosRoutes from './routes/repositorios.js'
@@ -66,6 +67,7 @@ await app.register(asignacionesRoutes, { prefix: '/api/asignaciones' })
 await app.register(dependenciasRoutes, { prefix: '/api/dependencias' })
 await app.register(instanciasRoutes, { prefix: '/api/instancias' })
 await app.register(reportesRoutes, { prefix: '/api/reportes' })
+await app.register(agendasRoutes, { prefix: '/api/agendas' })
 await app.register(tvRoutes, { prefix: '/api/tv' })
 await app.register(chatRoutes, { prefix: '/api/chat' })
 await app.register(repositoriosRoutes, { prefix: '/api/repositorios' })

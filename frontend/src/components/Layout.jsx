@@ -18,19 +18,19 @@ export default function Layout() {
 
   return (
     <div>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+      <header className="cabecera">
+        <div className="cabecera-izq">
           <strong style={{ color: 'var(--gold)' }}>DC-PLATAFORMA</strong>
-          <nav style={{ display: 'flex', gap: '1rem' }}>
+          <nav className="cabecera-nav">
             <NavLink to="/" style={linkStyle} end>Mi agenda</NavLink>
             {departamento && <NavLink to="/mis-tareas" style={linkStyle}>Mis tareas</NavLink>}
             <NavLink to="/reportes" style={linkStyle}>Reportes</NavLink>
-            {(esAdminGlobal || departamento) && <NavLink to="/admin/tareas" style={linkStyle}>Tareas</NavLink>}
+            {(esAdminGlobal || departamento) && <NavLink to="/agendas" style={linkStyle}>Agendas</NavLink>}
             {esAdminGlobal && <NavLink to="/admin/repositorios" style={linkStyle}>Documentos</NavLink>}
           </nav>
         </div>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', fontSize: '0.85rem', color: 'var(--texto-tenue)' }}>
-          <span>
+        <div className="cabecera-der">
+          <span className="cabecera-usuario" title={usuario?.email}>
             {usuario?.email}
             {departamentos.length ? ` · ${departamentos.map((d) => d.nombre).join(', ')}` : ''}
             {esDireccion ? ' · ve todo' : ''}

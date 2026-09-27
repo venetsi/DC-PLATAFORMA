@@ -3,10 +3,9 @@ import { asignacionesApi } from '../../api/recursos.js'
 import AgendaForm from './AgendaForm.jsx'
 import DependenciasAsignacion from '../../components/DependenciasAsignacion.jsx'
 
-// Panel de agenda de una tarea puntual -- se abre inline en el renglon de
-// AdminTareas ("definir la tarea en el mismo renglon donde se crea"), asi
-// que a diferencia de la vieja pantalla /admin/agenda no necesita su propio
-// picker de tarea: la tarea ya viene fija desde la fila que lo abrio.
+// Panel de agenda de una tarea puntual ("Opciones avanzadas" en Agendas) --
+// agenda por local, compartir y dependencias. Como
+// la tarea ya viene fija desde la fila que lo abrio, no necesita su propio picker.
 export default function AgendaDeTarea({ tarea, locales, grupos, departamentos, usuarios, onCerrar, onCambio }) {
   const [alcance, setAlcance] = useState('empresa') // empresa | grupo | local
   const [idLocal, setIdLocal] = useState('')

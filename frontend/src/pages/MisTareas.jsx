@@ -58,6 +58,11 @@ export default function MisTareas() {
     }
   }
 
+  async function reprogramar(instanceId, idDepto, fecha, motivo) {
+    await instanciasApi.reprogramar(instanceId, idDepto || departamento.id, fecha, motivo)
+    await cargar()
+  }
+
   if (!departamento) return <SinAsignacion />
 
   const resumen = data?.resumen
@@ -99,7 +104,14 @@ export default function MisTareas() {
       )}
 
       {data && data.items.length > 0 && (
-        <AgendaAgrupada eventos={data.items} mapaLocales={mapaLocales} onMarcar={marcar} onNoAplica={noAplica} marcando={marcando} />
+        <AgendaAgrupada
+          eventos={data.items}
+          mapaLocales={mapaLocales}
+          onMarcar={marcar}
+          onNoAplica={noAplica}
+          onReprogramar={reprogramar}
+          marcando={marcando}
+        />
       )}
     </div>
   )

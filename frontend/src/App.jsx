@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './store/authStore.js'
 import { ProtectedRoute, GestionRoute, AdminRoute } from './components/ProtectedRoute.jsx'
 import Layout from './components/Layout.jsx'
@@ -8,7 +8,7 @@ import Sso from './pages/Sso.jsx'
 import Calendario from './pages/Calendario.jsx'
 import MisTareas from './pages/MisTareas.jsx'
 import Reportes from './pages/Reportes.jsx'
-import AdminTareas from './pages/admin/AdminTareas.jsx'
+import Agendas from './pages/Agendas.jsx'
 import AdminRepositorios from './pages/admin/AdminRepositorios.jsx'
 
 export default function App() {
@@ -25,7 +25,9 @@ export default function App() {
           <Route path="/mis-tareas" element={<MisTareas />} />
           <Route path="/reportes" element={<Reportes />} />
           <Route element={<GestionRoute />}>
-            <Route path="/admin/tareas" element={<AdminTareas />} />
+            <Route path="/agendas" element={<Agendas />} />
+            {/* La vieja pantalla de catalogo: la reemplaza Agendas. */}
+            <Route path="/admin/tareas" element={<Navigate to="/agendas" replace />} />
           </Route>
           <Route element={<AdminRoute />}>
             <Route path="/admin/repositorios" element={<AdminRepositorios />} />

@@ -15,10 +15,11 @@ function textoEstado(t) {
 // Detalle de una tarea. Marcar hecha es definitivo (decision del usuario), asi
 // que pasa por un paso de confirmacion explicito: antes un toque sobre la tarea
 // -- incluso en Semana/Mes, donde uno toca para "ver" -- la cerraba en el acto.
-export default function DetalleTarea({ tarea, onCerrar, onMarcar, onNoAplica }) {
-  // null | 'hecha' | 'no_aplica'
+export default function DetalleTarea({ tarea, onCerrar, onMarcar, onNoAplica, onReprogramar }) {
+  // null | 'hecha' | 'no_aplica' | 'fecha'
   const [confirmando, setConfirmando] = useState(null)
   const [motivo, setMotivo] = useState('')
+  const [nuevaFecha, setNuevaFecha] = useState('')
   const [marcando, setMarcando] = useState(false)
   const [error, setError] = useState('')
 
@@ -32,16 +33,18 @@ export default function DetalleTarea({ tarea, onCerrar, onMarcar, onNoAplica }) 
   const abierta = tarea.estado === 'pendiente' || tarea.estado === 'vencida'
   const puedeMarcar = abierta && !!onMarcar
   const puedeNoAplica = abierta && !!onNoAplica
+  const puedeReprogramar = abierta && !!onReprogramar
 
   async function confirmar() {
     setError('')
     setMarcando(true)
     try {
       if (confirmando === 'no_aplica') await onNoAplica(tarea.id, tarea.idDepartamento, motivo.trim())
+      else if (confirmando === 'fecha') await onReprogramar(tarea.id, tarea.idDepartamento, nuevaFecha, motivo.trim())
       else await onMarcar(tarea.id, tarea.idDepartamento)
       onCerrar()
     } catch (err) {
-      setError(err.response?.data?.error || 'No se pudo marcar. Probá de nuevo.')
+      setError(err.response?.data?.error || 'No se pudo guardar. Probá de nuevo.')
       setMarcando(false)
     }
   }
@@ -79,10 +82,43 @@ export default function DetalleTarea({ tarea, onCerrar, onMarcar, onNoAplica }) 
 
         {error && <p style={{ color: 'var(--rojo)', fontSize: '0.85rem', margin: 0 }}>{error}</p>}
 
-        {!confirmando && (puedeMarcar || puedeNoAplica) && (
+        {!confirmando && (puedeMarcar || puedeNoAplica || puedeReprogramar) && (
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             {puedeMarcar && <button className="btn detalle-accion" onClick={() => setConfirmando('hecha')}>Marcar hecha</button>}
+            {puedeReprogramar && (
+              <button
+                className="btn btn-secondary detalle-accion"
+                onClick={() => { setMotivo(''); setNuevaFecha(tarea.fechaISO); setConfirmando('fecha') }}
+              >
+                Cambiar fecha
+              </button>
+            )}
             {puedeNoAplica && <button className="btn btn-secondary detalle-accion" onClick={() => setConfirmando('no_aplica')}>No aplica</button>}
+          </div>
+        )}
+        {confirmando === 'fecha' && (
+          <div className="detalle-confirmar">
+            <label htmlFor="nueva-fecha" style={{ margin: 0 }}>
+              Nueva fecha para esta tarea puntual. No cambia el resto de la agenda ni a los demás locales.
+            </label>
+            <input
+              id="nueva-fecha"
+              type="date"
+              className="detalle-fecha"
+              value={nuevaFecha}
+              onChange={(e) => setNuevaFecha(e.target.value)}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button
+                className="btn detalle-accion"
+                onClick={confirmar}
+                disabled={marcando || !nuevaFecha || nuevaFecha === tarea.fechaISO}
+              >
+                {marcando ? 'Guardando…' : 'Confirmar nueva fecha'}
+              </button>
+              <button className="btn btn-secondary detalle-accion" onClick={() => setConfirmando(null)} disabled={marcando}>Volver</button>
+            </div>
           </div>
         )}
         {confirmando === 'no_aplica' && (

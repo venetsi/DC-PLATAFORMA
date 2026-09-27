@@ -370,6 +370,41 @@ model CumplimientoDiario {
   @@map("cumplimiento_diario")
 }
 
+// Una fila por instancia de tarea (tarea x local x dia) de los dias ya
+// cerrados -- la base del tablero de cumplimiento por mes, grupo, local y
+// tarea (CumplimientoDiario solo guarda totales). La escribe el mismo job
+// diario, re-evaluando los ultimos 60 dias: asi una tarea atrasada que se
+// hace despues pasa de VENCIDA a REALIZADA con a_tiempo=false ("hecha tarde").
+//
+// Sin FK a proposito: el historico tiene que sobrevivir al borrado definitivo
+// de una tarea o asignacion. Una asignacion compartida aparece una vez por
+// calendario (como en CumplimientoDiario); `compartida` marca las copias, para
+// no contarla dos veces en la vista de toda la empresa.
+model CumplimientoInstancia {
+  id              String    @id @default(uuid())
+  fecha           DateTime  @db.Date
+  id_departamento String
+  id_asignacion   String
+  id_tarea        String?
+  nombre_tarea    String
+  id_local_ext    String    @default("")
+  compartida      Boolean   @default(false)
+  // REALIZADA | VENCIDA | NO_APLICA
+  estado          String
+  // Solo REALIZADA: marcada antes de la medianoche argentina del dia de la tarea.
+  a_tiempo        Boolean?
+  realizada_por   String?
+  realizada_en    DateTime?
+  asignado_a      String?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  @@unique([id_departamento, id_asignacion, fecha])
+  @@index([fecha])
+  @@index([id_departamento, fecha])
+  @@map("cumplimiento_instancias")
+}
+
 // --- Seguimiento de un Pago puntual de dcsmart (deliberadamente FUERA del
 // modelo Tarea/TareaAsignacion/Calendar). Un pago es un registro de una sola
 // vez de OTRO sistema, no algo que se repita -- forzarlo por el motor de

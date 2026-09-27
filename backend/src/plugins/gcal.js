@@ -222,6 +222,57 @@ async function gcalPlugin(fastify) {
       return data
     },
 
+    // Los maestros (series recurrentes y eventos sueltos, SIN expandir) de un
+    // calendario en una sola lectura paginada -- la pantalla de Agendas los
+    // necesita todos juntos para mostrar la frecuencia de cada asignacion.
+    // Pedirlos de a uno (GET /asignaciones/:id/agenda) tarda 2-5 s cada uno.
+    async listarMaestros({ calendarId, maxPaginas = 10 }) {
+      const calendar = await getCalendarClient()
+      const items = []
+      let pageToken
+      let paginas = 0
+      do {
+        const { data } = await withBackoff(() =>
+          calendar.events.list({ calendarId, singleEvents: false, maxResults: 2500, ...(pageToken ? { pageToken } : {}) })
+        )
+        items.push(...(data.items || []))
+        pageToken = data.nextPageToken
+        paginas++
+      } while (pageToken && paginas < maxPaginas)
+      if (pageToken) fastify.log.warn({ calendarId, items: items.length }, 'listarMaestros corto en maxPaginas')
+      return items
+    },
+
+    // Mueve UNA instancia puntual a otra fecha (no toca el maestro ni el
+    // resto de la serie) -- crea una excepcion, igual que marcarInstancia.
+    // Conserva la duracion del evento (por si algun dia dejara de ser de un
+    // solo dia) en vez de asumir que `end` siempre es `start + 1`.
+    async moverInstancia({ calendarId, instanceId, nuevaFecha, logLine }) {
+      const calendar = await getCalendarClient()
+      const { data: current } = await withBackoff(() => calendar.events.get({ calendarId, eventId: instanceId }))
+      const inicioActual = current.start?.date
+      const finActual = current.end?.date
+      if (!inicioActual || !finActual) {
+        throw Object.assign(new Error('La instancia no es un evento de dia completo'), { status: 409 })
+      }
+      const duracionDias = Math.round((Date.parse(finActual) - Date.parse(inicioActual)) / 86_400_000) || 1
+      const [a, m, d] = nuevaFecha.split('-').map(Number)
+      const nuevoFin = new Date(Date.UTC(a, m - 1, d + duracionDias)).toISOString().slice(0, 10)
+      const description = [current.description, logLine].filter(Boolean).join('\n')
+      const { data } = await withBackoff(() =>
+        calendar.events.patch({
+          calendarId,
+          eventId: instanceId,
+          requestBody: {
+            start: { date: nuevaFecha },
+            end: { date: nuevoFin },
+            description
+          }
+        })
+      )
+      return data
+    },
+
     async compartirConGroup({ calendarId, groupEmail, role = 'reader' }) {
       const calendar = await getCalendarClient()
       await withBackoff(() =>
