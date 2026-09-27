@@ -57,6 +57,7 @@ import { marcarInstanciaYPropagar } from '../lib/marcar-instancia.js'
 import { prerrequisitosPendientes } from '../lib/dependencias.js'
 import { esAdminGlobal, conPermisos } from '../lib/permisos.js'
 import { asegurarMembresiasFrescas, usuarioPorEmail, motivoSinAcceso } from '../lib/membresias.js'
+import { emailCanonico } from '../lib/alias-email.js'
 import { construirTarjetaDepartamento, conNotaSuperior } from '../lib/chat-recordatorio.js'
 import {
   ejecutarComando,
@@ -250,7 +251,7 @@ async function manejarComando(fastify, chatEvent) {
     return mensajeNuevo({ text: '⚠️ No pude identificarte. Entrá a la plataforma.' })
   }
   asegurarMembresiasFrescas(fastify)
-  const extUser = await conPermisos(fastify.db, await usuarioPorEmail(fastify.db, email, { nombre: usuario?.displayName }))
+  const extUser = await conPermisos(fastify.db, await usuarioPorEmail(fastify.db, await emailCanonico(fastify, email), { nombre: usuario?.displayName }))
   if (!extUser?.activo) {
     fastify.log.info({ email, existe: !!extUser }, 'chat: usuario sin acceso')
     return mensajeNuevo({ text: motivoSinAcceso(extUser, email) })
@@ -390,7 +391,7 @@ async function manejarClick(fastify, chatEvent, common) {
   }
 
   asegurarMembresiasFrescas(fastify)
-  const extUser = await conPermisos(fastify.db, await usuarioPorEmail(fastify.db, email, { nombre: usuario?.displayName }))
+  const extUser = await conPermisos(fastify.db, await usuarioPorEmail(fastify.db, await emailCanonico(fastify, email), { nombre: usuario?.displayName }))
   if (!extUser?.activo) {
     fastify.log.info({ email, existe: !!extUser }, 'chat: usuario sin acceso')
     return mensajePrivado(usuario, motivoSinAcceso(extUser, email))

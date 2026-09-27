@@ -46,6 +46,10 @@ app.decorate('authenticate', async (request, reply) => {
   } catch (err) {
     return reply.code(401).send({ error: 'No autenticado' })
   }
+  // Una sesion de un usuario desactivado (p.ej. la identidad vieja de una cuenta
+  // renombrada, ya unificada con la nueva) deja de valer en el acto, no a los 7 dias.
+  const vigente = await app.db.extUser.findUnique({ where: { id: request.user.id }, select: { activo: true } })
+  if (!vigente?.activo) return reply.code(401).send({ error: 'Tu sesión ya no es válida. Volvé a entrar desde dcsmart → Tareas.' })
   // Refresca en segundo plano la copia de los Groups si tiene mas de 15 min.
   asegurarMembresiasFrescas(app)
 })

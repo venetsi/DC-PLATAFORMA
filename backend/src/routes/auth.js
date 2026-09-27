@@ -4,6 +4,7 @@ import { OAuth2Client } from 'google-auth-library'
 import { asegurarDepartamento } from '../lib/departamentos.js'
 import { resolverDepartamento } from '../lib/departamento-alias.js'
 import { esAdminGlobal, conPermisos, departamentosDe, fuenteMembresia } from '../lib/permisos.js'
+import { emailCanonico } from '../lib/alias-email.js'
 
 // Dominios habilitados para entrar via SSO real -- despues de esto, dcsmart
 // ya filtro con sus propias politicas de usuario (activo, rol, etc.); esto
@@ -81,8 +82,14 @@ export default async function authRoutes(fastify) {
     // sin esto dos variantes de mayusculas del mismo email crearian dos
     // usuarios distintos -- y las comparaciones por responsable (asignado_a)
     // fallarian justo para quien entra por SSO real.
-    const email = String(emailRaw || '').toLowerCase().trim()
-
+    const emailTicket = String(emailRaw || '').toLowerCase().trim()
+    if (!dominioPermitido(emailTicket)) {
+      return reply.code(403).send({ error: 'Este dominio de email no tiene acceso a DC-PLATAFORMA' })
+    }
+    // dcsmart puede seguir teniendo el email viejo de una cuenta que en
+    // Workspace se renombro (el viejo quedo como alias): se entra con el
+    // principal, que es el que figura en los grupos y en Chat.
+    const email = await emailCanonico(fastify, emailTicket)
     if (!dominioPermitido(email)) {
       return reply.code(403).send({ error: 'Este dominio de email no tiene acceso a DC-PLATAFORMA' })
     }
