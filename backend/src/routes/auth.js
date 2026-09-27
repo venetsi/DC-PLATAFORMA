@@ -226,7 +226,10 @@ export default async function authRoutes(fastify) {
       // `departamento` (el principal) se mantiene para las pantallas que
       // todavia trabajan con uno solo; `departamentos` trae todos.
       departamento: departamentos[0] || null,
-      departamentos,
+      // Con el rol del Google Group en cada uno (MEMBER / MANAGER / OWNER): el
+      // frontend lo usa para mostrar u ocultar acciones; el backend igual lo
+      // vuelve a chequear en cada ruta (lib/permisos.js).
+      departamentos: departamentos.map((d) => ({ ...d, rol: usuario.roles?.[d.id] || 'MEMBER' })),
       esDireccion: !!usuario.esDireccion,
       esAdminGlobal: esAdminGlobal(usuario)
     }

@@ -1,9 +1,11 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore.js'
+import { usePermisos, NOMBRE_ROL } from '../lib/permisos.js'
 
 export default function Layout() {
   const { usuario, departamento, departamentos, esDireccion, esAdminGlobal, logout } = useAuthStore()
   const navigate = useNavigate()
+  const { enAlguno } = usePermisos()
 
   async function onLogout() {
     await logout()
@@ -24,13 +26,15 @@ export default function Layout() {
           <nav className="cabecera-nav">
             <NavLink to="/" style={linkStyle} end>Mi agenda</NavLink>
             {departamento && <NavLink to="/mis-tareas" style={linkStyle}>Mis tareas</NavLink>}
-            <NavLink to="/reportes" style={linkStyle}>Reportes</NavLink>
+            {/* Los reportes los ven MANAGER y OWNER (y Direccion). */}
+            {enAlguno('reportes') && <NavLink to="/reportes" style={linkStyle}>Reportes</NavLink>}
             {(esAdminGlobal || departamento) && <NavLink to="/agendas" style={linkStyle}>Agendas</NavLink>}
             {esAdminGlobal && <NavLink to="/admin/repositorios" style={linkStyle}>Documentos</NavLink>}
+            <NavLink to="/ayuda" style={linkStyle}>Ayuda</NavLink>
           </nav>
         </div>
         <div className="cabecera-der">
-          <span className="cabecera-usuario" title={usuario?.email}>
+          <span className="cabecera-usuario" title={[usuario?.email, ...departamentos.map((d) => `${d.nombre}: ${NOMBRE_ROL[d.rol] || 'Miembro'}`)].join('\n')}>
             {usuario?.email}
             {departamentos.length ? ` · ${departamentos.map((d) => d.nombre).join(', ')}` : ''}
             {esDireccion ? ' · ve todo' : ''}

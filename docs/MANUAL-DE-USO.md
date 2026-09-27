@@ -1,367 +1,266 @@
 # Manual de uso — DC-PLATAFORMA
 
-Guía paso a paso: cómo un administrador carga tareas y su agenda, cómo cada
-departamento las marca como hechas, qué muestra la pantalla de oficina, y cómo leer
-el reporte de cumplimiento.
+DC-PLATAFORMA organiza las tareas periódicas de cada departamento: qué hay que
+hacer, en qué local, cuándo, quién la tiene, y si ya se hizo. Todo vive en Google
+Calendar y se opera desde la plataforma o desde Google Chat.
 
-> Versión con formato: ver el artifact publicado (link en la conversación de
-> planificación) — este archivo es la copia de referencia dentro del repo.
+> Este manual es el que ves en **Ayuda** dentro de la plataforma. Se actualiza
+> cada vez que cambia algo. Actualizado el 27/09/2026.
 
 ## Cómo entrar
 
-Hoy la plataforma usa un **login temporal** mientras se conecta con el sistema
-principal de DCSMART (ver Fase 8 del plan). Vas a entrar con tu email nada más, sin
-contraseña.
+1. En el sistema de dcsmart, tocá **Tareas** en el menú lateral.
+2. Se abre DC-PLATAFORMA en una pestaña nueva, ya con tu sesión. No hay contraseña
+   aparte.
 
-1. Abrí la aplicación en el navegador.
-2. Escribí tu email y hacé click en **Entrar**. Si tu email todavía no fue cargado
-   como usuario, te va a avisar que consultes con el administrador.
-3. Vas a caer en "Mi checklist de hoy" si tenés un departamento asignado, o en un
-   aviso de "Sin asignación" si todavía no.
+Para entrar tenés que estar en el grupo de Google de tu departamento
+(`depto-<área>@dcsmart.app`, por ejemplo `depto-auditoria@dcsmart.app`). Si ves *"Tu
+cuenta no está en ningún grupo de departamento"*, pedile al OWNER de tu grupo o a
+Dirección que te agregue: en unos 15 minutos ya podés entrar.
 
-Este login temporal se reemplaza más adelante por el ingreso automático desde el
-sistema principal de DCSMART — mientras tanto, es intencional que cualquiera con el
-email correcto pueda entrar, para poder probar la plataforma antes de conectarla.
+Si tu email cambió en Google (por ejemplo, de una cuenta de área a una personal), la
+plataforma te reconoce igual y entrás con tu cuenta nueva.
 
-## Cargar el catálogo de tareas (administrador)
+## Qué podés hacer según tu rol
 
-Antes de poder agendar algo, la tarea tiene que existir en el catálogo — es el tipo
-de tarea (ej. "CMV"), no todavía el día ni la frecuencia.
+Tu rol sale del grupo de Google de cada departamento. Si estás en varios grupos,
+tenés un rol en cada uno.
 
-1. Andá a **Tareas** en el menú superior.
-2. Escribí el nombre de la tarea y elegí el departamento responsable. El
-   departamento queda fijo para esa tarea.
-3. Click en **Crear**.
+| Rol en el grupo | Qué puede hacer en ese departamento |
+|---|---|
+| **Miembro** (MEMBER) | Ver agendas y tareas. Marcarlas hechas o "no aplica", tomarlas y dejar notas |
+| **Manager** (MANAGER) | Todo lo anterior + crear y editar tareas, moverlas de día, pasarlas a otra persona, ver los reportes |
+| **Owner** (OWNER) | Todo lo anterior + desactivar y eliminar tareas, y configurar los avisos del departamento |
+| **Dirección** | Quien está en `depto-direccion@` ve y gestiona **todos** los departamentos, sin restricción |
 
-## Definir cuándo se repite — la agenda (administrador)
+Si pasás el mouse sobre tu email, arriba a la derecha, ves tu rol en cada
+departamento. Lo que tu rol no permite directamente no aparece en pantalla.
 
-Una misma tarea puede tener una agenda distinta por local (ej. "P&L" vence el día 10
-en un local y el día 15 en otro).
+## Mi agenda
 
-1. Andá a **Agenda** y elegí la tarea.
-2. Agregá una asignación: un local específico, o "Sin local (alcance empresa)".
-3. Elegí cómo se repite:
-   - **Diaria** — todos los días desde la fecha "desde".
-   - **Semanal** — días de la semana específicos.
-   - **Cada N meses** — mensual, trimestral, semestral o anual, con el día del mes.
-   - **Una vez** — una fecha puntual.
-4. Click en **Agendar**. Para editar, volvé a esta pantalla con la misma tarea — el
-   botón pasa a decir **Actualizar**; los días ya marcados como hechos no se tocan.
+Es la pantalla principal. Si estás en varios departamentos, arranca mostrando
+**todos juntos**: cada tarea lleva una etiqueta de color con su departamento (ADM,
+AUD, TES…) y arriba está la referencia. Con el selector de arriba ves uno solo.
 
-Cada agenda se crea por **12 meses** a partir de la fecha "desde", y se renueva sola
-antes de vencerse: no hay que volver a cargarla cada año.
+Tres vistas:
+
+- **Agenda**: la semana en curso, un día por columna, agrupado por local.
+- **Semana (L-V)**: de lunes a viernes, con flechas para ir y volver.
+- **Mes**: el mes completo.
+
+El punto de color de cada tarea indica cómo viene:
+
+| Color | Estado |
+|---|---|
+| Amarillo | Pendiente, todavía no venció |
+| Rojo | Atrasada: pasó su día sin hacerse |
+| Verde | Hecha |
+| Gris | No aplica |
+
+Una tarea vence a la medianoche de su día (hora argentina).
+
+### Sobre una tarea
+
+Tocá cualquier tarea para ver su detalle: estado, responsable, de qué depende, e
+historial (quién la marcó, notas, cambios de fecha). Desde ahí, según tu rol:
+
+- **Marcar hecha**: queda registrada a tu nombre. Pide confirmación porque no se
+  puede deshacer.
+- **No aplica**: para cuando esa vez no correspondía (local cerrado, feriado, mes
+  sin movimiento). Pide el motivo. No cuenta ni como hecha ni como atrasada, y
+  tampoco se puede deshacer.
+- **Cambiar fecha** (Manager y Owner): mueve **solo esa ocurrencia** a otro día. No
+  cambia el resto de la agenda ni otros locales. Si la tarea está compartida con
+  otro departamento, se mueve en los dos.
+- **Editar** (Manager y Owner): cambiar el nombre de la tarea (en todos sus
+  locales), el responsable en ese local, o la frecuencia en ese local.
+
+### Mover y crear desde el calendario (Manager y Owner)
+
+- En **Semana** o **Mes**, **arrastrá** una tarea pendiente a otro día para
+  moverla. Aparece un aviso con **Deshacer** por si te equivocaste.
+- **Tocá un día vacío** (o el botón **+ Nueva tarea**) para crear una tarea ahí.
+  Arranca como "una sola vez, ese día", y la podés cambiar a cualquier frecuencia.
+
+Las tareas hechas o "no aplica" no se pueden arrastrar.
+
+## Mis tareas
+
+Como Mi agenda, pero con lo que te toca a vos: las que están a tu nombre **más** las
+de tus departamentos sin responsable fijo (esas las puede hacer cualquiera del
+equipo). Muestra los últimos 60 días y las próximas 2 semanas, y arriba cuántas
+tenés atrasadas, pendientes y hechas.
+
+Con **Solo las que tengo asignadas** ves únicamente las que están a tu nombre.
+
+## Agendas
+
+Acá se ven y se gestionan todas las tareas de cada departamento: dónde se hace
+(toda la empresa, un grupo de locales, o locales sueltos), cuándo, quién es
+responsable, cuándo es la próxima y si hay atrasadas. Las que necesitan atención
+aparecen primero. A la izquierda elegís el departamento; **Buscar** filtra por
+tarea, local o grupo.
+
+Siendo Miembro la ves en modo lectura. Siendo Manager u Owner:
+
+- **+ Nueva tarea**: se crea en un solo paso. Completás qué, dónde, cuándo y
+  quién, y una frase abajo te dice exactamente qué se va a crear antes de
+  confirmar. En **Más opciones** podés compartirla con otros departamentos: cada
+  uno la ve en su agenda, y marcarla en uno la marca en todos.
+- Tocá una tarea para ver sus locales. Tildá varios para **cambiar cuándo** o
+  **cambiar responsable** a todos juntos, o para **quitarlos**. Con **+ Agregar
+  locales** sumás un grupo o locales sueltos con la misma agenda.
+- **Renombrar** y **Duplicar**. Duplicar copia la tarea con sus locales,
+  frecuencia y responsable, desde hoy.
+- **Opciones avanzadas**: agenda de un local puntual, compartir, y dependencias
+  (ver abajo).
+
+Siendo Owner, además: **Desactivar** (deja de agendarse desde hoy; el historial
+queda), **Eliminar definitivamente**, y los **avisos de tu departamento** (webhook
+de Chat y cuántos días hábiles de atraso disparan cada aviso).
+
+Las agendas se crean por 12 meses y se renuevan solas mientras la tarea siga activa.
 
 ### Tareas que dependen de otra
 
-Debajo de la agenda podés indicar que esa tarea **espera** a otra — por ejemplo, que
-el reporte de Auditoría espere al CMV de Finanzas del mismo día.
+Una tarea puede **esperar** a otra, incluso de otro departamento: por ejemplo, que
+el reporte de Auditoría espere al CMV del mismo día. Se configura en **Opciones
+avanzadas → Depende de otra tarea**.
 
-1. Click en **Depende de otra tarea**.
-2. Elegí el departamento, la tarea y el local del prerrequisito.
-3. Queda listado en **Espera a:**, con la × al lado para sacarlo.
+**Avisa, no bloquea**: mientras el prerrequisito siga sin hacerse, la tarea muestra
+**⏳ espera a CMV — Costos**. Si la marcás igual, se marca, y te avisa qué quedó
+pendiente. Si el prerrequisito no tiene tarea ese día, la dependencia no aplica.
 
-La dependencia puede cruzar departamentos, y el sistema rechaza los círculos (si A
-espera a B, B no puede esperar a A).
+## Reportes (Manager y Owner)
 
-**Avisa, no bloquea.** Nadie queda trabado esperando a otro equipo:
+El tablero de cumplimiento muestra un mes a la vez (‹ › para cambiar):
 
-- En la agenda, la tarea muestra el nombre del prerrequisito y su departamento
-  (por ejemplo **⏳ espera a CMV — Finanzas**) mientras ese día siga sin hacerse.
-- Si la marcás igual, **se marca** y aparece un aviso de qué quedó sin hacer. Eso
-  también queda anotado en el historial del evento en Google Calendar.
-- Si el prerrequisito no tiene tarea ese día, la dependencia simplemente no aplica.
+- **Cumplimiento** del mes (hechas sobre el total de lo que ya venció) y la
+  diferencia con el mes anterior, más hechas a tiempo, hechas tarde, atrasadas sin
+  hacer y no aplica.
+- **Por mes y departamento**: los últimos 6 meses. Tocá una celda para filtrar.
+- **Días con tareas**: solo los días que tuvieron alguna.
+- **Por grupo y local**: cada grupo se abre en sus locales, con cada tarea (en rojo
+  las que tienen atrasadas).
 
-## Mi checklist de hoy (cualquier usuario)
+Cuenta los días ya cerrados: lo de hoy aparece mañana. Si una atrasada se hace
+después, pasa a "hecha tarde".
 
-Pantalla principal al entrar — muestra las tareas de tu departamento que vencen hoy.
+## Pantalla de oficina (kiosko)
 
-1. Ves la lista de tareas de hoy con su estado.
-2. Click en **Marcar realizada** cuando termines una. Queda registrado quién y
-   cuándo.
+Pensada para una TV fija en la oficina, sin login, que se actualiza sola cada 2
+minutos. Pedile a Dirección el link de tu departamento (cada uno tiene su clave).
 
-Por ahora no hay paso de aprobación: marcar "realizada" ya cierra la tarea.
+Muestra un semáforo (🔴 hay atrasadas, 🟡 hay pendientes de hoy, 🟢 todo al día), los
+contadores, las atrasadas de los últimos 60 días, la semana por local y un adelanto
+de la siguiente. Si se corta internet, sigue mostrando lo último y se reconecta sola.
 
-## Mis tareas (cualquier usuario)
+## Google Chat
 
-Como "Mi agenda", pero acotada a lo que te toca a vos: las que tenés asignadas a tu
-nombre **más** las de tu departamento que no tienen responsable fijo (esas las puede
-hacer cualquiera del equipo, vos incluido).
+### El recordatorio de todas las mañanas
 
-1. Andá a **Mis tareas**.
-2. Arriba ves cuántas tenés vencidas, pendientes y realizadas.
-3. Las vencidas muestran hace cuántos días lo están.
-4. Click en una tarea para marcarla realizada, igual que en Mi agenda.
-5. Si alguna espera a otra tarea, lo vas a ver con **⏳ espera a…** debajo del nombre.
+De lunes a viernes a las 8, cada departamento con su Space vinculado recibe un
+recordatorio con lo atrasado y lo que vence hoy, con un botón **Marcar hecha** por
+tarea. La tarjeta se actualiza sola al marcar.
 
-Con **Solo las que tengo asignadas** dejás afuera las del equipo y ves únicamente las
-que están a tu nombre.
+El atraso se cuenta en **días hábiles**. Pasado el umbral del departamento (por
+defecto 2 días hábiles) la tarea aparece como atrasada; pasado el de Dirección (por
+defecto 5), además entra en un mensaje consolidado a Dirección.
 
-Muestra los últimos 30 días y las próximas 2 semanas: mira más hacia atrás que Mi
-agenda porque lo que importa acá es lo que quedó pendiente.
+### Comandos
 
-## La pantalla de agenda — kiosko (todos)
+Se escriben en el Space del departamento. No hace falta el nombre completo de la
+tarea: con una parte alcanza, y si hay varias parecidas te pregunta cuál.
 
-Pensada para quedar fija en una TV/monitor de oficina, sin login, actualizándose
-sola cada 2 minutos.
-
-1. Pedile al administrador el link de tu departamento (cada uno tiene su propia
-   clave privada).
-2. Abrí ese link en pantalla completa en la TV/monitor.
-3. Muestra un semáforo del día, contadores de pendientes/realizadas/vencidas, y el
-   listado de tareas de hoy.
-
-| Color | Significado |
-|---|---|
-| Verde | Todo al día |
-| Amarillo | Hay pendientes, todavía no vencieron |
-| Rojo | Hay al menos una vencida sin hacer |
-
-Si se corta internet, sigue mostrando los últimos datos (con aviso de "sin
-conexión" y hace cuánto) y se reconecta sola.
-
-## Reporte de cumplimiento (usuario y admin)
-
-1. Andá a **Reportes**.
-2. Si sos de un departamento, ves el tuyo directo; si sos admin, elegís cuál mirar.
-3. Arriba: % de cumplimiento del período. Abajo: tabla día por día (total,
-   realizadas, vencidas sin hacer).
-
-El número del día se calcula una vez que el día termina — el de hoy aparece recién
-mañana. Para el estado de hoy mismo, mirá el checklist o la pantalla de oficina.
-
-## Avisos por Google Chat
-
-Todas las mañanas (8 hs) cada departamento recibe en su Space un recordatorio con:
-
-- **Atrasadas** — las que ya pasaron el umbral de días hábiles del departamento.
-- **Vencidas** — el resto de lo que quedó sin hacer.
-- **Pendientes de hoy** — lo que vence hoy.
-
-Cada línea muestra el local, el responsable si tiene uno, y hace cuántos **días
-hábiles** está atrasada, con un botón **Marcar hecha** al lado. Se cuentan días
-hábiles y no de calendario a propósito: una tarea del viernes no debe escalar sola el
-lunes solo porque pasó el fin de semana.
-
-El recordatorio se repite todos los días mientras la tarea siga sin hacerse.
-
-### Escalamiento a Dirección
-
-Cuando una tarea supera un segundo umbral, más alto, entra además en **un único
-mensaje consolidado a Dirección**, agrupado por departamento y ordenado por
-antigüedad. No reemplaza al aviso del departamento: se le suma.
-
-Los umbrales por defecto son **2 días hábiles** para el departamento y **5** para
-Dirección, y se pueden ajustar por departamento.
-
-### Operar desde el Chat
-
-Podés consultar y coordinar tareas escribiendo comandos en el Space del
-departamento, sin abrir la plataforma.
-
-**Para mirar:**
+**Para mirar**
 
 | Comando | Qué hace |
 |---|---|
-| `/hoy` | Las tareas que vencen hoy en el departamento |
-| `/atrasadas` | Lo que quedó sin hacer, de más viejo a más nuevo |
-| `/mias` | Las que están a tu nombre, más las del equipo sin responsable fijo |
+| `/hoy` | Las tareas que vencen hoy |
+| `/atrasadas` | Lo que quedó sin hacer, de lo más viejo a lo más nuevo |
+| `/mias` | Las tuyas + las del equipo sin responsable fijo |
+| `/resumen` | Pendientes de hoy, atrasadas y % de cumplimiento |
+| `/equipo` | Quién tiene qué y cuánto atraso arrastra cada uno |
+| `/tarea cierre` | Estado, responsable, dependencias e historial (incluye las notas) |
+| `/local tiamo` | Las tareas de un local; `/grupo aldos`, las de todo un grupo |
 | `/ayuda` | La lista de comandos |
 
-**Para ver el detalle:**
+**Para hacer**
+
+| Comando | Qué hace | Rol |
+|---|---|---|
+| `/marcar cierre` | La das por hecha | Miembro |
+| `/tildar` | Formulario para marcar varias a la vez, de la más atrasada a la más nueva | Miembro |
+| `/tomar cierre` | Queda a tu nombre | Miembro |
+| `/asignar` | `/tomar` con formulario | Miembro |
+| `/nota cierre: hablé con el proveedor` | Deja un comentario en el historial | Miembro |
+| `/apuntar` | `/nota` con formulario | Miembro |
+| `/pasar cierre: juan@dcsmart.app` | Se la pasa a otra persona | Manager |
+| `/derivar` | `/pasar` con formulario | Manager |
+
+`/marcar` y `/tildar` son los únicos que dan la tarea por hecha: `/tomar` y `/pasar`
+solo cambian quién se encarga. Si la tarea espera a otra sin hacer, se marca igual
+y te avisa. Si alguien ya la había marcado, te dice quién.
+
+**Pagos de dcsmart**
 
 | Comando | Qué hace |
 |---|---|
-| `/tarea cierre` | En qué anda esa tarea: estado, quién la tiene, de qué depende y su historial completo |
-| `/local tiamo` | Las tareas de un local. Con `/grupo aldos` ves las de todos los locales del grupo |
-| `/resumen` | Cómo viene el departamento: pendientes de hoy, atrasadas y % de cumplimiento |
-| `/equipo` | Quién tiene qué y cuánto atraso arrastra cada uno |
-
-`/tarea` es el que muestra las notas que se dejaron con `/nota`, junto con quién marcó
-qué y cuándo.
-
-**Para coordinar entre el equipo:**
-
-| Comando | Qué hace |
-|---|---|
-| `/marcar cierre` | La das por hecha |
-| `/tomar cierre` | Esa tarea queda a tu nombre |
-| `/pasar cierre: juan@dcsmart.app` | Se la pasás a otra persona |
-| `/nota cierre: hablé con el proveedor` | Dejás un comentario en el historial de la tarea |
-
-No hace falta escribir el nombre completo de la tarea: con una parte alcanza. Si hay
-más de una que coincida, la app te pregunta cuál. Todo queda registrado en el historial
-del evento en Google Calendar, con tu nombre y la fecha.
-
-Si preferís elegir de una lista en vez de escribir, `/tomar`, `/pasar` y `/nota` tienen
-cada uno su versión en formulario: `/asignar`, `/derivar` y `/apuntar`. Hacen exactamente
-lo mismo, solo cambia cómo elegís la tarea (y, en el caso de `/derivar`, la persona).
-
-`/marcar` también tiene su versión en formulario, pero para varias tareas a la vez:
-**`/tildar`** abre un checklist con checkbox, ordenado de la más atrasada a la más
-nueva, con un semáforo arriba (🔴🟡🟢, igual que la pantalla de oficina) y cuántas
-tenés vencidas/pendientes/hechas hoy. Tildás las que ya hiciste y las marca todas juntas.
-
-Un par de detalles:
-
-- `/marcar` es el único de estos cuatro que da la tarea por hecha. `/tomar` y `/pasar`
-  **no** la marcan, solo cambian quién se encarga.
-- Si la tarea espera a otra que todavía no está hecha, `/marcar` la marca igual y te
-  avisa qué quedó pendiente — mismo criterio que el botón de la tarjeta.
-- Si alguien ya la había marcado, `/marcar` te avisa quién fue en vez de duplicar nada.
-- Si le pasás una tarea a alguien de otro departamento, la app te avisa: esa persona no
-  la va a ver en su `/mias`, así que conviene avisarle aparte.
-- Si escribís un comando en un Space que no está vinculado a ningún departamento, la app
-  te muestra las de tu propio departamento y te lo aclara.
-
-**Marcar una tarea desde el recordatorio.** Cada tarea del aviso diario trae un botón
-**Marcar hecha**: un click la cierra sin salir de Chat, y queda registrada en Google
-Calendar con tu nombre igual que si la marcaras desde la plataforma. La tarjeta se
-actualiza en el momento con las tareas que quedan pendientes, así que no hace falta
-recargar nada ni se acumulan mensajes viejos con botones que ya no sirven.
-
-- Solo pueden marcar los del departamento (y los administradores); si alguien más lo
-  intenta, o pasa algo raro (la tarea ya no existe, el Space no está vinculado), el aviso
-  lo ve solo quien clickeó — no se llena el Space de mensajes de error ajenos.
-- Si alguien ya la marcó, el segundo click te avisa a vos quién fue, sin duplicar nada.
-- Si la tarea espera a otra que todavía no está hecha, se marca igual y la respuesta lo
-  aclara.
-- El botón **Ver todas** del pie abre la plataforma cuando hay más tareas de las que
-  entran en la tarjeta.
-
-### Seguimiento de pagos
-
-Además de las tareas, podés hacerle seguimiento a un **pago puntual** de dcsmart —
-asignarle una tarea del catálogo y/o una persona, sin salir de Chat. No depende de tu
-departamento: funciona igual desde cualquier Space.
-
-| Comando | Qué hace |
-|---|---|
-| `/pago tiamo` | Elegís un pago reciente de ese local (últimos 30 días) y le asignás una tarea y/o una persona |
+| `/pago tiamo` | Elegís un pago reciente de ese local y le asignás una tarea y/o una persona |
 | `/mispagos` | Los pagos que tenés pendientes de resolver |
-| `/tildarpagos` | Marcás varios como resueltos, con checkbox |
+| `/tildarpagos` | Marcás varios como resueltos |
 
-Los datos del pago (proveedor, importe, fecha, comprobante) se leen de dcsmart en el
-momento de vincularlo y quedan guardados — no hace falta volver a consultar nada para
-verlos en `/mispagos`.
+**Preguntar**
 
-### Preguntar por información con Gemini
+| Comando | Qué hace |
+|---|---|
+| `/buscar cuál es la política de viáticos` | Gemini responde **solo** con los documentos cargados para tu departamento y los generales, y dice de qué documento salió |
 
-`/buscar` le pregunta algo a Gemini y responde basado **solo** en los documentos que un
-administrador haya cargado (manuales, políticas, instructivos) — nunca inventa a partir
-de información externa.
+**De administración** (Dirección)
 
-```
-/buscar cuál es la política de viáticos
-```
+| Comando | Qué hace |
+|---|---|
+| `/vincular` | Elegir qué departamento(s) cubre este Space |
+| `/desvincular` | Que el Space deje de cubrir departamentos |
+| `/departamentos` | Panorama de configuración de todos los departamentos |
 
-La respuesta llega en el mismo mensaje (empieza como "🔎 Buscando…" y se actualiza sola
-cuando Gemini termina) y, cuando corresponde, cierra con una línea de "Fuentes" que
-nombra de qué documento salió la información.
+### Spaces de Chat
 
-Ve los **repositorios generales** (sin ningún departamento asignado, para toda la
-empresa) más los asignados al o los departamentos que cubra el Space donde escribís —
-los mismos que ya ves con `/hoy` o `/resumen`. Si todavía no hay ningún documento para
-ese ámbito, te lo dice en vez de inventar una respuesta.
+- **Vincular un Space**: crear el Space, agregar el grupo `depto-<área>@dcsmart.app`
+  y la app **DC-PLATAFORMA**, y escribir `/vincular` para elegir el departamento.
+- **Un Space para varios departamentos**: en `/vincular` se tildan varios. Los
+  comandos muestran todo junto, y cada línea dice de qué departamento es. El
+  recordatorio diario va al primero tildado.
+- **El Space de Dirección** ve y opera todos los departamentos. Equivale a
+  administración: conviene cuidar a quién se agrega.
 
-**Administrar repositorios (administrador):** desde la plataforma, en **Documentos**
-(`/admin/repositorios`). Un repositorio tiene nombre propio y se asigna a uno, varios o
-ningún departamento (podés cambiarlo cuando quieras, sin recrear nada) — así dos
-departamentos pueden compartir la misma fuente de información. Hay dos tipos:
-
-- **Documentos sueltos**: subís un archivo (.txt, .md o .pdf) o pegás una URL, uno por
-  uno. La carga a Gemini es asincrónica: un documento recién subido queda "Indexando…"
-  un rato antes de estar disponible para `/buscar`.
-- **Carpeta de Google Drive**: pegás el link de la carpeta y un botón
-  **"Resincronizar"** importa todo lo que haya adentro (Google Docs, Sheets, Slides,
-  y también `.txt`/`.md`/`.pdf` sueltos). No es automático: para traer archivos nuevos
-  o agregados después, hay que volver a apretar "Resincronizar". No trae el contenido de
-  subcarpetas, y de una planilla de Sheets solo lee la primera hoja.
-
-### Vincular el Space de uno o varios departamentos (administrador)
-
-1. Creá el Space en Google Chat y agregá el grupo `depto-` + el slug del departamento
-   + `@dcsmart.app` (por ejemplo `depto-finanzas@dcsmart.app`) — con eso entran todos
-   los del departamento de una. Si el Space va a cubrir más de un departamento (ver
-   abajo), agregá también el grupo del otro.
-2. Agregá la app **DC-PLATAFORMA** al Space. Te va a saludar y listar los
-   departamentos disponibles con un botón cada uno — sirve para el caso simple de
-   vincular uno solo.
-3. Para elegir de una lista (o para tildar más de uno), escribí `/vincular`: se abre
-   un formulario con un checkbox por departamento.
-
-Tildá el o los departamentos que este Space va a cubrir y guardá. Desde ese momento
-el recordatorio diario llega a ese Space, y `/hoy`, `/atrasadas`, `/mias`, `/tarea`,
-`/local`, `/resumen`, `/equipo`, `/marcar`, `/tomar`, `/pasar` y `/nota` (con sus
-formularios) operan sobre lo tildado.
-
-Para que el Space deje de recibir avisos y de cubrir departamentos, `/desvincular` —
-o volver a abrir `/vincular` y guardar sin nada tildado, que es lo mismo.
-
-Para cambiar los umbrales de escalamiento de un departamento:
-
-```json
-PATCH /api/departamentos/:id/notificaciones
-{ "dias_aviso_departamento": 2, "dias_aviso_direccion": 5 }
-```
-
-Un departamento **sin** Space se sigue evaluando igual — sus tareas atrasadas llegan a
-Dirección — pero no recibe su propio recordatorio hasta que se le vincule uno.
-
-### Un Space que cubre varios departamentos
-
-Algunos Spaces reúnen gente de más de un equipo (por ejemplo "Administración +
-Finanzas", o "RRHH + Informes") que quiere coordinar tareas de los dos sin que cada
-uno tenga que escribir desde el Space del otro. Para eso alcanza con tildar más de un
-departamento en el formulario de `/vincular` (ver arriba) — no hace falta ningún
-comando aparte.
-
-Desde ese momento, ese Space cubre **todos** los que quedaron tildados: cualquiera de
-esos equipos puede escribir `/hoy`, `/atrasadas`, `/mias`, `/tarea`, `/local`,
-`/resumen` o `/equipo` y ve la información de todos mezclada (cada línea aclara de
-cuál es), y `/marcar`, `/tomar`, `/pasar`, `/nota` (y sus formularios) actúan sobre la
-tarea de cualquiera de ellos. El recordatorio diario automático sigue yendo solo al
-primero que haya quedado tildado (el que ya era dueño se mantiene si lo dejás tildado,
-para no reordenar nada) — tildar más departamentos amplía lo que se puede **consultar
-y operar** desde ese Space, no a quién avisa el job.
-
-Para agregar o sacar un departamento más adelante, volvé a abrir `/vincular`: el
-formulario ya viene con lo actual tildado, así que solo hay que ajustar la selección y
-guardar de nuevo.
-
-### El Space de Dirección ve todos los departamentos
-
-El Space que se vincule a **Dirección** es distinto de los demás: desde ahí, los
-comandos dejan de estar acotados a un solo departamento.
-
-- `/hoy`, `/atrasadas`, `/mias`, `/tarea`, `/local`, `/resumen` y `/equipo` traen la
-  información de **los 11 departamentos mezclada**, y cada línea aclara de cuál es
-  (`[Costos]`, `[RRHH]`, etc.).
-- `/marcar`, `/tomar`, `/pasar` y `/nota` — y sus versiones en formulario `/asignar`,
-  `/derivar`, `/apuntar` y `/tildar` — actúan sobre la tarea que encuentren, sea de qué
-  departamento sea.
-
-Quien escribe desde ese Space obtiene esta visión completa **sin importar su propio
-departamento** — el control es formar parte del Space, no la ficha de la persona. Por
-eso conviene armar ese grupo con cuidado de a quién se agrega: equivale, dentro de Chat,
-al mismo nivel de acceso que un administrador.
+Si escribís desde un Space sin vincular, la app te muestra lo de tus propios
+departamentos y te lo aclara.
 
 ## Preguntas frecuentes
 
-**Marqué una tarea por error, ¿la puedo destildar?**
-Por ahora no desde la pantalla — pedile al administrador que la reabra desde el
-calendario del departamento.
+**Marqué una tarea por error, ¿la puedo desmarcar?**
+No: marcar hecha y "no aplica" son definitivos, por eso piden confirmación. Si fue
+un error, avisale a Dirección.
 
-**¿Puedo tener una tarea sin fecha todavía?**
-Sí. Si creás la asignación pero no le definís agenda, queda "sin agenda definida"
-hasta que alguien la complete.
+**No veo Reportes (o no puedo crear tareas).**
+Tu rol en el grupo es Miembro. Si necesitás más, pedile al Owner de tu grupo que te
+haga Manager.
 
-**¿Un local puede tener una fecha distinta a otro para la misma tarea?**
-Sí, esa es la idea — cada asignación (tarea + local) tiene su propia agenda.
+**No puedo entrar.**
+No estás en ningún grupo `depto-*`. Pedí que te agreguen; en unos 15 minutos entrás.
+
+**Veo una tarea que es de otro departamento.**
+Está compartida con el tuyo: la ves en tu agenda y la podés marcar. Marcarla en un
+departamento la marca en todos.
+
+**En Semana (L-V) no veo una tarea del sábado.**
+Esa vista muestra de lunes a viernes. Usá **Mes**.
+
+**¿Un local puede tener otra fecha que otro para la misma tarea?**
+Sí: cada local tiene su propia agenda. En Agendas, tildá solo ese local y usá
+**Cambiar cuándo**.
 
 **Mi departamento no recibe los avisos de Chat.**
-Le falta vincular el Space. Sus tareas atrasadas igual escalan a Dirección; pedile a un
-administrador que escriba `/vincular` en ese Space y tilde el departamento en el
-formulario que se abre.
-
-**No veo el menú de "Tareas" ni "Agenda".**
-Son solo para administradores. Pedí acceso a quien administra la plataforma.
+Le falta un Space vinculado. Sus atrasadas igual escalan a Dirección. Pedile a
+Dirección que escriba `/vincular` en el Space del departamento.

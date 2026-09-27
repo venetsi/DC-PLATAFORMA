@@ -45,12 +45,24 @@ DC-PLATAFORMA/
 
 - ESM, async/await, UUID v4 como PK, snake_case en tablas/columnas, `activo` en vez de
   hard-delete, timestamps `created_at`/`updated_at`.
-- Sin tabla de roles/permisos propia: el admin de esta plataforma es el rol global
-  `super_admin`/`dcsmart` de `dcsmart`, leído desde el ticket SSO — no inventar un
-  sistema de permisos nuevo acá.
+- Sin tabla de roles/permisos propia: los permisos salen de los Google Groups
+  `depto-<slug>@` (departamentos de cada persona y su rol MEMBER / MANAGER / OWNER
+  en cada uno) y Dirección (`depto-direccion@`) + el `super_admin` de dcsmart pueden
+  todo. Todo pasa por `backend/src/lib/permisos.js#puede(usuario, accion, depto)`
+  (espejo en `frontend/src/lib/permisos.js`) — no inventar chequeos sueltos.
 - `Departamento`/`Tarea`/`TareaAsignacion`/`CumplimientoDiario` son las únicas tablas
   propias con lógica de negocio real; `ExtUser`/`ExtLocal` son cache de solo lectura de
   `dcsmart`, nunca fuente de verdad.
+
+## Manuales: se actualizan con cada cambio visible
+
+- `docs/MANUAL-DE-USO.md` es lo que muestra la pantalla **Ayuda** (`/ayuda`) de
+  la plataforma, tal cual. Cualquier cambio que se note en pantalla o en Chat
+  (una acción nueva, un permiso, un comando) actualiza ese archivo en el mismo
+  cambio.
+- `docs/MANUAL-ADMINISTRADOR.md` (y su copia en el doc de claude.ai del manual)
+  se actualiza cuando cambia algo de administración: permisos, procesos,
+  configuración.
 
 ## Antes de cualquier cambio en el schema de `dcsmart` (Fase 8, no antes)
 

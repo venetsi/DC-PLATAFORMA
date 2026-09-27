@@ -1,4 +1,4 @@
-import { usuarioActual, puedeGestionarDepartamento } from '../lib/permisos.js'
+import { usuarioActual, puede } from '../lib/permisos.js'
 import { crearianCiclo } from '../lib/dependencias.js'
 
 // CRUD de dependencias entre asignaciones. Mismo modelo de permisos que el
@@ -50,8 +50,8 @@ export default async function dependenciasRoutes(fastify) {
     if (!asignacion || !prerequisito) return reply.code(404).send({ error: 'Asignación no encontrada' })
 
     const usuario = await usuarioActual(fastify, request)
-    if (!puedeGestionarDepartamento(usuario, asignacion.tarea.id_departamento)) {
-      return reply.code(403).send({ error: 'Solo podés definir dependencias de tu propio departamento' })
+    if (!puede(usuario, 'editar', asignacion.tarea.id_departamento)) {
+      return reply.code(403).send({ error: 'Definir dependencias lo puede hacer un MANAGER u OWNER del grupo del departamento' })
     }
 
     if (await crearianCiclo(fastify.db, { idAsignacion: id_asignacion, idPrerequisito: id_asignacion_prerequisito })) {
@@ -79,8 +79,8 @@ export default async function dependenciasRoutes(fastify) {
     if (!fila) return reply.code(404).send({ error: 'Dependencia no encontrada' })
 
     const usuario = await usuarioActual(fastify, request)
-    if (!puedeGestionarDepartamento(usuario, fila.asignacion.tarea.id_departamento)) {
-      return reply.code(403).send({ error: 'Solo podés borrar dependencias de tu propio departamento' })
+    if (!puede(usuario, 'editar', fila.asignacion.tarea.id_departamento)) {
+      return reply.code(403).send({ error: 'Borrar dependencias lo puede hacer un MANAGER u OWNER del grupo del departamento' })
     }
 
     await fastify.db.tareaAsignacionDependencia.delete({ where: { id: fila.id } })

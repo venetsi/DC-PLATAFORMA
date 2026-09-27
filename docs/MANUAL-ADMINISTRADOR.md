@@ -86,29 +86,45 @@ pero dcsmart todavía puede mandar el viejo en el ticket.
 - **Recomendado**: actualizar esos emails también en los usuarios de dcsmart,
   para que el ticket ya llegue con el email principal.
 
-### Quién es administrador
+### Permisos: el rol en el Google Group
+
+Cada persona tiene, en cada departamento, el **rol que tiene en su grupo**
+`depto-<slug>@` (MEMBER, MANAGER u OWNER). Se cambia en Google Groups o en la
+consola de admin y rige en unos 15 minutos. Decidido el 27/09/2026:
+
+| Acción (en ese departamento) | MEMBER | MANAGER | OWNER |
+|---|---|---|---|
+| Ver agendas y tareas (Mi agenda, Mis tareas, Agendas, Chat) | ✅ | ✅ | ✅ |
+| Marcar hecha / No aplica; en Chat `/marcar`, `/tildar`, `/tomar`, `/nota` | ✅ | ✅ | ✅ |
+| Crear y editar tareas, cambiar agenda y responsable, duplicar | ❌ | ✅ | ✅ |
+| Mover una tarea de día (arrastrar o Cambiar fecha) | ❌ | ✅ | ✅ |
+| Pasar una tarea a otra persona (`/pasar`, `/derivar`) | ❌ | ✅ | ✅ |
+| Ver Reportes | ❌ | ✅ | ✅ |
+| Desactivar y eliminar tareas | ❌ | ❌ | ✅ |
+| Avisos del departamento (webhook, umbrales) | ❌ | ❌ | ✅ |
+
+**Dirección y super admin, sin restricción**:
 
 ```js
 esAdminGlobal(usuario) = usuario.es_admin_global || usuario.esDireccion
 ```
 
-- **Dirección = administración.** Quien está en `depto-direccion@dcsmart.app`
-  ve y gestiona **todos** los departamentos: agendas, reportes, marcar,
-  reprogramar. Para hacer administrador a alguien, se lo agrega a ese grupo.
+- Quien está en `depto-direccion@dcsmart.app`, **con cualquier rol**, cuenta como
+  OWNER en todos los departamentos. Para hacer administrador a alguien, se lo
+  agrega a ese grupo.
 - `es_admin_global` es el acceso de emergencia: se copia en cada entrada por
   Tareas del `super_admin` de dcsmart. Entra aunque no esté en ningún grupo.
+- Solo Dirección / super admin: crear departamentos, **Releer Google Groups**,
+  **Documentos** (`/admin/repositorios`), y `/vincular`, `/desvincular` y
+  `/departamentos` en Chat.
+- En Chat, el **Space de Dirección** opera sobre todos los departamentos para
+  quien escriba desde ahí (el control es formar parte del Space).
 - El atajo de desarrollo `admin@dcsmart.app` solo funciona con el login de
   desarrollo encendido (nunca en producción).
 
-| | Administrador (Dirección o super admin) | Usuario con departamento(s) | Sin grupo |
-|---|---|---|---|
-| Mi agenda / Mis tareas / Reportes | ✅ todos los departamentos | ✅ los suyos | No entra |
-| **Agendas**: crear, editar, duplicar, cambios en lote | ✅ cualquier departamento | ✅ los suyos | — |
-| Marcar hecha / No aplica / Cambiar fecha | ✅ | ✅ los suyos | — |
-| Desactivar y eliminar tareas | ✅ | ❌ | — |
-| Departamentos y avisos, crear departamentos | ✅ | ❌ | — |
-| **Documentos** (`/admin/repositorios`) | ✅ | ❌ | — |
-| `/departamentos` en Chat | ✅ | ❌ | — |
+La pantalla muestra solo lo que el rol permite (`frontend/src/lib/permisos.js`),
+y el backend lo vuelve a chequear en cada pedido (`backend/src/lib/permisos.js`,
+función `puede(usuario, acción, departamento)`).
 
 ---
 
@@ -131,7 +147,7 @@ curl -X POST "https://dc-plataforma.web.app/api/departamentos/membresias/sincron
 ## 3. Departamentos y avisos
 
 Todo en **Agendas → "Departamentos y avisos"** (sección plegable arriba de
-la pantalla, solo administradores; se recuerda abierta o cerrada por
+la pantalla (Dirección ve todos los departamentos; un OWNER, solo los avisos de los suyos); se recuerda abierta o cerrada por
 navegador). El encabezado resume cuántos departamentos hay, cuántos tienen
 Space de Chat y si algún grupo no se pudo leer.
 
@@ -182,7 +198,9 @@ todas las pantallas y sus miembros dejan de tenerlo entre sus departamentos.
 ## 4. Agendas (`/agendas`)
 
 Reemplaza a la vieja pantalla "Tareas" (`/admin/tareas` redirige acá). Entra
-cualquier administrador o usuario con departamento.
+cualquier usuario con departamento: un MEMBER la ve en modo lectura; crear y
+editar pide MANAGER; desactivar, eliminar y los avisos del departamento, OWNER
+(ver §1).
 
 ### La pantalla
 
@@ -194,8 +212,8 @@ cualquier administrador o usuario con departamento.
   "Equipo" o "Varios") y **Estado** (🔴 N atrasadas / 🟡 Sin agenda /
   🟢 Al día, contando los últimos 60 días). Las que necesitan atención van
   primero.
-- **Buscar** filtra por tarea, local o grupo. Los administradores pueden
-  tildar **"Desactivadas"** para ver las desactivadas y eliminarlas.
+- **Buscar** filtra por tarea, local o grupo. Quien es OWNER (o Dirección)
+  puede tildar **"Desactivadas"** para ver las desactivadas y eliminarlas.
 
 ### Nueva tarea (en un paso)
 
@@ -243,38 +261,62 @@ Y siempre disponibles:
   agenda: mismos locales, frecuencia, responsable y departamentos
   compartidos, **desde hoy** (no crea atrasadas hacia atrás). Las
   dependencias no se copian.
-- **Desactivar** (solo administradores) — cierra la agenda de todos sus
+- **Desactivar** (OWNER del grupo o Dirección) — cierra la agenda de todos sus
   locales desde hoy, sin borrar historial.
-- **Eliminar definitivamente** (solo administradores, sobre una desactivada;
+- **Eliminar definitivamente** (OWNER del grupo o Dirección, sobre una desactivada;
   hay que escribir `ELIMINAR`) — borra eventos de Calendar, asignaciones,
   dependencias y la tarea. No se puede deshacer. Las series viejas que se
   cerraron al cambiar la frecuencia quedan en Calendar como historial.
 
 ---
 
-## 5. Sobre una tarea puntual (Mi agenda y Mis tareas)
+## 5. Mi agenda y una tarea puntual
 
-Tocar una tarea abre su detalle (estado, responsable, "espera a",
-historial). Mientras esté pendiente o atrasada:
+**Varios departamentos**: quien está en más de un grupo (y Dirección) arranca
+viendo **todos juntos**; cada tarea lleva una etiqueta de color con su
+departamento (el color sale del orden alfabético de todos los departamentos,
+así es el mismo en todas las vistas). Una tarea compartida entre dos
+departamentos visibles se muestra una sola vez, con la etiqueta de su dueño.
 
-- **Marcar hecha** — definitivo, con confirmación.
-- **Cambiar fecha** — mueve **solo esa ocurrencia** a otro día (no toca el
-  resto de la serie ni otros locales). Si la tarea está compartida, se mueve
-  también en los otros departamentos. Queda en el historial: *REPROGRAMADA de
-  <fecha> a <fecha> por <email>*.
-- **No aplica** — con motivo obligatorio; no cuenta ni como hecha ni como
-  atrasada. Definitivo.
+**Semana y Mes, para MANAGER y OWNER**:
 
-Mi agenda muestra "Actualizando…" mientras carga, y volver a un
-departamento ya visto es instantáneo. La primera entrada después de un rato
-sin uso puede tardar 5 a 9 segundos (el servidor se apaga cuando no se usa;
-se decidió no pagar una instancia fija).
+- **Arrastrar** una tarea pendiente a otro día = Cambiar fecha de esa
+  ocurrencia, con un aviso de **Deshacer**.
+- **Tocar un día vacío** (o **+ Nueva tarea**) abre el formulario de nueva
+  tarea con ese día ya puesto ("una sola vez, ese día").
+
+**El detalle de una tarea** (tocándola, en Mi agenda o Mis tareas). Mientras
+esté pendiente o atrasada:
+
+- **Marcar hecha** (MEMBER) — definitivo, con confirmación.
+- **No aplica** (MEMBER) — con motivo obligatorio; no cuenta ni como hecha ni
+  como atrasada. Definitivo.
+- **Cambiar fecha** (MANAGER) — mueve **solo esa ocurrencia** a otro día (no
+  toca el resto de la serie ni otros locales). Si la tarea está compartida, se
+  mueve también en los otros departamentos. Queda en el historial:
+  *REPROGRAMADA de <fecha> a <fecha> por <email>*.
+- **Editar** (MANAGER del departamento dueño) — nombre de la tarea (en todos
+  sus locales), responsable y frecuencia de ese local.
+
+Mi agenda muestra "Actualizando…" mientras carga, y volver a algo ya visto es
+instantáneo. La primera entrada después de un rato sin uso puede tardar 5 a 9
+segundos (el servidor se apaga cuando no se usa; se decidió no pagar una
+instancia fija).
+
+## 5 bis. Ayuda (`/ayuda`)
+
+La pantalla **Ayuda** muestra `docs/MANUAL-DE-USO.md` tal cual (con índice y
+buscador), incluidos todos los comandos de Chat. **Es la única copia del
+manual de uso**: cada cambio visible de la plataforma tiene que actualizar ese
+archivo (y este manual si toca la administración); se ve en la Ayuda con el
+próximo deploy del frontend.
 
 ---
 
 ## 6. Tablero de cumplimiento (`/reportes`)
 
-Cualquier usuario ve el de sus departamentos; los administradores, todos.
+Lo ven los MANAGER y OWNER de cada grupo (el de sus departamentos) y Dirección
+(todos). Un MEMBER no tiene la entrada en el menú.
 
 - **Un mes a la vez** (‹ ›). Filtros de **departamento** y **grupo**.
 - **Indicadores del mes**: cumplimiento (hechas / (hechas + atrasadas sin
@@ -362,6 +404,10 @@ todos ("modo todo").
 | `/mispagos` | | barra | Tus pagos con seguimiento pendiente |
 | `/tildarpagos` | | barra + diálogo | Marca varios pagos como resueltos |
 | `/buscar` | | barra | Pregunta libre, respondida por Gemini (§8) |
+
+Los de acción siguen el rol del grupo (§1): marcar, tildar, tomar y anotar
+alcanzan con MEMBER; `/pasar` y `/derivar` piden MANAGER u OWNER. Desde el Space
+de Dirección, todo.
 
 Si alguien escribe desde una cuenta sin acceso, Chat le dice cuál cuenta
 detectó y qué hacer: *"No encuentro a X en la plataforma…"* (no está en

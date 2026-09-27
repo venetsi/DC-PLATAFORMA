@@ -473,3 +473,47 @@ th, td {
   .agendas-deptos { position: static; flex-direction: row; overflow-x: auto; padding-bottom: 0.25rem; }
   .depto { flex: 0 0 auto; }
 }
+
+/* Etiqueta de departamento cuando una vista mezcla varios (color por depto). */
+.chip-depto { display: inline-block; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; padding: 0.05rem 0.35rem; border-radius: 4px; margin-right: 0.35rem; vertical-align: 0.1em; }
+
+/* --- Mi agenda: varios departamentos, arrastrar y crear (Calendario.jsx) --- */
+.agenda-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+.leyenda-deptos { display: flex; gap: 0.4rem 0.9rem; flex-wrap: wrap; margin-top: 0.35rem; font-size: 0.75rem; color: var(--texto-tenue); }
+.calendario-fc .fc-event { background: transparent; border: 0; cursor: pointer; }
+.calendario-fc .fc-event:hover { background: rgba(255, 255, 255, 0.05); }
+.calendario-fc .fc-event.fc-event-draggable { cursor: grab; }
+.calendario-fc .fc-event-dragging { opacity: 0.85; }
+.calendario-fc .fc-daygrid-day { cursor: copy; }
+.calendario-fc .fc-daygrid-day.fc-day-disabled { cursor: default; }
+.fc-tarea { display: flex; align-items: center; gap: 0.25rem; min-width: 0; padding: 0.05rem 0.2rem; font-size: 0.78rem; color: var(--texto); }
+.fc-punto { flex: 0 0 auto; width: 0.5rem; height: 0.5rem; border-radius: 50%; }
+.fc-titulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fc-tarea .chip-depto { margin-right: 0; flex: 0 0 auto; }
+.fc-tarea.estado-realizada .fc-titulo, .fc-tarea.estado-no_aplica .fc-titulo { color: var(--texto-tenue); text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, 0.25); }
+.modal-ancho { width: 100%; max-width: 760px; max-height: 92vh; overflow-y: auto; }
+
+/* --- Ayuda (/ayuda): el manual de uso, renderizado desde docs/MANUAL-DE-USO.md --- */
+.ayuda { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 2rem; align-items: start; }
+.ayuda-indice { position: sticky; top: 1rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.ayuda-indice input { padding: 0.45rem 0.6rem; }
+.ayuda-indice ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.ayuda-indice a { display: block; padding: 0.3rem 0.5rem; border-radius: 6px; color: var(--texto-tenue); text-decoration: none; font-size: 0.85rem; }
+.ayuda-indice a:hover { color: var(--texto); background: rgba(255, 255, 255, 0.04); }
+.md { max-width: 72ch; line-height: 1.6; font-size: 0.92rem; }
+.md h1 { margin: 0 0 0.75rem; font-size: 1.5rem; }
+.md h2 { margin: 2rem 0 0.6rem; font-size: 1.2rem; color: var(--gold); scroll-margin-top: 1rem; text-wrap: balance; }
+.md section:first-child h2 { margin-top: 1rem; }
+.md h3 { margin: 1.4rem 0 0.4rem; font-size: 1rem; }
+.md p, .md ul, .md ol { margin: 0 0 0.8rem; }
+.md li { margin-bottom: 0.25rem; }
+.md table { width: 100%; border-collapse: collapse; margin: 0 0 1rem; font-size: 0.85rem; display: block; overflow-x: auto; }
+.md th, .md td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255, 255, 255, 0.08); vertical-align: top; }
+.md th { color: var(--texto-tenue); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.md code { background: rgba(255, 255, 255, 0.07); padding: 0.05rem 0.35rem; border-radius: 4px; font-size: 0.85em; }
+.md blockquote { margin: 0 0 1rem; padding: 0.5rem 0.9rem; border-left: 3px solid var(--teal); border-radius: 0; background: rgba(63, 182, 189, 0.06); color: var(--texto-tenue); }
+.md blockquote p { margin: 0; }
+@media (max-width: 800px) {
+  .ayuda { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+  .ayuda-indice { position: static; }
+}

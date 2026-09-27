@@ -6,12 +6,19 @@ import DuplicarTarea from './admin/DuplicarTarea.jsx'
 import NuevaTarea from './agendas/NuevaTarea.jsx'
 import DetalleAgenda from './agendas/DetalleAgenda.jsx'
 import { dondeTexto, cuandoTexto, responsableTexto, estadoTarea } from './agendas/resumen.js'
+import { usePermisos } from '../lib/permisos.js'
 
 // Agendas: las tareas de cada departamento con donde, cuando, quien y como
 // vienen, en un solo lugar. Direccion ve y gestiona todos los departamentos;
 // cada area, los suyos. Reemplaza al viejo catalogo de /admin/tareas.
+//
+// Que se puede hacer depende del rol en el Google Group de cada departamento
+// (lib/permisos.js): MEMBER mira, MANAGER crea y edita, OWNER ademas
+// desactiva, elimina y configura los avisos de su departamento.
 export default function Agendas() {
   const { esAdminGlobal, departamentos: propios } = useAuthStore()
+  const { puede, enAlguno, filtrar } = usePermisos()
+  const puedeConfigurar = enAlguno('administrar')
   const verTodos = esAdminGlobal || propios.length > 1
   const [idDepto, setIdDepto] = useState(verTodos ? '' : propios[0]?.id || '')
   const [data, setData] = useState(null)
@@ -41,7 +48,7 @@ export default function Agendas() {
       if (pedido === ultimoPedido.current) setCargando(false)
     }
   }
-  const cargarConfig = () => (esAdminGlobal ? departamentosApi.listar().then(setDeptosConfig) : Promise.resolve())
+  const cargarConfig = () => (puedeConfigurar ? departamentosApi.listar().then(setDeptosConfig) : Promise.resolve())
 
   useEffect(() => { cargar() }, [idDepto, verInactivas])
   useEffect(() => {
@@ -60,7 +67,7 @@ export default function Agendas() {
   const usuariosDe = (id) => usuarios.filter((u) => (u.departamentos || [u.id_departamento]).includes(id))
   const deptos = data?.departamentos || []
   const nombreDepto = (id) => deptos.find((d) => d.id === id)?.nombre || ''
-  const gestionables = esAdminGlobal ? deptos : deptos.filter((d) => propios.some((p) => p.id === d.id))
+  const gestionables = filtrar('editar', deptos)
 
   const tareas = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
@@ -100,7 +107,13 @@ export default function Agendas() {
 
   return (
     <div className="agendas">
-      {esAdminGlobal && <DepartamentosAvisos departamentos={deptosConfig} onCambio={() => Promise.all([cargarConfig(), cargar()])} />}
+      {puedeConfigurar && (
+        <DepartamentosAvisos
+          departamentos={esAdminGlobal ? deptosConfig : deptosConfig.filter((d) => puede('administrar', d.id))}
+          puedeCrear={esAdminGlobal}
+          onCambio={() => Promise.all([cargarConfig(), cargar()])}
+        />
+      )}
 
       <div className="agendas-grid">
         <nav className="agendas-deptos" aria-label="Departamentos">
@@ -128,7 +141,7 @@ export default function Agendas() {
             </div>
             <div className="agendas-herramientas">
               <input type="search" placeholder="Buscar tarea, local o grupo" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} aria-label="Buscar" />
-              {esAdminGlobal && (
+              {puedeConfigurar && (
                 <label className="en-linea tenue"><input type="checkbox" checked={verInactivas} onChange={(e) => setVerInactivas(e.target.checked)} /> Desactivadas</label>
               )}
               {gestionables.length > 0 && <button className="btn" onClick={() => setPanel(panel === 'nueva' ? null : 'nueva')}>+ Nueva tarea</button>}
@@ -167,7 +180,8 @@ export default function Agendas() {
                   const cuando = cuandoTexto(t.asignaciones)
                   const estado = estadoTarea(t.asignaciones)
                   const expandida = abierta === t.id
-                  const puede = esAdminGlobal || propios.some((p) => p.id === t.id_departamento)
+                  const puedeEditar = puede('editar', t.id_departamento)
+                  const puedeAdministrar = puede('administrar', t.id_departamento)
                   return (
                     <Fragment key={t.id}>
                       <tr className={`fila-tarea${expandida ? ' abierta' : ''}${t.activa ? '' : ' inactiva'}`}>
@@ -183,14 +197,14 @@ export default function Agendas() {
                         <td>{responsableTexto(t.asignaciones, nombrePorEmail)}</td>
                         <td>{t.activa && <span className={`pill-${estado.tono}`}>{estado.texto}</span>}</td>
                         <td className="acciones-fila">
-                          {puede && t.activa && (
+                          {puedeEditar && t.activa && (
                             <>
                               <button className="btn btn-secondary btn-chico" onClick={() => { setNuevoNombre(t.nombre); setPanel({ renombrar: t.id }) }}>Renombrar</button>
                               <button className="btn btn-secondary btn-chico" onClick={() => setPanel(panel?.duplicar === t.id ? null : { duplicar: t.id })}>Duplicar</button>
                             </>
                           )}
-                          {esAdminGlobal && t.activa && <button className="btn btn-secondary btn-chico" onClick={() => desactivar(t)}>Desactivar</button>}
-                          {esAdminGlobal && !t.activa && <button className="btn btn-secondary btn-chico" onClick={() => eliminar(t)}>Eliminar definitivamente</button>}
+                          {puedeAdministrar && t.activa && <button className="btn btn-secondary btn-chico" onClick={() => desactivar(t)}>Desactivar</button>}
+                          {puedeAdministrar && !t.activa && <button className="btn btn-secondary btn-chico" onClick={() => eliminar(t)}>Eliminar definitivamente</button>}
                         </td>
                       </tr>
                       {panel?.renombrar === t.id && (
@@ -215,8 +229,9 @@ export default function Agendas() {
                       )}
                       {expandida && (
                         <tr className="fila-detalle"><td colSpan={6}>
-                          {puede ? (
+                          {(
                             <DetalleAgenda
+                              soloLectura={!puedeEditar}
                               tarea={t}
                               locales={locales}
                               grupos={grupos}
@@ -226,8 +241,6 @@ export default function Agendas() {
                               onCambio={cargar}
                               avisar={avisar}
                             />
-                          ) : (
-                            <p className="tenue">Solo lectura: esta tarea es de otro departamento.</p>
                           )}
                         </td></tr>
                       )}

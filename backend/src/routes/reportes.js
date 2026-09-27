@@ -1,4 +1,4 @@
-import { usuarioActual, puedeGestionarDepartamento, esAdminGlobal, departamentosDe } from '../lib/permisos.js'
+import { usuarioActual, puede, esAdminGlobal, departamentosCon } from '../lib/permisos.js'
 import { hoyEnArgentina } from '../lib/vencimiento.js'
 
 // Lee CumplimientoDiario (snapshot escrito por el job diario) -- nunca
@@ -9,8 +9,8 @@ export default async function reportesRoutes(fastify) {
     if (!idDepartamento) return reply.code(400).send({ error: 'departamento requerido' })
 
     const usuario = await usuarioActual(fastify, request)
-    if (!puedeGestionarDepartamento(usuario, idDepartamento)) {
-      return reply.code(403).send({ error: 'No tenes acceso a este departamento' })
+    if (!puede(usuario, 'reportes', idDepartamento)) {
+      return reply.code(403).send({ error: 'Los reportes los ven los MANAGER y OWNER del grupo del departamento' })
     }
 
     // id_local_ext = '' trae la fila agregada de todo el departamento (default);
@@ -47,10 +47,11 @@ export default async function reportesRoutes(fastify) {
     const { departamento: idDepto, grupo, local } = request.query
 
     const visibles = await fastify.db.departamento.findMany({
-      where: { activo: true, ...(esAdminGlobal(usuario) ? {} : { id: { in: departamentosDe(usuario) } }) },
+      where: { activo: true, ...(esAdminGlobal(usuario) ? {} : { id: { in: departamentosCon(usuario, 'reportes') } }) },
       select: { id: true, nombre: true },
       orderBy: { nombre: 'asc' }
     })
+    if (!visibles.length) return reply.code(403).send({ error: 'Los reportes los ven los MANAGER y OWNER de cada grupo' })
     if (idDepto && !visibles.some((d) => d.id === idDepto)) return reply.code(403).send({ error: 'No tenes acceso a este departamento' })
     const idsDepto = idDepto ? [idDepto] : visibles.map((d) => d.id)
 

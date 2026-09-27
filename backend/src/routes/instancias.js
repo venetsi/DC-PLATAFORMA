@@ -1,4 +1,4 @@
-import { usuarioActual, puedeGestionarDepartamento, departamentosDe } from '../lib/permisos.js'
+import { usuarioActual, puede, departamentosDe } from '../lib/permisos.js'
 import { hoyEnArgentina, clasificarInstancia } from '../lib/vencimiento.js'
 import { marcarInstanciaYPropagar } from '../lib/marcar-instancia.js'
 import { reprogramarInstanciaYPropagar } from '../lib/reprogramar-instancia.js'
@@ -43,10 +43,17 @@ async function conDependencias(fastify, items, activar) {
   })
 }
 
-async function resolverDepartamentoConAcceso(fastify, request, reply, idDepartamento) {
+// `accion` = lo que pide la ruta (ver ACCIONES en lib/permisos.js): mirar la
+// agenda es 'ver', marcar es 'marcar', mover de dia es 'editar'.
+const SIN_PERMISO = {
+  ver: 'No tenés acceso a este departamento',
+  marcar: 'No tenés permiso para marcar tareas de este departamento',
+  editar: 'Mover o editar tareas de este departamento lo puede hacer un MANAGER u OWNER del grupo'
+}
+async function resolverDepartamentoConAcceso(fastify, request, reply, idDepartamento, accion) {
   const usuario = await usuarioActual(fastify, request)
-  if (!puedeGestionarDepartamento(usuario, idDepartamento)) {
-    reply.code(403).send({ error: 'No tenes acceso a este departamento' })
+  if (!puede(usuario, accion, idDepartamento)) {
+    reply.code(403).send({ error: SIN_PERMISO[accion] })
     return null
   }
   const departamento = await fastify.db.departamento.findUnique({ where: { id: idDepartamento } })
@@ -150,7 +157,7 @@ export default async function instanciasRoutes(fastify) {
   fastify.get('/', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { departamento: idDepartamento, estado, desde, hasta } = request.query
     if (!idDepartamento) return reply.code(400).send({ error: 'departamento requerido' })
-    const departamento = await resolverDepartamentoConAcceso(fastify, request, reply, idDepartamento)
+    const departamento = await resolverDepartamentoConAcceso(fastify, request, reply, idDepartamento, 'ver')
     if (!departamento) return
 
     const items = await fastify.gcal.listarInstancias({
@@ -165,7 +172,7 @@ export default async function instanciasRoutes(fastify) {
   fastify.post('/:instanceId/marcar', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { departamento: idDepartamento } = request.body || {}
     if (!idDepartamento) return reply.code(400).send({ error: 'departamento requerido' })
-    const departamento = await resolverDepartamentoConAcceso(fastify, request, reply, idDepartamento)
+    const departamento = await resolverDepartamentoConAcceso(fastify, request, reply, idDepartamento, 'marcar')
     if (!departamento) return
 
     const usuario = await fastify.db.extUser.findUnique({ where: { id: request.user.id } })
@@ -192,7 +199,7 @@ export default async function instanciasRoutes(fastify) {
     if (!idDepartamento) return reply.code(400).send({ error: 'departamento requerido' })
     const motivoLimpio = String(motivo || '').trim().replace(/\s+/g, ' ').slice(0, 300)
     if (!motivoLimpio) return reply.code(400).send({ error: 'Contá por qué no aplica' })
-    const departamento = await resolverDepartamentoConAcceso(fastify, request, reply, idDepartamento)
+    const departamento = await resolverDepartamentoConAcceso(fastify, request, reply, idDepartamento, 'marcar')
     if (!departamento) return
 
     const usuario = await fastify.db.extUser.findUnique({ where: { id: request.user.id } })
@@ -216,7 +223,7 @@ export default async function instanciasRoutes(fastify) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha || '')) || Number.isNaN(Date.parse(fecha))) {
       return reply.code(400).send({ error: 'fecha inválida (formato AAAA-MM-DD)' })
     }
-    const departamento = await resolverDepartamentoConAcceso(fastify, request, reply, idDepartamento)
+    const departamento = await resolverDepartamentoConAcceso(fastify, request, reply, idDepartamento, 'editar')
     if (!departamento) return
 
     const usuario = await fastify.db.extUser.findUnique({ where: { id: request.user.id } })

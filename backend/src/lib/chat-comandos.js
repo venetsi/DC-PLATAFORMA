@@ -11,7 +11,7 @@
 // Chat API (seccion "Comandos"): hay que usar los mismos numeros de aca.
 import { hoyEnArgentina, clasificarInstancia, diasHabilesVencida, estaHecha } from './vencimiento.js'
 import { lineaDeTarea } from './mensajes-chat.js'
-import { esAdminGlobal, puedeGestionarDepartamento, conPermisos, departamentosDe } from './permisos.js'
+import { esAdminGlobal, puede, conPermisos, departamentosDe } from './permisos.js'
 import { SLUG_DIRECCION } from './direccion.js'
 import { marcarInstanciaYPropagar } from './marcar-instancia.js'
 import { prerrequisitosPendientes } from './dependencias.js'
@@ -271,8 +271,14 @@ function unDia(fechaISO, dias) {
 export function puedeOperarEnChat(usuario, departamentos) {
   if (!usuario) return false
   if (departamentos.some((d) => d?.slug === SLUG_DIRECCION)) return true
-  return departamentos.some((d) => puedeGestionarDepartamento(usuario, d?.id))
+  return departamentos.some((d) => puede(usuario, 'ver', d?.id))
 }
+
+// Pasar una tarea a OTRA persona es editar (MANAGER u OWNER del grupo de ese
+// departamento). Marcar, tomar y anotar alcanzan con ser MEMBER, y eso ya lo
+// garantiza el ambito del Space. El Space de Direccion (modo todo) puede todo.
+const AVISO_SIN_PERMISO_PASAR = (departamento) =>
+  `⚠️ Pasarle una tarea a otra persona lo puede hacer un MANAGER u OWNER del grupo de ${departamento.nombre}. Si la querés hacer vos, usá \`/tomar\`.`
 
 // Todos los departamentos que cubre un Space: el dueño (chat_space_name) +
 // los que se agregaron con /compartir. Array vacio si el Space no esta
@@ -825,7 +831,7 @@ async function comandoTomar(deps, { departamentos, modoTodo, email, argumento })
     : `✋ Listo, ${etiqueta} queda a tu nombre.${cierre}`
 }
 
-async function comandoPasar(deps, { departamentos, modoTodo, email, argumento }) {
+async function comandoPasar(deps, { departamentos, modoTodo, email, extUser, argumento }) {
   const { db, gcal } = deps
   const { tarea, resto: destino } = partirArgumento(argumento)
 
@@ -844,6 +850,7 @@ async function comandoPasar(deps, { departamentos, modoTodo, email, argumento })
 
   const { evento, rotulo: nombre, hecha, departamento } = r.una
   if (hecha) return `*${nombre}* ya está hecha, no hace falta pasarla.`
+  if (!modoTodo && !puede(extUser, 'editar', departamento.id)) return AVISO_SIN_PERMISO_PASAR(departamento)
 
   await gcal.marcarInstancia({
     calendarId: departamento.id_calendar_google,
@@ -1245,7 +1252,7 @@ async function departamentoDeTareaCodificada(db, valorCodificado, { space, extUs
 
   const departamento = await db.departamento.findUnique({ where: { id: idDepartamento } })
   if (!departamento?.activo || !departamento.id_calendar_google) return { instanceId: null }
-  return { departamento, instanceId }
+  return { departamento, instanceId, modoTodo }
 }
 
 // Semaforo + contadores, MISMO criterio que el kiosko (routes/tv.js#estado_general):
@@ -1335,8 +1342,9 @@ export async function personasActivas(deps) {
 // del lado del servidor, el formulario no decide nada por si solo.
 export async function pasarPorInstanceId(deps, { space, extUser, email, instanceId: valorCodificado, emailDestino }) {
   const { db, gcal, log = console } = deps
-  const { departamento, instanceId } = await departamentoDeTareaCodificada(db, valorCodificado, { space, extUser })
+  const { departamento, instanceId, modoTodo } = await departamentoDeTareaCodificada(db, valorCodificado, { space, extUser })
   if (!departamento) return '⚠️ No pude identificar la tarea (o ya no tenés acceso a ese departamento).'
+  if (!modoTodo && !puede(extUser, 'editar', departamento.id)) return AVISO_SIN_PERMISO_PASAR(departamento)
 
   const destino = normalizarEmail(emailDestino)
   if (!destino) return '⚠️ Elegí a quién le pasás la tarea.'

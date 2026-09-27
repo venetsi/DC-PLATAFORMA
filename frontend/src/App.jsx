@@ -9,6 +9,7 @@ import Calendario from './pages/Calendario.jsx'
 import MisTareas from './pages/MisTareas.jsx'
 import Reportes from './pages/Reportes.jsx'
 import Agendas from './pages/Agendas.jsx'
+import Ayuda from './pages/Ayuda.jsx'
 import AdminRepositorios from './pages/admin/AdminRepositorios.jsx'
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
           <Route index element={<Calendario />} />
           <Route path="/mis-tareas" element={<MisTareas />} />
           <Route path="/reportes" element={<Reportes />} />
+          <Route path="/ayuda" element={<Ayuda />} />
           <Route element={<GestionRoute />}>
             <Route path="/agendas" element={<Agendas />} />
             {/* La vieja pantalla de catalogo: la reemplaza Agendas. */}

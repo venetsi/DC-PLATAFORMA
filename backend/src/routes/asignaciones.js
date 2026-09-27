@@ -1,5 +1,5 @@
 import { leerRecurrence } from '../lib/recurrencia.js'
-import { usuarioActual, puedeGestionarDepartamento } from '../lib/permisos.js'
+import { usuarioActual, puede } from '../lib/permisos.js'
 import { definirAgenda } from '../lib/agenda.js'
 
 // CRUD de TareaAsignacion (agenda por local). Crear/editar la agenda
@@ -39,8 +39,8 @@ export default async function asignacionesRoutes(fastify) {
     if (!tarea) return reply.code(404).send({ error: 'Tarea no encontrada' })
 
     const usuario = await usuarioActual(fastify, request)
-    if (!puedeGestionarDepartamento(usuario, tarea.id_departamento)) {
-      return reply.code(403).send({ error: 'Solo podés asignar tareas de tu propio departamento' })
+    if (!puede(usuario, 'editar', tarea.id_departamento)) {
+      return reply.code(403).send({ error: 'Asignar tareas lo puede hacer un MANAGER u OWNER del grupo del departamento' })
     }
 
     async function compartirCon(idAsignacion) {
@@ -91,14 +91,25 @@ export default async function asignacionesRoutes(fastify) {
       include: { tarea: { include: { departamento: true } } }
     })
     if (!asignacion) return reply.code(404).send({ error: 'Asignacion no encontrada' })
-    if (!asignacion.id_calendar_event) return { agenda: null }
+    if (!puede(await usuarioActual(fastify, request), 'ver', asignacion.tarea.id_departamento)) {
+      return reply.code(403).send({ error: 'No tenés acceso a este departamento' })
+    }
+    // Lo que necesita el panel Editar del detalle de una tarea (Mi agenda).
+    const datos = {
+      id: asignacion.id,
+      id_tarea: asignacion.id_tarea,
+      nombre_tarea: asignacion.tarea.nombre,
+      id_departamento: asignacion.tarea.id_departamento,
+      asignado_a: asignacion.asignado_a
+    }
+    if (!asignacion.id_calendar_event) return { agenda: null, asignacion: datos }
 
     const maestro = await fastify.gcal.leerInstancia({
       calendarId: asignacion.tarea.departamento.id_calendar_google,
       instanceId: asignacion.id_calendar_event
     })
-    if (!maestro) return { agenda: null }
-    return { agenda: leerRecurrence(maestro.recurrence, maestro.start?.date) }
+    if (!maestro) return { agenda: null, asignacion: datos }
+    return { agenda: leerRecurrence(maestro.recurrence, maestro.start?.date), asignacion: datos }
   })
 
   // Define/edita la agenda de una asignacion existente -- crea el evento de
@@ -119,8 +130,8 @@ export default async function asignacionesRoutes(fastify) {
     if (!asignacion) return reply.code(404).send({ error: 'Asignacion no encontrada' })
 
     const usuario = await usuarioActual(fastify, request)
-    if (!puedeGestionarDepartamento(usuario, asignacion.tarea.id_departamento)) {
-      return reply.code(403).send({ error: 'Solo podés definir la agenda de tu propio departamento' })
+    if (!puede(usuario, 'editar', asignacion.tarea.id_departamento)) {
+      return reply.code(403).send({ error: 'Cambiar la agenda lo puede hacer un MANAGER u OWNER del grupo del departamento' })
     }
 
     const { recurrencia_tipo, recurrencia_config, vigencia_desde, vigencia_hasta, asignado_a } = request.body || {}

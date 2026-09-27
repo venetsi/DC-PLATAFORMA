@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { asegurarDepartamento } from '../lib/departamentos.js'
 import { aSlug } from '../lib/slug.js'
 import { sincronizarMembresias } from '../lib/membresias.js'
+import { usuarioActual, puede } from '../lib/permisos.js'
 
 export default async function departamentosRoutes(fastify) {
   // select acotado a proposito -- Departamento tambien guarda kiosko_key y
@@ -60,8 +61,13 @@ export default async function departamentosRoutes(fastify) {
   // por SQL a mano contra la base compartida con produccion.
   fastify.patch(
     '/:id/notificaciones',
-    { preHandler: [fastify.authenticate, fastify.requireAdminGlobal] },
+    { preHandler: [fastify.authenticate] },
     async (request, reply) => {
+      // Los avisos de un departamento los configura un OWNER de su grupo (o
+      // Direccion/admin, que cuentan como OWNER en todos).
+      if (!puede(await usuarioActual(fastify, request), 'administrar', request.params.id)) {
+        return reply.code(403).send({ error: 'Los avisos del departamento los configura un OWNER de su grupo' })
+      }
       const body = request.body || {}
       const datos = {}
 

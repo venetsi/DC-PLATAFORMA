@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuthStore } from '../store/authStore.js'
-import { instanciasApi, localesApi } from '../api/recursos.js'
+import { instanciasApi, localesApi, departamentosApi } from '../api/recursos.js'
+import { infoDepartamentos } from '../lib/colores-depto.js'
 import AgendaAgrupada from '../components/AgendaAgrupada.jsx'
 import SinAsignacion from './SinAsignacion.jsx'
 
@@ -16,9 +17,12 @@ export default function MisTareas() {
   const [marcando, setMarcando] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [aviso, setAviso] = useState(null)
+  const [todosDeptos, setTodosDeptos] = useState([])
+  const deptos = useMemo(() => infoDepartamentos(todosDeptos), [todosDeptos])
 
   useEffect(() => {
     localesApi.listar().then((locales) => setMapaLocales(new Map(locales.map((l) => [l.id, l.nombre]))))
+    departamentosApi.listar().then(setTodosDeptos)
   }, [])
 
   async function cargar(only = soloMias) {
@@ -70,9 +74,9 @@ export default function MisTareas() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
         <div>
-          {/* El nombre del departamento va en el título a propósito: hoy la
-              vista no cruza calendarios, y sin esto se leería como un bug. */}
-          <h2 style={{ margin: 0 }}>Mis tareas — {departamento.nombre}</h2>
+          {/* Los departamentos van en el título: la vista junta todos los de
+              la persona ("Auditoría + Reportes") y así queda claro el alcance. */}
+          <h2 style={{ margin: 0 }}>Mis tareas — {data?.departamento?.nombre || departamento.nombre}</h2>
           <span style={{ fontSize: '0.8rem', color: 'var(--texto-tenue)' }}>
             Últimos 60 días y las próximas 2 semanas
           </span>
@@ -110,7 +114,10 @@ export default function MisTareas() {
           onMarcar={marcar}
           onNoAplica={noAplica}
           onReprogramar={reprogramar}
+          onEditado={() => cargar()}
           marcando={marcando}
+          deptos={deptos}
+          mostrarDepto={(data.departamentos || []).length > 1}
         />
       )}
     </div>

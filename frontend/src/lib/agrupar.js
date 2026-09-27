@@ -28,6 +28,9 @@ export function aTarea(ev, mapaLocales, hoyISO = hoyEnArgentina()) {
     // El departamento del evento, para poder marcar desde una vista que no
     // sea la del departamento propio.
     idDepartamento: props.id_departamento || null,
+    // La asignacion (tarea x local) de la que sale esta instancia: la usa el
+    // panel Editar del detalle.
+    idAsignacion: props.id_asignacion || null,
     diasVencida: estado === 'vencida' ? diasVencida(ev, { hoyISO }) : 0,
     // Prerrequisitos sin cumplir, resueltos en el backend: evaluarlos acá
     // exigiría leer calendarios de otros departamentos (ver dependencias.js).

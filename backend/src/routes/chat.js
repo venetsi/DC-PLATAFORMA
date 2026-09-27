@@ -55,7 +55,7 @@ import {
 } from '../lib/chat-cards.js'
 import { marcarInstanciaYPropagar } from '../lib/marcar-instancia.js'
 import { prerrequisitosPendientes } from '../lib/dependencias.js'
-import { esAdminGlobal, conPermisos } from '../lib/permisos.js'
+import { esAdminGlobal, conPermisos, puede } from '../lib/permisos.js'
 import { asegurarMembresiasFrescas, usuarioPorEmail, motivoSinAcceso } from '../lib/membresias.js'
 import { emailCanonico } from '../lib/alias-email.js'
 import { construirTarjetaDepartamento, conNotaSuperior } from '../lib/chat-recordatorio.js'
@@ -265,6 +265,10 @@ async function manejarComando(fastify, chatEvent) {
   if (comando === COMANDO_ASIGNAR || comando === COMANDO_DERIVAR || comando === COMANDO_APUNTAR) {
     const { departamento, departamentos, pendientes, porFallback, modoTodo, error } = await pendientesParaAsignar(fastify, { space, extUser })
     if (error) return mensajeNuevo({ text: error })
+    // Pasar a otra persona es editar: MANAGER u OWNER (el Space de Direccion puede todo).
+    if (comando === COMANDO_DERIVAR && !modoTodo && !departamentos.some((d) => puede(extUser, 'editar', d.id))) {
+      return mensajeNuevo({ text: '⚠️ Pasarle una tarea a otra persona lo puede hacer un MANAGER u OWNER del grupo del departamento. Si la querés hacer vos, usá /asignar.' })
+    }
     fastify.log.info(
       { comando, departamento: departamento.slug, pendientes: pendientes.length, porFallback, modoTodo },
       'chat: abriendo diálogo'

@@ -14,7 +14,9 @@ function leerAbierta() {
 // El webhook es write-only: el backend nunca devuelve el valor crudo (solo
 // "tiene_webhook"), asi que el input arranca vacio y "dejarlo en blanco"
 // significa "no tocarlo".
-export default function DepartamentosAvisos({ departamentos, onCambio }) {
+// `puedeCrear`: solo Direccion/admin crea departamentos y relee los grupos; un
+// OWNER ve esta seccion solo con los avisos de SUS departamentos.
+export default function DepartamentosAvisos({ departamentos, onCambio, puedeCrear = true }) {
   const [abierta, setAbierta] = useState(leerAbierta)
   const [avisos, setAvisos] = useState({})
   const [guardandoAviso, setGuardandoAviso] = useState(null)
@@ -116,7 +118,7 @@ export default function DepartamentosAvisos({ departamentos, onCambio }) {
     <section className="card seccion-plegable">
       <button type="button" className="seccion-cabecera" onClick={alternar} aria-expanded={abierta}>
         <span className="seccion-flecha" aria-hidden="true">{abierta ? '▾' : '▸'}</span>
-        <span className="seccion-titulo">Departamentos y avisos</span>
+        <span className="seccion-titulo">{puedeCrear ? 'Departamentos y avisos' : 'Avisos de tus departamentos'}</span>
         <span className="seccion-resumen">
           {departamentos.length} departamentos · {departamentos.filter((d) => d.chat_space_name).length} con Space de Chat
           {departamentos.some((d) => d.membresia_sync_error) && <span style={{ color: 'var(--rojo)' }}> · error leyendo grupos</span>}
@@ -124,6 +126,7 @@ export default function DepartamentosAvisos({ departamentos, onCambio }) {
       </button>
       {abierta && (
         <div className="seccion-cuerpo">
+          {puedeCrear && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
             <form onSubmit={crear} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <input placeholder="Nuevo departamento (ej. Marketing)" value={nombreNuevo} onChange={(e) => setNombreNuevo(e.target.value)} required style={{ minWidth: 240, padding: '0.4rem' }} />
@@ -133,6 +136,7 @@ export default function DepartamentosAvisos({ departamentos, onCambio }) {
               {sincronizando ? 'Leyendo grupos…' : 'Releer Google Groups'}
             </button>
           </div>
+          )}
           {errorCrear && <p style={{ color: 'var(--rojo)', fontSize: '0.85rem' }}>{errorCrear}</p>}
           {resultadoSync && <p style={{ fontSize: '0.8rem', margin: '0 0 0.5rem' }}>{resultadoSync}</p>}
           <p style={{ fontSize: '0.8rem', color: 'var(--texto-tenue)', margin: '0 0 0.75rem' }}>

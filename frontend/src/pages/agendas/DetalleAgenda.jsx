@@ -9,7 +9,9 @@ import { cuandoTexto } from './resumen.js'
 // Lo que se abre debajo de una tarea: sus locales con checkbox y las acciones
 // en lote (cambiar cuando, cambiar responsable, quitar), sumar locales, y el
 // panel avanzado de siempre (compartir, dependencias, agenda por local).
-export default function DetalleAgenda({ tarea, locales, grupos, departamentos, usuarios, nombrePorEmail, onCambio, avisar }) {
+// `soloLectura`: quien es MEMBER del grupo ve los locales y su estado, sin
+// checkbox ni acciones (crear y editar pide MANAGER u OWNER).
+export default function DetalleAgenda({ tarea, locales, grupos, departamentos, usuarios, nombrePorEmail, onCambio, avisar, soloLectura = false }) {
   const [seleccion, setSeleccion] = useState(() => new Set())
   // null | 'cuando' | 'responsable' | 'quitar' | 'agregar' | 'avanzado'
   const [accion, setAccion] = useState(null)
@@ -66,16 +68,18 @@ export default function DetalleAgenda({ tarea, locales, grupos, departamentos, u
       <table className="tabla-locales">
         <thead>
           <tr>
-            <th style={{ width: '2rem' }}>
-              <input type="checkbox" checked={todas} onChange={() => setSeleccion(todas ? new Set() : new Set(asignaciones.map((a) => a.id)))} aria-label="Elegir todos" />
-            </th>
+            {!soloLectura && (
+              <th style={{ width: '2rem' }}>
+                <input type="checkbox" checked={todas} onChange={() => setSeleccion(todas ? new Set() : new Set(asignaciones.map((a) => a.id)))} aria-label="Elegir todos" />
+              </th>
+            )}
             <th>Local</th><th>Cuándo</th><th>Responsable</th><th>Próxima</th><th>Estado</th>
           </tr>
         </thead>
         <tbody>
           {asignaciones.map((a) => (
-            <tr key={a.id} className={seleccion.has(a.id) ? 'elegida' : undefined} onClick={() => alternar(a.id)}>
-              <td><input type="checkbox" checked={seleccion.has(a.id)} onChange={() => alternar(a.id)} onClick={(e) => e.stopPropagation()} aria-label={`Elegir ${a.local || 'toda la empresa'}`} /></td>
+            <tr key={a.id} className={seleccion.has(a.id) ? 'elegida' : soloLectura ? 'solo-lectura' : undefined} onClick={() => !soloLectura && alternar(a.id)}>
+              {!soloLectura && <td><input type="checkbox" checked={seleccion.has(a.id)} onChange={() => alternar(a.id)} onClick={(e) => e.stopPropagation()} aria-label={`Elegir ${a.local || 'toda la empresa'}`} /></td>}
               <td>{a.local || 'Toda la empresa'}{a.grupo && <span className="tenue"> · {a.grupo}</span>}
                 {a.compartidas.length > 0 && <div className="tenue">compartida con {a.compartidas.map((c) => c.nombre).join(', ')}</div>}
               </td>
@@ -89,6 +93,9 @@ export default function DetalleAgenda({ tarea, locales, grupos, departamentos, u
         </tbody>
       </table>
 
+      {soloLectura ? (
+        <p className="tenue" style={{ margin: 0 }}>Solo lectura: crear y editar tareas de este departamento lo hace un MANAGER u OWNER de su grupo.</p>
+      ) : (
       <div className="barra-lote">
         {ids.length > 0 ? (
           <>
@@ -104,6 +111,7 @@ export default function DetalleAgenda({ tarea, locales, grupos, departamentos, u
         <button className={accion === 'agregar' ? 'btn' : 'btn btn-secondary'} onClick={() => abrir('agregar')}>+ Agregar locales</button>
         <button className={accion === 'avanzado' ? 'btn' : 'btn btn-secondary'} onClick={() => abrir('avanzado')}>Opciones avanzadas</button>
       </div>
+      )}
 
       {accion === 'cuando' && frecuencia && (
         <div className="panel-accion">

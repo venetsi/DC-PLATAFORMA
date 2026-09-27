@@ -6,11 +6,13 @@ import { valorInicial, agendaDesdeValor, errorDeValor, describirAgenda, fechaCor
 
 // Nueva tarea en un paso: que + donde + cuando + quien, y la frase de abajo
 // dice exactamente que se va a crear antes de tocar "Crear y agendar".
-export default function NuevaTarea({ departamentos, idDepartamentoInicial, locales, grupos, usuariosDe, onCreada, onCerrar }) {
+// `fechaInicial` (YYYY-MM-DD): al tocar un dia vacio en el calendario, la tarea
+// arranca como "una sola vez, ese dia" (se puede cambiar a una frecuencia).
+export default function NuevaTarea({ departamentos, idDepartamentoInicial, locales, grupos, usuariosDe, onCreada, onCerrar, fechaInicial }) {
   const [nombre, setNombre] = useState('')
-  const [idDepto, setIdDepto] = useState(idDepartamentoInicial || departamentos[0]?.id || '')
+  const [idDepto, setIdDepto] = useState(departamentos.some((d) => d.id === idDepartamentoInicial) ? idDepartamentoInicial : departamentos[0]?.id || '')
   const [alcance, setAlcance] = useState(ALCANCE_VACIO)
-  const [frecuencia, setFrecuencia] = useState(valorInicial)
+  const [frecuencia, setFrecuencia] = useState(() => (fechaInicial ? { ...valorInicial(), tipo: 'UNICA', fecha: fechaInicial, desde: fechaInicial } : valorInicial()))
   const [responsable, setResponsable] = useState('')
   const [masOpciones, setMasOpciones] = useState(false)
   const [descripcion, setDescripcion] = useState('')

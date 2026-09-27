@@ -1,4 +1,4 @@
-import { usuarioActual, puedeGestionarDepartamento, esAdminGlobal, departamentosDe } from '../lib/permisos.js'
+import { usuarioActual, puede, esAdminGlobal, departamentosDe, departamentosCon } from '../lib/permisos.js'
 import { leerRecurrence } from '../lib/recurrencia.js'
 import { clasificarInstancia, fechaDeInstancia, hoyEnArgentina } from '../lib/vencimiento.js'
 import { definirAgenda, asegurarAsignacion, cerrarAsignacion, INCLUDES_AGENDA, sumarDias } from '../lib/agenda.js'
@@ -53,9 +53,14 @@ export default async function agendasRoutes(fastify) {
     const conteo = await fastify.db.tarea.groupBy({ by: ['id_departamento'], where: { activa: true, id_departamento: { in: visibles.map((d) => d.id) } }, _count: true })
     const tareasPorDepto = new Map(conteo.map((c) => [c.id_departamento, c._count]))
 
-    const verInactivas = inactivas === 'true' && esAdminGlobal(usuario)
+    // Las desactivadas solo para quien las puede eliminar: OWNER de ese
+    // departamento, o Direccion/admin (departamentosCon devuelve null = todos).
+    const administrables = departamentosCon(usuario, 'administrar')
+    const filtroActiva = inactivas !== 'true'
+      ? { activa: true }
+      : administrables === null ? {} : { OR: [{ activa: true }, { id_departamento: { in: administrables } }] }
     const tareas = await fastify.db.tarea.findMany({
-      where: { id_departamento: { in: enAlcance.map((d) => d.id) }, ...(verInactivas ? {} : { activa: true }) },
+      where: { id_departamento: { in: enAlcance.map((d) => d.id) }, ...filtroActiva },
       include: {
         asignaciones: {
           where: { activa: true },
@@ -133,7 +138,7 @@ export default async function agendasRoutes(fastify) {
     if (errorAgenda) return reply.code(400).send({ error: errorAgenda })
 
     const usuario = await usuarioActual(fastify, request)
-    if (!puedeGestionarDepartamento(usuario, id_departamento)) return reply.code(403).send({ error: 'Solo podés crear tareas de tus departamentos' })
+    if (!puede(usuario, 'editar', id_departamento)) return reply.code(403).send({ error: 'Crear tareas lo puede hacer un MANAGER u OWNER del grupo del departamento' })
     const locales = await localesDelAlcance(fastify.db, alcance)
     if (!locales.length) return reply.code(400).send({ error: 'Ese grupo no tiene locales activos' })
 
@@ -153,7 +158,7 @@ export default async function agendasRoutes(fastify) {
     const tarea = await fastify.db.tarea.findUnique({ where: { id: request.params.id } })
     if (!tarea?.activa) return reply.code(404).send({ error: 'Tarea no encontrada' })
     const usuario = await usuarioActual(fastify, request)
-    if (!puedeGestionarDepartamento(usuario, tarea.id_departamento)) return reply.code(403).send({ error: 'Solo podés gestionar tareas de tus departamentos' })
+    if (!puede(usuario, 'editar', tarea.id_departamento)) return reply.code(403).send({ error: 'Editar tareas lo puede hacer un MANAGER u OWNER del grupo del departamento' })
     const { alcance, agenda, asignado_a = null, compartir_con = [] } = request.body || {}
     const errorAgenda = validarAgenda(agenda)
     if (errorAgenda) return reply.code(400).send({ error: errorAgenda })
@@ -185,7 +190,7 @@ export default async function agendasRoutes(fastify) {
   async function cargarPermitidas(request, ids) {
     const usuario = await usuarioActual(fastify, request)
     const asignaciones = await fastify.db.tareaAsignacion.findMany({ where: { id: { in: ids || [] }, activa: true }, include: INCLUDES_AGENDA })
-    return asignaciones.filter((a) => puedeGestionarDepartamento(usuario, a.tarea.id_departamento))
+    return asignaciones.filter((a) => puede(usuario, 'editar', a.tarea.id_departamento))
   }
 
   // En lote: cambiar la frecuencia y/o el responsable de varias asignaciones.

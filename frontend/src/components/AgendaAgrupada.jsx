@@ -8,7 +8,9 @@ const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 // que el kiosko -- ver kiosko/index.html:pintarSemana), cada dia agrupado
 // por local y sus tareas como bullets. Tocar una tarea abre su detalle; marcar
 // hecha se hace desde ahi, con confirmacion (es definitivo).
-export default function AgendaAgrupada({ eventos, mapaLocales, onMarcar, onNoAplica, onReprogramar, marcando }) {
+// `deptos` (Map id -> { nombre, abreviatura, color }) + `mostrarDepto`: cuando la
+// vista mezcla varios departamentos, cada tarea lleva su etiqueta de color.
+export default function AgendaAgrupada({ eventos, mapaLocales, onMarcar, onNoAplica, onReprogramar, onEditado, marcando, deptos, mostrarDepto = false }) {
   const [abierta, setAbierta] = useState(null)
   const dias = agruparPorDiaYLocal(eventos, mapaLocales)
 
@@ -36,18 +38,22 @@ export default function AgendaAgrupada({ eventos, mapaLocales, onMarcar, onNoApl
                     : t.estado === 'realizada'
                     ? (t.realizadaPor ? `✓ ${t.realizadaPor}` : null)
                     : (t.asignadoA ? `→ ${t.asignadoA}` : null)
+                  const depto = mostrarDepto ? deptos?.get(t.idDepartamento) : null
                   return (
                     <li
-                      key={t.id}
+                      key={`${t.idDepartamento}:${t.id}`}
                       className={t.estado + ' clickable'}
-                      onClick={() => setAbierta(t)}
-                      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setAbierta(t)}
+                      onClick={() => setAbierta({ ...t, departamento: deptos?.get(t.idDepartamento)?.nombre })}
+                      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setAbierta({ ...t, departamento: deptos?.get(t.idDepartamento)?.nombre })}
                       role="button"
                       tabIndex={0}
                       title="Ver detalle"
                     >
                       <span className="tarea-texto">
                         <span>
+                          {depto && (
+                            <span className="chip-depto" style={{ color: depto.color, background: `${depto.color}26` }} title={depto.nombre}>{depto.abreviatura}</span>
+                          )}
                           {t.titulo}
                           {t.diasVencida > 0 && (
                             <span className="tarea-atraso">
@@ -72,7 +78,7 @@ export default function AgendaAgrupada({ eventos, mapaLocales, onMarcar, onNoApl
         </div>
       ))}
       {abierta && (
-        <DetalleTarea tarea={abierta} onCerrar={() => setAbierta(null)} onMarcar={onMarcar} onNoAplica={onNoAplica} onReprogramar={onReprogramar} />
+        <DetalleTarea tarea={abierta} onCerrar={() => setAbierta(null)} onMarcar={onMarcar} onNoAplica={onNoAplica} onReprogramar={onReprogramar} onEditado={onEditado} />
       )}
     </div>
   )
