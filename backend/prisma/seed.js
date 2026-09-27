@@ -2,7 +2,7 @@
 // poder probar toda la plataforma con el login temporal (ALLOW_DEV_LOGIN)
 // antes de que exista el ticket SSO real de dcsmart (Fase 8).
 import { PrismaClient } from '@prisma/client'
-import { randomUUID, randomBytes } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { google } from 'googleapis'
 import 'dotenv/config'
 import { crearAuthClient } from '../src/lib/gcal-auth.js'
@@ -65,12 +65,11 @@ async function main() {
         nombre,
         slug,
         id_calendar_google: calendarId,
-        email_group_google: groupEmail || null,
-        kiosko_key: randomBytes(16).toString('hex')
+        email_group_google: groupEmail || null
       }
     })
     deptosPorSlug[slug] = depto
-    console.log(`Departamento ${slug} -- kiosko_key=${depto.kiosko_key}`)
+    console.log(`Departamento ${slug} listo`)
   }
 
   await prisma.extUser.upsert({

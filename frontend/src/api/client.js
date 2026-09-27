@@ -5,7 +5,7 @@ import axios from 'axios'
 // header Cookie de la request (confirmado: Authorization si pasa, Cookie
 // no) -- por eso ademas se guarda el token de la respuesta y se manda como
 // Bearer en cada pedido, que es lo que realmente sostiene la sesion ahi.
-const STORAGE_KEY = 'dc_plataforma_token'
+export const STORAGE_KEY = 'dc_plataforma_token'
 
 export function guardarToken(token) {
   localStorage.setItem(STORAGE_KEY, token)

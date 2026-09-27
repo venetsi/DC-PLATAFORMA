@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore.js'
+import { tomarDestino } from '../lib/destino.js'
 
 // Destino real del botón "Tareas" del Sidebar de dcsmart (Fase 8) -- dcsmart
 // abre esta URL en una pestaña nueva con ?ticket=<jwt corto>, esta pantalla
 // lo canjea por una sesión propia y redirige. Pública, sin Layout: todavía
-// no hay sesión cuando se llega acá.
+// no hay sesión cuando se llega acá. Si alguien venía de otra pantalla (p.ej.
+// el QR de una TV) y tuvo que entrar, vuelve ahí (ver lib/destino.js).
 export default function Sso() {
   const [searchParams] = useSearchParams()
   const [error, setError] = useState('')
@@ -19,7 +21,7 @@ export default function Sso() {
       return
     }
     loginSso(ticket)
-      .then(() => navigate('/', { replace: true }))
+      .then(() => navigate(tomarDestino() || '/', { replace: true }))
       .catch((err) => setError(err.response?.data?.error || 'No se pudo iniciar sesión'))
     // Un ticket es de un solo uso y expira en 60s -- no reintentar en cambios
     // posteriores de searchParams/loginSso.

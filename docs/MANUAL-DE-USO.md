@@ -146,7 +146,7 @@ Siendo Owner, además: **Desactivar** (deja de agendarse desde hoy; el historial
 queda), **Eliminar definitivamente**, y los **avisos de tu departamento** (webhook
 de Chat y cuántos días hábiles de atraso disparan cada aviso).
 
-Las agendas se crean por 12 meses y se renuevan solas mientras la tarea siga activa.
+Las agendas se crean por 6 meses y se renuevan solas mientras la tarea siga activa.
 
 ### Tareas que dependen de otra
 
@@ -175,12 +175,42 @@ después, pasa a "hecha tarde".
 
 ## Pantalla de oficina (kiosko)
 
-Pensada para una TV fija en la oficina, sin login, que se actualiza sola cada 2
-minutos. Pedile a Dirección el link de tu departamento (cada uno tiene su clave).
+Pensada para una TV fija en la oficina, sin login, que se actualiza sola cada
+minuto. Puede mostrar una agenda o varias juntas, con la etiqueta de color de cada
+departamento.
 
 Muestra un semáforo (🔴 hay atrasadas, 🟡 hay pendientes de hoy, 🟢 todo al día), los
 contadores, las atrasadas de los últimos 60 días, la semana por local y un adelanto
 de la siguiente. Si se corta internet, sigue mostrando lo último y se reconecta sola.
+
+### Conectar una TV
+
+1. En la TV, abrí **tv.dcsmart.app** (si todavía no abre, **dc-plataforma-tv.web.app**:
+   es la misma pantalla). Aparece un código QR con un código corto (por ejemplo
+   `BCD-FGH`).
+2. Escanealo con tu celular. Si no tenés la sesión abierta, entrá con dcsmart →
+   **Tareas** y volvés solo a la pantalla de conexión. Sin cámara: entrá a
+   **Pantallas** en la plataforma y escribí el código.
+3. Elegí qué agendas muestra, ponele un nombre (por ejemplo, *TV Tesorería*) y
+   tocá **Conectar**. En unos segundos la TV pasa sola a la agenda.
+
+Cualquiera que vea una agenda la puede poner en una TV. La TV muestra lo que **vos**
+podés ver: si dejás de ver un departamento, la TV deja de mostrarlo. Conectala solo
+si tenés la pantalla adelante. Si no reconocés un código, tocá **No reconozco esta
+pantalla**.
+
+El código dura 10 minutos. Si nadie lo usa, la TV muestra uno nuevo sola.
+
+### Pantallas
+
+En **Pantallas** ves las TVs que conectaste, con su estado (en línea, o desde cuándo
+no se conecta). Desde ahí podés **Cambiar agendas**, **Renombrar** o
+**Desconectar**. La TV toma el cambio en menos de un minuto, y al desconectarla
+vuelve a mostrar el QR. Dirección ve todas las pantallas. El Owner de un
+departamento ve las que muestran su agenda y las puede desconectar.
+
+Los links viejos del kiosko, los que tenían la clave del departamento, ya no andan:
+esas TVs muestran el QR y hay que volver a conectarlas.
 
 ## Google Chat
 

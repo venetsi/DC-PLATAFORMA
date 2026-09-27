@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore.js'
+import { STORAGE_KEY } from '../api/client.js'
+import { destinoSeguro, guardarDestino, tomarDestino } from '../lib/destino.js'
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
-
-// Solo destinos internos: evita que ?volver= mande a otro sitio.
-function destinoSeguro(volver) {
-  return volver && volver.startsWith('/') && !volver.startsWith('//') ? volver : '/'
-}
+const DCSMART_URL = import.meta.env.VITE_DCSMART_URL || 'https://gestion.dcsmart.app'
 
 // Entradas: "Entrar con Google" (la principal, todos usan Workspace) y el boton
 // "Tareas" de dcsmart (ver /sso). El formulario por email solo en `vite dev`.
@@ -16,8 +14,28 @@ export default function Login() {
   const volver = destinoSeguro(searchParams.get('volver'))
   const [error, setError] = useState('')
   const loginGoogle = useAuthStore((s) => s.loginGoogle)
+  const cargarSesion = useAuthStore((s) => s.cargarSesion)
+  const usuario = useAuthStore((s) => s.usuario)
   const navigate = useNavigate()
   const botonRef = useRef(null)
+  const conectandoTv = /^\/(tv|pantallas)(\?|$)/.test(volver)
+
+  // Si se entra por dcsmart -> Tareas (otra pestaña, /sso), el destino tiene
+  // que sobrevivir: se guarda para que /sso lo retome.
+  useEffect(() => { guardarDestino(volver) }, [volver])
+
+  // Ya hay sesion (o aparece desde otra pestaña, la de /sso): seguir solo.
+  // Aca NO se consume el destino guardado: lo usa la pestaña de /sso, que es
+  // la que la persona tiene adelante (si esta lo borrara primero, aquella
+  // caeria en el inicio).
+  useEffect(() => {
+    if (usuario) navigate(volver, { replace: true })
+  }, [usuario, navigate, volver])
+  useEffect(() => {
+    const alCambiar = (e) => { if (e.key === STORAGE_KEY && e.newValue) cargarSesion() }
+    window.addEventListener('storage', alCambiar)
+    return () => window.removeEventListener('storage', alCambiar)
+  }, [cargarSesion])
 
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID) return
@@ -28,6 +46,7 @@ export default function Login() {
           setError('')
           try {
             await loginGoogle(credential)
+            tomarDestino() // se entro en esta pestaña: el guardado ya no hace falta
             navigate(volver, { replace: true })
           } catch (err) {
             setError(err.response?.data?.error || 'No se pudo entrar con Google')
@@ -48,6 +67,15 @@ export default function Login() {
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: '1rem' }}>
       <div className="card" style={{ width: 340, display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
         <h2 style={{ margin: 0, color: 'var(--gold)' }}>DC-PLATAFORMA</h2>
+        {conectandoTv && !GOOGLE_CLIENT_ID && (
+          <>
+            <p style={{ margin: 0 }}>
+              Para conectar la pantalla, entrá con tu usuario: abrí dcsmart y tocá <strong>Tareas</strong> en el menú.
+              Después volvés acá solo.
+            </p>
+            <a className="btn" href={DCSMART_URL} target="_blank" rel="noreferrer" style={{ textAlign: 'center', textDecoration: 'none' }}>Abrir dcsmart</a>
+          </>
+        )}
         {GOOGLE_CLIENT_ID && (
           <>
             <p style={{ margin: 0 }}>Entrá con tu cuenta de Google de trabajo.</p>
@@ -55,9 +83,11 @@ export default function Login() {
             {error && <div style={{ color: 'var(--rojo)', fontSize: '0.85rem' }}>{error}</div>}
           </>
         )}
-        <p style={{ margin: 0, color: GOOGLE_CLIENT_ID ? 'var(--texto-tenue)' : 'var(--texto)', fontSize: GOOGLE_CLIENT_ID ? '0.85rem' : '1rem' }}>
-          {GOOGLE_CLIENT_ID ? 'También podés entrar' : 'Para entrar,'} desde dcsmart con el botón <strong>Tareas</strong> del menú lateral.
-        </p>
+        {!(conectandoTv && !GOOGLE_CLIENT_ID) && (
+          <p style={{ margin: 0, color: GOOGLE_CLIENT_ID ? 'var(--texto-tenue)' : 'var(--texto)', fontSize: GOOGLE_CLIENT_ID ? '0.85rem' : '1rem' }}>
+            {GOOGLE_CLIENT_ID ? 'También podés entrar' : 'Para entrar,'} desde dcsmart con el botón <strong>Tareas</strong> del menú lateral.
+          </p>
+        )}
         {!GOOGLE_CLIENT_ID && (
           <p style={{ color: 'var(--texto-tenue)', fontSize: '0.85rem', margin: 0 }}>
             Si no ves esa opción en dcsmart, pedile acceso a un administrador.
@@ -80,6 +110,7 @@ function LoginDev({ volver }) {
     setError('')
     try {
       await loginDev(email)
+      tomarDestino() // se entro en esta pestaña: el guardado ya no hace falta
       navigate(volver)
     } catch (err) {
       setError(err.response?.data?.error || 'No se pudo iniciar sesion')

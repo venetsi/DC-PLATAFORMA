@@ -4,9 +4,9 @@
 //    nunca events.delete) la recurrencia de cualquier TareaAsignacion que
 //    apunte a ese local -- sin perder el historial ya generado.
 // 2. RENOVACION: extiende el horizonte de las series que estan por agotarse.
-//    Desde que las recurrencias se crean acotadas a 12 meses (ver
-//    lib/recurrencia.js), sin esto una tarea activa se apagaria sola al año y
-//    desapareceria del kiosko y del checklist SIN ningun error a la vista.
+//    Desde que las recurrencias se crean acotadas a 6 meses (ver
+//    lib/recurrencia.js), sin esto una tarea activa se apagaria sola a los 6
+//    meses y desapareceria del kiosko y del checklist SIN ningun error a la vista.
 //
 // Ver docs/superpowers/plans.
 import { prisma, getCalendar } from './lib.js'
@@ -29,7 +29,7 @@ function reemplazarUntil(recurrence, fechaISO) {
 }
 
 // Lee el UNTIL de una RRULE y lo devuelve como 'YYYY-MM-DD', o null si la
-// serie es infinita (las creadas antes del horizonte de 12 meses).
+// serie es infinita (las creadas antes de que existiera el horizonte).
 function untilDeRecurrence(recurrence) {
   for (const rule of recurrence || []) {
     const m = /UNTIL=(\d{4})(\d{2})(\d{2})/.exec(rule)

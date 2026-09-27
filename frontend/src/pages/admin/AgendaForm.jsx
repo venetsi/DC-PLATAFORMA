@@ -155,12 +155,12 @@ export default function AgendaForm({ asignacion, usuarios = [], onGuardado }) {
       <button className="btn" disabled={guardando}>{asignacion.id_calendar_event ? 'Actualizar' : 'Agendar'}</button>
       {error && <span style={{ color: 'var(--rojo)', fontSize: '0.8rem' }}>{error}</span>}
 
-      {/* La serie se crea acotada a 12 meses y se renueva sola mientras la
+      {/* La serie se crea acotada a 6 meses y se renueva sola mientras la
           tarea siga activa (ver backend lib/recurrencia.js + jobs/reconciliar.js).
           Se avisa para que nadie asuma que queda agendada para siempre. */}
       {tipo !== 'UNICA' && (
         <span style={{ fontSize: '0.72rem', color: 'var(--texto-tenue)', width: '100%' }}>
-          Se agenda por 12 meses y se renueva automáticamente mientras la tarea siga activa.
+          Se agenda por 6 meses y se renueva automáticamente mientras la tarea siga activa.
         </span>
       )}
       {agendaActual && (

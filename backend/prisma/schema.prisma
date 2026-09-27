@@ -78,6 +78,7 @@ model Departamento {
   compartidoEnSpaces       DepartamentoCompartidoEnSpace[]
   repositoriosAsignados    RepositorioDepartamento[]
   membresias               MembresiaDepartamento[]
+  pantallasTv              TvPantallaDepartamento[]
 
   @@map("departamentos")
 }
@@ -408,7 +409,7 @@ model CumplimientoInstancia {
 // --- Seguimiento de un Pago puntual de dcsmart (deliberadamente FUERA del
 // modelo Tarea/TareaAsignacion/Calendar). Un pago es un registro de una sola
 // vez de OTRO sistema, no algo que se repita -- forzarlo por el motor de
-// agenda (RRULE, horizonte de 12 meses, evento de Calendar) seria mezclar dos
+// agenda (RRULE con horizonte, evento de Calendar) seria mezclar dos
 // formas de "tarea" que no son lo mismo, y ensuciaria el calendario del
 // departamento con eventos que no son operativos reales. Esta tabla es la
 // unica fuente de verdad de "quien tiene que hacer algo con este pago" -- no
@@ -444,4 +445,66 @@ model PagoSeguimiento {
 
   @@index([asignado_a, estado])
   @@map("pago_seguimientos")
+}
+
+// --- Pantallas de TV (kiosko) conectadas escaneando un QR desde el celular:
+// Device Authorization Grant, RFC 8628 (ver lib/tv-conexion.js). Reemplaza a
+// la clave por departamento en la URL (Departamento.kiosko_key, que ya no se
+// lee ni se genera; la columna queda hasta un cambio aparte).
+
+// Pedido de conexion de una TV. Vive 10 minutos; los vencidos se borran solos
+// al crear uno nuevo. Del device_code (el secreto de la TV) solo se guarda el hash.
+model TvConexion {
+  id               String    @id @default(uuid())
+  device_code_hash String    @unique
+  user_code        String    @unique // 6 letras sin vocales, sin guion
+  estado           String    @default("PENDIENTE") // PENDIENTE | APROBADA | RECHAZADA | ENTREGADA
+  intervalo_seg    Int       @default(5)
+  ultimo_pedido_at DateTime?
+  expira_at        DateTime
+  user_agent       String?
+  resuelta_por     String? // email de quien la aprobo o la rechazo
+  id_pantalla      String?
+  created_at       DateTime  @default(now())
+
+  pantalla TvPantalla? @relation(fields: [id_pantalla], references: [id])
+
+  @@index([expira_at])
+  @@map("tv_conexiones")
+}
+
+// Una TV conectada. Muestra lo que `conectada_por` puede ver HOY: se
+// re-verifica en cada consulta, asi una TV no conserva un acceso que su dueño
+// ya perdio. Del token solo se guarda el hash; es null hasta que la TV lo retira.
+model TvPantalla {
+  id                 String    @id @default(uuid())
+  nombre             String
+  token_hash         String?   @unique
+  conectada_por      String // email
+  activa             Boolean   @default(true)
+  ultima_conexion_at DateTime?
+  user_agent         String?
+  desconectada_por   String?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  departamentos TvPantallaDepartamento[]
+  conexiones    TvConexion[]
+
+  @@index([conectada_por])
+  @@map("tv_pantallas")
+}
+
+model TvPantallaDepartamento {
+  id              String   @id @default(uuid())
+  id_pantalla     String
+  id_departamento String
+  created_at      DateTime @default(now())
+
+  pantalla     TvPantalla   @relation(fields: [id_pantalla], references: [id])
+  departamento Departamento @relation(fields: [id_departamento], references: [id])
+
+  @@unique([id_pantalla, id_departamento])
+  @@index([id_departamento])
+  @@map("tv_pantalla_departamentos")
 }

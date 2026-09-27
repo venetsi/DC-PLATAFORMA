@@ -20,6 +20,7 @@
     --texto-tenue: #9aa5b4;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body {
     margin: 0; padding: 0;
     width: 100vw; height: 100vh;
@@ -35,9 +36,10 @@
   #app { width: 100%; height: 100%; display: flex; flex-direction: column; padding: 32px 48px; }
 
   header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
-  .titulo { display: flex; flex-direction: column; }
+  .titulo { display: flex; flex-direction: column; min-width: 0; }
   .titulo .marca { font-size: 16px; letter-spacing: 3px; color: var(--gold); font-weight: 700; text-transform: uppercase; }
-  .titulo .depto { font-size: 38px; font-weight: 800; margin-top: 2px; }
+  .titulo .depto { font-size: 38px; font-weight: 800; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .titulo .deptos { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; font-size: 13px; color: var(--texto-tenue); }
 
   .header-derecha { display: flex; align-items: center; gap: 28px; }
 
@@ -84,6 +86,9 @@
   .tarea-persona { font-size: 10px; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none; }
   .tarea-bullets li.realizada .tarea-persona { color: var(--verde); }
   .dia-vacio { font-size: 12px; color: var(--texto-tenue); font-style: italic; }
+  /* Etiqueta de departamento cuando la pantalla muestra varios (mismo color
+     que en Mi agenda: lo manda el backend). */
+  .chip-depto { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.04em; padding: 1px 5px; border-radius: 4px; margin-right: 5px; vertical-align: 1px; text-decoration: none; }
 
   /* Columna de atrasadas: mismo lenguaje visual que un dia-col, pero con
      acento rojo (urgencia) en vez de dorado, y a la izquierda de la semana. */
@@ -103,19 +108,62 @@
   #proxima-semana .mini-tareas li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #proxima-semana .mini-vacio { font-size: 11px; color: var(--texto-tenue); opacity: 0.5; font-style: italic; }
 
-  footer { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; font-size: 14px; color: var(--texto-tenue); }
+  footer { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-top: 14px; font-size: 14px; color: var(--texto-tenue); }
   .estado-conexion { display: flex; align-items: center; gap: 8px; }
-  .punto { width: 10px; height: 10px; border-radius: 50%; }
+  .punto { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .punto.ok { background: var(--verde); }
   .punto.mal { background: var(--rojo); }
+  .pie-derecha { display: flex; gap: 18px; align-items: center; text-align: right; }
+  .pie-pantalla { opacity: 0.75; }
+
+  /* --- Modo conexion: la TV todavia no esta conectada. QR grande para
+     leerse de lejos, y el codigo para quien prefiere escribirlo. --- */
+  #conexion { width: 100%; height: 100%; display: flex; flex-direction: column; padding: 40px 64px; }
+  #conexion .marca { font-size: 16px; letter-spacing: 3px; color: var(--gold); font-weight: 700; text-transform: uppercase; }
+  .conexion-cuerpo { flex: 1; display: flex; align-items: center; justify-content: center; gap: 72px; min-height: 0; }
+  .qr-caja { background: #fff; border-radius: 22px; padding: 22px; width: min(48vh, 40vw); height: min(48vh, 40vw); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 0 60px rgba(63, 182, 189, 0.18); }
+  .qr-caja img { width: 100%; height: 100%; image-rendering: pixelated; }
+  .qr-caja.apagado img { opacity: 0.12; }
+  .conexion-texto { max-width: 720px; display: flex; flex-direction: column; gap: 22px; }
+  .conexion-texto h1 { margin: 0; font-size: 56px; font-weight: 800; line-height: 1.05; }
+  .pasos { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; font-size: 26px; color: var(--texto); }
+  .pasos li { display: flex; gap: 14px; align-items: baseline; }
+  .pasos b { color: var(--teal); font-size: 22px; min-width: 1.2em; }
+  .manual { font-size: 20px; color: var(--texto-tenue); line-height: 1.4; }
+  .manual strong { color: var(--texto); font-weight: 600; }
+  .codigo { font-size: 96px; font-weight: 800; letter-spacing: 10px; color: var(--gold); font-variant-numeric: tabular-nums; line-height: 1; }
+  .conexion-estado { font-size: 18px; color: var(--texto-tenue); display: flex; align-items: center; gap: 10px; min-height: 1.4em; }
+  .conexion-estado.mal { color: var(--rojo); }
 </style>
 </head>
 <body>
-<div id="app">
+
+<!-- Modo conexion (RFC 8628): QR + codigo, hasta que alguien la conecta desde el celular. -->
+<div id="conexion" hidden>
+  <span class="marca">DC-PLATAFORMA</span>
+  <div class="conexion-cuerpo">
+    <div class="qr-caja" id="qr-caja"><img id="qr" alt="Código QR para conectar esta pantalla" /></div>
+    <div class="conexion-texto">
+      <h1>Conectá esta pantalla</h1>
+      <ol class="pasos">
+        <li><b>1</b><span>Escaneá el código con tu celular</span></li>
+        <li><b>2</b><span>Elegí qué agendas mostrar</span></li>
+        <li><b>3</b><span>Tocá <strong>Conectar</strong></span></li>
+      </ol>
+      <div class="manual">¿Sin cámara? Entrá a <strong id="uri-manual">…</strong> y escribí:</div>
+      <div class="codigo" id="codigo">···-···</div>
+      <div class="conexion-estado" id="conexion-estado">Pidiendo un código…</div>
+    </div>
+  </div>
+</div>
+
+<!-- Modo kiosko: la agenda de la pantalla conectada. -->
+<div id="app" hidden>
   <header>
     <div class="titulo">
       <span class="marca">DC-PLATAFORMA</span>
-      <span class="depto" id="nombre-depto">Cargando…</span>
+      <span class="depto" id="nombre-pantalla">Cargando…</span>
+      <div class="deptos" id="deptos-pantalla"></div>
     </div>
     <div class="header-derecha">
       <div class="clima" id="clima"></div>
@@ -145,25 +193,69 @@
       <span class="punto ok" id="punto-conexion"></span>
       <span id="texto-conexion">Conectando…</span>
     </div>
-    <span id="ultima-actualizacion"></span>
+    <div class="pie-derecha">
+      <span class="pie-pantalla" id="pie-pantalla"></span>
+      <span id="ultima-actualizacion"></span>
+    </div>
   </footer>
 </div>
 
 <script>
 (function () {
   var params = new URLSearchParams(location.search);
-  var departamento = params.get('depto');
-  var key = params.get('key');
-  var apiBase = params.get('api') || '/api';
-  var CACHE_KEY = 'dcplataforma_tv_' + departamento;
+  // ?api= solo para desarrollo local: en produccion la API es siempre la del
+  // mismo sitio (/api, rewrite de Firebase). Si no, un link armado podria
+  // mandar el token de la TV a otro servidor.
+  var enLocal = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  var apiBase = (enLocal && params.get('api')) || '/api';
 
-  var REFRESH_MS = 2 * 60 * 1000;
+  var TOKEN_KEY = 'dcplataforma_tv_token';
+  var CACHE_KEY = 'dcplataforma_tv_cache';
+
+  var REFRESH_MS = 60 * 1000;
   var RETRY_MS = 30 * 1000;
   var CLIMA_REFRESH_MS = 30 * 60 * 1000; // el clima cambia mucho mas lento -- ciclo propio, independiente
 
   var DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'];
 
-  document.getElementById('nombre-depto').textContent = departamento || '(sin departamento)';
+  // Los links viejos (?depto=&key=) ya no sirven: se limpian de la URL y del
+  // almacenamiento, y la TV pasa a mostrar el QR para conectarla de nuevo.
+  (function limpiarLoViejo() {
+    try {
+      if (params.has('key') || params.has('depto')) {
+        params.delete('key');
+        params.delete('depto');
+        var resto = params.toString();
+        history.replaceState(null, '', location.pathname + (resto ? '?' + resto : ''));
+      }
+      for (var i = localStorage.length - 1; i >= 0; i--) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf('dcplataforma_tv_') === 0 && k !== TOKEN_KEY && k !== CACHE_KEY) localStorage.removeItem(k);
+      }
+    } catch (e) {}
+  })();
+
+  // Todo lo que viene de la API se escapa antes de ir a innerHTML (titulos de
+  // tareas, locales, nombres): la TV guarda su token en localStorage.
+  function esc(valor) {
+    return String(valor == null ? '' : valor)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function colorSeguro(c) {
+    return /^#[0-9a-f]{6}$/i.test(String(c)) ? c : '#8fb3bd';
+  }
+
+  function leerToken() { try { return localStorage.getItem(TOKEN_KEY); } catch (e) { return null; } }
+  function guardarToken(t) { try { localStorage.setItem(TOKEN_KEY, t); } catch (e) {} }
+  function olvidarPantalla() {
+    try { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(CACHE_KEY); } catch (e) {}
+  }
+
+  function mostrar(modo) {
+    document.getElementById('conexion').hidden = modo !== 'conexion';
+    document.getElementById('app').hidden = modo !== 'kiosko';
+  }
 
   function actualizarReloj() {
     var ahora = new Date();
@@ -175,6 +267,113 @@
   actualizarReloj();
   setInterval(actualizarReloj, 1000 * 15);
 
+  // ------------------------------------------------------------------
+  // Modo conexion (RFC 8628: device authorization grant)
+  // ------------------------------------------------------------------
+  var pedido = null;        // { device_code, user_code, verification_uri, expira, interval }
+  var timerConexion = null;
+  var timerCuenta = null;
+
+  function estadoConexion(texto, mal) {
+    var el = document.getElementById('conexion-estado');
+    el.textContent = texto;
+    el.className = 'conexion-estado' + (mal ? ' mal' : '');
+  }
+
+  function post(ruta, cuerpo) {
+    return fetch(apiBase + ruta, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cuerpo || {})
+    });
+  }
+
+  function empezarConexion() {
+    clearTimeout(timer);
+    clearTimeout(timerConexion);
+    clearInterval(timerCuenta);
+    pedido = null;
+    mostrar('conexion');
+    // Nunca dejar a la vista un codigo que ya no sirve mientras llega el nuevo.
+    document.getElementById('qr-caja').className = 'qr-caja apagado';
+    document.getElementById('codigo').textContent = '···-···';
+    estadoConexion('Pidiendo un código…');
+    post('/tv/conexion')
+      .then(function (res) {
+        if (res.status === 429) throw Object.assign(new Error('limite'), { limite: true });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        pedido = {
+          device_code: data.device_code,
+          user_code: data.user_code,
+          expira: Date.now() + data.expires_in * 1000,
+          interval: data.interval || 5
+        };
+        document.getElementById('qr').src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(data.qr_svg);
+        document.getElementById('qr-caja').className = 'qr-caja';
+        document.getElementById('codigo').textContent = data.user_code;
+        document.getElementById('uri-manual').textContent = String(data.verification_uri).replace(/^https?:\/\//, '');
+        timerCuenta = setInterval(cuentaRegresiva, 1000);
+        cuentaRegresiva();
+        timerConexion = setTimeout(consultar, pedido.interval * 1000);
+      })
+      .catch(function (err) {
+        estadoConexion(err.limite ? 'Demasiados intentos. Reintento en un minuto…' : 'Sin conexión. Reintentando…', true);
+        timerConexion = setTimeout(empezarConexion, err.limite ? 60 * 1000 : 15 * 1000);
+      });
+  }
+
+  function cuentaRegresiva() {
+    if (!pedido) return;
+    var resta = Math.max(0, Math.round((pedido.expira - Date.now()) / 1000));
+    if (resta === 0) { empezarConexion(); return; } // una TV desatendida siempre muestra un QR vigente
+    var m = Math.floor(resta / 60), s = resta % 60;
+    estadoConexion('Esperando que alguien la conecte · el código se renueva en ' + m + ':' + String(s).padStart(2, '0'));
+  }
+
+  function consultar() {
+    if (!pedido) return;
+    var actual = pedido;
+    post('/tv/conexion/token', { device_code: actual.device_code })
+      .then(function (res) { return res.json().then(function (body) { return { status: res.status, body: body }; }); })
+      .then(function (r) {
+        if (pedido !== actual) return; // ya se pidio otro codigo
+        if (r.status === 200 && r.body.access_token) {
+          clearInterval(timerCuenta);
+          guardarToken(r.body.access_token);
+          pedido = null;
+          estadoConexion('¡Listo! Cargando la agenda…');
+          arrancarKiosko();
+          return;
+        }
+        var error = r.body && r.body.error;
+        if (error === 'authorization_pending') {
+          timerConexion = setTimeout(consultar, actual.interval * 1000);
+        } else if (error === 'slow_down') {
+          actual.interval = r.body.interval || actual.interval + 5;
+          timerConexion = setTimeout(consultar, actual.interval * 1000);
+        } else if (error === 'access_denied') {
+          clearInterval(timerCuenta);
+          estadoConexion('Se rechazó la conexión. Pido un código nuevo…', true);
+          timerConexion = setTimeout(empezarConexion, 5000);
+        } else if (r.status === 429) {
+          timerConexion = setTimeout(consultar, 30 * 1000);
+        } else {
+          empezarConexion(); // expired_token / invalid_grant: codigo nuevo
+        }
+      })
+      .catch(function () {
+        if (pedido !== actual) return;
+        estadoConexion('Sin conexión. Reintentando…', true);
+        timerConexion = setTimeout(consultar, 10 * 1000);
+      });
+  }
+
+  // ------------------------------------------------------------------
+  // Modo kiosko
+  // ------------------------------------------------------------------
   function lunesDeEstaSemana() {
     var hoy = new Date();
     var diaIso = hoy.getDay() === 0 ? 7 : hoy.getDay();
@@ -182,6 +381,10 @@
     lunes.setDate(hoy.getDate() - (diaIso - 1));
     lunes.setHours(0, 0, 0, 0);
     return lunes;
+  }
+
+  function fechaLocal(inicio) {
+    return new Date(String(inicio).slice(0, 10) + 'T00:00:00');
   }
 
   function construirColumnasVacias() {
@@ -206,10 +409,12 @@
     return grupos;
   }
 
-  // Solo la parte antes del @ -- en una pantalla de oficina el dominio ocupa
-  // lugar y no distingue nada (son todos del mismo Workspace).
-  function nombreCorto(email) {
-    return String(email || '').split('@')[0];
+  var variosDeptos = false;
+
+  function chipDepto(d) {
+    if (!variosDeptos || !d) return '';
+    var color = colorSeguro(d.color);
+    return '<span class="chip-depto" style="color:' + color + ';background:' + color + '26">' + esc(d.abreviatura) + '</span>';
   }
 
   function bulletsHtml(grupos) {
@@ -217,13 +422,13 @@
       var itemsHtml = grupos[local].map(function (ev) {
         // Quien la hizo (si esta hecha) o quien la tiene a cargo (si no).
         var persona = ev.estado === 'realizada'
-          ? (ev.realizada_por ? '✓ ' + nombreCorto(ev.realizada_por) : '')
-          : (ev.asignado_a ? '→ ' + nombreCorto(ev.asignado_a) : '');
-        return '<li class="' + ev.estado + '"><span class="tarea-texto">' + ev.titulo
-          + (persona ? '<span class="tarea-persona">' + persona + '</span>' : '')
+          ? (ev.realizada_por ? '✓ ' + ev.realizada_por : '')
+          : (ev.asignado_a ? '→ ' + ev.asignado_a : '');
+        return '<li class="' + esc(ev.estado) + '"><span class="tarea-texto"><span>' + chipDepto(ev.departamento) + esc(ev.titulo) + '</span>'
+          + (persona ? '<span class="tarea-persona">' + esc(persona) + '</span>' : '')
           + '</span></li>';
       }).join('');
-      return '<div class="local-grupo"><div class="local-nombre">' + local + '</div><ul class="tarea-bullets">' + itemsHtml + '</ul></div>';
+      return '<div class="local-grupo"><div class="local-nombre">' + esc(local) + '</div><ul class="tarea-bullets">' + itemsHtml + '</ul></div>';
     }).join('');
   }
 
@@ -233,8 +438,7 @@
     columnas.forEach(function (c) { porFecha[c.fecha.toDateString()] = c; });
 
     (eventos || []).forEach(function (ev) {
-      var fechaEv = new Date(ev.inicio + 'T00:00:00');
-      var col = porFecha[fechaEv.toDateString()];
+      var col = porFecha[fechaLocal(ev.inicio).toDateString()];
       if (!col) return; // fuera de lunes-viernes (no deberia pasar, el backend ya filtra)
       var local = ev.nombre_local || 'Toda la empresa';
       col.grupos[local] = col.grupos[local] || [];
@@ -250,7 +454,7 @@
     var htmlDias = columnas.map(function (col) {
       return '<div class="dia-col' + (col.esHoy ? ' hoy' : '') + '">'
         + '<div class="dia-nombre">' + col.nombre + '</div>'
-        + '<div class="dia-fecha">' + col.fecha.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }) + '</div>'
+        + '<div class="dia-fecha">' + esc(col.fecha.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })) + '</div>'
         + '<div class="dia-contenido">' + (bulletsHtml(col.grupos) || '<div class="dia-vacio">Sin tareas</div>') + '</div>'
         + '</div>';
     }).join('');
@@ -269,22 +473,21 @@
     for (var i = 0; i < 5; i++) {
       var fecha = new Date(lunesQueViene);
       fecha.setDate(lunesQueViene.getDate() + i);
-      var col = { nombre: DIAS[i], titulos: [] };
+      var col = { nombre: DIAS[i], items: [] };
       cols.push(col);
       porFecha[fecha.toDateString()] = col;
     }
 
     (eventos || []).forEach(function (ev) {
-      var fechaEv = new Date(ev.inicio + 'T00:00:00');
-      var col = porFecha[fechaEv.toDateString()];
+      var col = porFecha[fechaLocal(ev.inicio).toDateString()];
       if (!col) return;
-      col.titulos.push(ev.titulo);
+      col.items.push(ev);
     });
 
     var htmlHueco = '<div class="mini-col hueco"></div>';
     var htmlDias = cols.map(function (col) {
-      var itemsHtml = col.titulos.length
-        ? col.titulos.map(function (t) { return '<li>' + t + '</li>'; }).join('')
+      var itemsHtml = col.items.length
+        ? col.items.map(function (ev) { return '<li>' + chipDepto(ev.departamento) + esc(ev.titulo) + '</li>'; }).join('')
         : '<li class="mini-vacio">Sin tareas</li>';
       return '<div class="mini-col"><div class="mini-dia">' + col.nombre + '</div><ul class="mini-tareas">' + itemsHtml + '</ul></div>';
     }).join('');
@@ -293,13 +496,24 @@
   }
 
   function pintar(data) {
-    document.getElementById('nombre-depto').textContent = data.departamento.nombre;
-    document.getElementById('kpi-pendientes').textContent = data.totales.pendientes;
-    document.getElementById('kpi-realizadas').textContent = data.totales.realizadas;
-    document.getElementById('kpi-vencidas').textContent = data.totales.vencidas;
+    var deptos = data.departamentos || [];
+    variosDeptos = deptos.length > 1;
+    var nombre = (data.pantalla && data.pantalla.nombre) || deptos.map(function (d) { return d.nombre; }).join(', ');
+    document.getElementById('nombre-pantalla').textContent = nombre;
+    document.title = nombre + ' — DC-PLATAFORMA';
+    document.getElementById('deptos-pantalla').innerHTML = variosDeptos
+      ? deptos.map(function (d) { return '<span>' + chipDepto(d) + esc(d.nombre) + '</span>'; }).join('')
+      : '';
+    document.getElementById('pie-pantalla').textContent =
+      'Pantalla «' + nombre + '» · se administra desde DC-PLATAFORMA → Pantallas';
+
+    var totales = data.totales || { pendientes: 0, realizadas: 0, vencidas: 0 };
+    document.getElementById('kpi-pendientes').textContent = totales.pendientes;
+    document.getElementById('kpi-realizadas').textContent = totales.realizadas;
+    document.getElementById('kpi-vencidas').textContent = totales.vencidas;
 
     var semaforo = document.getElementById('semaforo-general');
-    semaforo.className = 'semaforo ' + data.estado_general;
+    semaforo.className = 'semaforo ' + esc(data.estado_general);
     var textoEstado = { verde: 'Todo al día', amarillo: 'Con pendientes', rojo: 'Con atrasadas' }[data.estado_general] || '—';
     document.getElementById('estado-general-texto').textContent = textoEstado;
 
@@ -309,10 +523,11 @@
 
   function pintarClima(data) {
     var html = (data.horas || []).map(function (h) {
+      var icono = /^https:\/\//.test(String(h.icono)) ? h.icono : null;
       return '<div class="clima-hora">'
-        + (h.icono ? '<img src="' + h.icono + '" alt="' + h.descripcion + '">' : '')
-        + '<span class="t">' + (h.temperatura != null ? h.temperatura + '°' : '—') + '</span>'
-        + '<span class="h">' + String(h.hora).padStart(2, '0') + 'h</span>'
+        + (icono ? '<img src="' + esc(icono) + '" alt="' + esc(h.descripcion) + '">' : '')
+        + '<span class="t">' + (h.temperatura != null ? esc(h.temperatura) + '°' : '—') + '</span>'
+        + '<span class="h">' + esc(String(h.hora).padStart(2, '0')) + 'h</span>'
         + '</div>';
     }).join('');
     document.getElementById('clima').innerHTML = html;
@@ -331,24 +546,31 @@
   }
 
   function tick() {
-    if (!departamento || !key) {
-      marcarConexion(false, 'Falta ?depto= y ?key= en la URL');
-      return;
-    }
-    fetch(apiBase + '/tv/resumen?departamento=' + encodeURIComponent(departamento) + '&key=' + encodeURIComponent(key))
+    var token = leerToken();
+    if (!token) { empezarConexion(); return; }
+    fetch(apiBase + '/tv/resumen', { headers: { Authorization: 'Bearer ' + token } })
       .then(function (res) {
+        // 401 = la pantalla ya no esta conectada (la desconectaron, o quien la
+        // conecto ya no ve sus agendas): no es "sin conexion", hay que volver al QR.
+        if (res.status === 401) throw Object.assign(new Error('desconectada'), { desconectada: true });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
       })
       .then(function (data) {
         pintar(data);
         guardarCache(data);
-        marcarConexion(true, 'En línea');
+        var sinLeer = (data.sin_leer || []).length ? ' · no se pudo leer: ' + data.sin_leer.join(', ') : '';
+        marcarConexion(!sinLeer, 'En línea' + sinLeer);
         document.getElementById('ultima-actualizacion').textContent =
           'Actualizado ' + new Date(data.actualizado).toLocaleTimeString('es-AR');
         scheduleNext(REFRESH_MS);
       })
-      .catch(function () {
+      .catch(function (err) {
+        if (err.desconectada) {
+          olvidarPantalla();
+          empezarConexion();
+          return;
+        }
         var cache = leerCache();
         if (cache) {
           pintar(cache.data);
@@ -375,16 +597,28 @@
     timer = setTimeout(tick, ms);
   }
 
-  var cacheInicial = leerCache();
-  if (cacheInicial) pintar(cacheInicial.data);
+  function arrancarKiosko() {
+    clearTimeout(timerConexion);
+    clearInterval(timerCuenta);
+    mostrar('kiosko');
+    var cacheInicial = leerCache();
+    if (cacheInicial) pintar(cacheInicial.data);
+    tick();
+  }
 
-  tick();
+  if (leerToken()) arrancarKiosko();
+  else empezarConexion();
+
   tickClima();
   setInterval(tickClima, CLIMA_REFRESH_MS);
-  window.addEventListener('online', tick);
+  window.addEventListener('online', function () {
+    if (leerToken()) tick();
+    else if (!pedido) empezarConexion();
+  });
 
   // Doble red de recarga (ver dashboard-rendimiento-general: quedo 74hs sin
-  // actualizar por un bug de refresco silencioso).
+  // actualizar por un bug de refresco silencioso). El token vive en
+  // localStorage, asi que la pantalla sigue conectada despues de recargar.
   setInterval(function () { location.reload(); }, 60 * 60 * 1000);
 })();
 </script>

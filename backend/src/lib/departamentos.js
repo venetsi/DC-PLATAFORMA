@@ -1,9 +1,8 @@
-import { randomBytes } from 'node:crypto'
-
 // Provisioning de un Departamento: Calendar (Fase 3) + Group compartido en
-// modo lectura (Fase 7) + clave de kiosko (Fase 6). Idempotente -- se puede
-// llamar cada vez que se ve el departamento (sync perezoso desde el ticket
-// SSO, el seed de dev, o /admin/departamentos).
+// modo lectura (Fase 7). Idempotente -- se puede llamar cada vez que se ve el
+// departamento (sync perezoso desde el ticket SSO, el seed de dev, o
+// /admin/departamentos). Ya no genera clave de kiosko: las TVs se conectan
+// escaneando un QR (ver lib/tv-conexion.js).
 export async function asegurarDepartamento(fastify, { id, nombre, slug }) {
   let departamento = await fastify.db.departamento.findUnique({ where: { slug } })
 
@@ -11,7 +10,7 @@ export async function asegurarDepartamento(fastify, { id, nombre, slug }) {
     const calendarId = await fastify.gcal.crearCalendarioDepartamento(`DC-PLATAFORMA — ${nombre}`)
     departamento = await fastify.db.departamento.upsert({
       where: { slug },
-      create: { id, nombre, slug, id_calendar_google: calendarId, kiosko_key: randomBytes(16).toString('hex') },
+      create: { id, nombre, slug, id_calendar_google: calendarId },
       update: { id_calendar_google: calendarId }
     })
   }

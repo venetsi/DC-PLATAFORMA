@@ -585,6 +585,42 @@ th, td {
 }
 .semana-tablero .dia-vacio { font-size: 0.75rem; color: var(--texto-tenue); font-style: italic; opacity: 0.8; }
 
+/* --- Pantallas de TV (pages/Pantallas.jsx): conectar una con el codigo del
+   QR y administrar las conectadas. Se usa mucho desde el celular. --- */
+.pantallas { display: flex; flex-direction: column; gap: 1rem; max-width: 860px; }
+.pantalla-conectar { display: flex; flex-direction: column; gap: 0.75rem; }
+.pantalla-conectar h3 { margin: 0; }
+.pantalla-conectar.destacada { border-color: rgba(63, 182, 189, 0.45); box-shadow: 0 0 0 1px rgba(63, 182, 189, 0.25) inset; }
+.pantalla-conectar-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
+.pantalla-codigo-grande { color: var(--gold); letter-spacing: 0.12em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pantalla-codigo { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.pantalla-codigo input { flex: 1 1 10rem; max-width: 14rem; padding: 0.5rem 0.7rem; font-size: 1.1rem; letter-spacing: 0.15em; text-transform: uppercase; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.14); background: var(--bg-0); color: var(--texto); }
+.pantalla-alerta { margin: 0; padding: 0.5rem 0.75rem; border-radius: 8px; background: rgba(224, 184, 63, 0.12); color: var(--amarillo); font-size: 0.85rem; }
+.pantalla-form { display: flex; flex-direction: column; gap: 0.85rem; }
+.pantalla-form fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
+.pantalla-form legend { font-size: 0.78rem; color: var(--texto-tenue); margin-bottom: 0.45rem; padding: 0; }
+.pantalla-form .campo input { padding: 0.5rem 0.6rem; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.14); background: var(--bg-0); color: var(--texto); max-width: 26rem; }
+.pantalla-deptos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); gap: 0.4rem; }
+.pantalla-depto { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.65rem; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; cursor: pointer; font-size: 0.9rem; }
+.pantalla-depto:hover { border-color: rgba(255, 255, 255, 0.25); }
+.pantalla-depto.sel { border-color: var(--teal); background: rgba(63, 182, 189, 0.1); }
+.pantalla-depto input { margin: 0; accent-color: var(--teal); }
+.pantalla-depto .chip-depto { margin-right: 0; }
+.chip-depto.tachado { opacity: 0.45; }
+.pantallas-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+.pantalla-tarjeta { display: flex; flex-direction: column; gap: 0.55rem; }
+.pantalla-tarjeta-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; flex-wrap: wrap; }
+.pantalla-nombre { font-weight: 700; font-size: 1.05rem; }
+.pantalla-chips { display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem; margin-top: 0.3rem; font-size: 0.82rem; color: var(--texto-tenue); }
+.pantalla-chips .no-se-muestra { text-decoration: line-through; opacity: 0.7; }
+.pantalla-estado { font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.6rem; border-radius: 999px; white-space: nowrap; }
+.pantalla-estado.ok { background: rgba(63, 182, 106, 0.16); color: var(--verde); }
+.pantalla-estado.medio { background: rgba(224, 184, 63, 0.16); color: var(--amarillo); }
+.pantalla-estado.mal { background: rgba(224, 92, 63, 0.16); color: var(--rojo); }
+.pantalla-editor { display: flex; flex-direction: column; gap: 0.6rem; padding-top: 0.25rem; }
+.pantalla-editor.en-linea { flex-direction: row; }
+.pantalla-editor input:not([type="checkbox"]) { padding: 0.45rem 0.6rem; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.14); background: var(--bg-0); color: var(--texto); min-width: 0; flex: 1 1 14rem; }
+
 /* --- Celular y pantallas tactiles ---
    700px = celular (mismo corte que lib/pantalla.js y que el apilado de la
    vista Semana). (pointer: coarse) = se usa con el dedo, aunque la pantalla
@@ -681,4 +717,6 @@ th, td {
   .agenda-cab select { min-height: 2.5rem; }
   .barra-lote .btn { min-height: 2.25rem; }
   .tabla-locales td { padding: 0.6rem 0.5rem; }
+  /* Conectar una TV: se hace casi siempre desde el celular, recien escaneado el QR. */
+  .pantalla-form .acciones .btn, .pantalla-codigo .btn, .pantalla-codigo input { min-height: 2.75rem; }
 }

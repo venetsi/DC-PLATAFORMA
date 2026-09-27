@@ -2,6 +2,7 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
 import cookie from '@fastify/cookie'
+import rateLimit from '@fastify/rate-limit'
 import 'dotenv/config'
 
 import dbPlugin from './plugins/db.js'
@@ -20,15 +21,24 @@ import instanciasRoutes from './routes/instancias.js'
 import reportesRoutes from './routes/reportes.js'
 import agendasRoutes from './routes/agendas.js'
 import tvRoutes from './routes/tv.js'
+import pantallasRoutes from './routes/pantallas.js'
 import chatRoutes from './routes/chat.js'
 import repositoriosRoutes from './routes/repositorios.js'
 import { esAdminGlobal, usuarioActual } from './lib/permisos.js'
 import { asegurarMembresiasFrescas } from './lib/membresias.js'
 import { cargarFeriados } from './lib/feriados.js'
 
-const app = Fastify({ logger: true })
+// trustProxy: en produccion todo llega por el rewrite de Firebase Hosting y
+// el frente de Cloud Run, asi que la IP real viene en X-Forwarded-For. Sin
+// esto request.ip era la del proxy y los limites por IP contaban a todas las
+// TVs como una sola. (El primer valor de ese header lo puede inventar el
+// cliente: por eso el limite que importa, adivinar codigos, va por persona.)
+const app = Fastify({ logger: true, trustProxy: true })
 
 await app.register(cors, { origin: process.env.FRONTEND_URL, credentials: true })
+// Sin limite global: cada ruta que lo necesita trae el suyo (config.rateLimit).
+// Va antes de las rutas: el plugin engancha los limites cuando se registran.
+await app.register(rateLimit, { global: false })
 await app.register(cookie)
 await app.register(jwt, {
   secret: process.env.JWT_SECRET,
@@ -73,6 +83,7 @@ await app.register(instanciasRoutes, { prefix: '/api/instancias' })
 await app.register(reportesRoutes, { prefix: '/api/reportes' })
 await app.register(agendasRoutes, { prefix: '/api/agendas' })
 await app.register(tvRoutes, { prefix: '/api/tv' })
+await app.register(pantallasRoutes, { prefix: '/api/pantallas' })
 await app.register(chatRoutes, { prefix: '/api/chat' })
 await app.register(repositoriosRoutes, { prefix: '/api/repositorios' })
 

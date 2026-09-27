@@ -39,6 +39,8 @@ export default function Layout() {
             {enAlguno('reportes') && <NavLink to="/reportes" style={linkStyle}>Reportes</NavLink>}
             {(esAdminGlobal || departamento) && <NavLink to="/agendas" style={linkStyle}>Agendas</NavLink>}
             {esAdminGlobal && <NavLink to="/admin/repositorios" style={linkStyle}>Documentos</NavLink>}
+            {/* Conecta una TV cualquiera que vea alguna agenda. */}
+            {(esAdminGlobal || departamento) && <NavLink to="/pantallas" style={linkStyle}>Pantallas</NavLink>}
             <NavLink to="/ayuda" style={linkStyle}>Ayuda</NavLink>
           </nav>
         </div>

@@ -79,6 +79,18 @@ export const repositoriosApi = {
   eliminar: (id) => api.delete(`/repositorios/${id}`).then((r) => r.data)
 }
 
+// Pantallas de TV conectadas con QR (ver backend routes/pantallas.js y
+// lib/tv-conexion.js). El codigo es el que muestra la TV ("BCD-FGH").
+export const pantallasApi = {
+  conexion: (codigo) => api.get(`/pantallas/conexion/${encodeURIComponent(codigo)}`).then((r) => r.data),
+  aprobar: (codigo, body) => api.post(`/pantallas/conexion/${encodeURIComponent(codigo)}/aprobar`, body).then((r) => r.data),
+  rechazar: (codigo) => api.post(`/pantallas/conexion/${encodeURIComponent(codigo)}/rechazar`).then((r) => r.data),
+  departamentos: () => api.get('/pantallas/departamentos').then((r) => r.data.departamentos),
+  listar: () => api.get('/pantallas').then((r) => r.data.pantallas),
+  editar: (id, body) => api.patch(`/pantallas/${id}`, body).then((r) => r.data),
+  desconectar: (id) => api.delete(`/pantallas/${id}`).then((r) => r.data)
+}
+
 // Pantalla Agendas (ver backend routes/agendas.js): todo el departamento en un
 // pedido, crear una tarea completa en un paso, y cambios en lote por local.
 export const agendasApi = {

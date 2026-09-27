@@ -14,7 +14,9 @@ const DIAS_ISO_A_RRULE = { 1: 'MO', 2: 'TU', 3: 'WE', 4: 'TH', 5: 'FR', 6: 'SA',
 // formulario de agenda no ofrece fecha de fin, en la practica TODAS lo eran.
 // El horizonte se renueva solo desde jobs/reconciliar.js mientras la
 // asignacion siga activa, asi que acotarlo no apaga nada por sorpresa.
-export const MESES_DE_HORIZONTE = 12
+// 6 meses desde 2026-09-27 (antes 12, a pedido del usuario). Las series ya
+// creadas conservan su UNTIL y pasan a 6 meses cuando el job las renueva.
+export const MESES_DE_HORIZONTE = 6
 
 export function horizontePorDefecto(desdeISO, meses = MESES_DE_HORIZONTE) {
   const [a, m, d] = String(desdeISO).split('-').map(Number)

@@ -320,7 +320,7 @@ recurrente.
 
 **Deliberadamente NO usa el modelo de Tarea/TareaAsignacion/Calendar.** Un pago es un
 registro de una sola vez de OTRO sistema (dcsmart), no algo que se repita — forzarlo
-por el motor de agenda (RRULE, 12 meses, evento de Calendar) ensuciaría el calendario
+por el motor de agenda (RRULE con horizonte, evento de Calendar) ensuciaría el calendario
 del departamento con eventos que no son operativos reales. Tiene su propia tabla,
 `PagoSeguimiento` (`schema.prisma`), sin Calendar de por medio.
 

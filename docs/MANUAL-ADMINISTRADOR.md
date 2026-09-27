@@ -20,7 +20,7 @@ repositorios de documentos, y lo poco que todavía no tiene pantalla.
 | | |
 |---|---|
 | **Plataforma** | `https://dc-plataforma.web.app` |
-| **Kiosko (TV)** | `https://dc-plataforma-tv.web.app/?depto=<slug>&key=<kiosko_key>` (§7) |
+| **Kiosko (TV)** | `https://tv.dcsmart.app` (o `https://dc-plataforma-tv.web.app`): muestra un QR para conectarla (§7) |
 | **API** | `https://dc-plataforma-api-288069746644.us-central1.run.app` — el frontend la usa a través de `/api/**` del mismo dominio |
 
 ### Cómo se entra
@@ -155,7 +155,7 @@ Space de Chat y si algún grupo no se pudo leer.
 
 Campo **"Nuevo departamento"** → **Crear departamento** (o
 `POST /api/departamentos { "nombre": "..." }`). No es un simple alta: crea
-en el momento el **Calendar** del departamento, su **clave de kiosko**, el
+en el momento el **Calendar** del departamento, el
 **Google Group** `depto-<slug>@dcsmart.app` y le da a ese grupo acceso de
 lectura al Calendar. Si Directory falla a mitad de camino, el departamento
 queda guardado y la próxima vez solo reintenta lo que falta.
@@ -167,14 +167,9 @@ queda guardado y la próxima vez solo reintenta lo que falta.
 Después de crearlo: agregar a las personas al grupo nuevo en Workspace y
 "Releer Google Groups".
 
-### ⚠️ La clave de kiosko solo se ve al crearlo
-
-La `kiosko_key` viaja una única vez, en la respuesta de la creación. Si se
-perdió, solo se recupera con una consulta directa a la base:
-
-```sql
-SELECT slug, kiosko_key FROM departamentos WHERE slug = 'reportes';
-```
+> Desde el 27/09/2026 ya no se genera una **clave de kiosko** por departamento:
+> las TVs se conectan con QR (§7). La columna `departamentos.kiosko_key` quedó
+> en la base sin usarse; se borra en un cambio aparte.
 
 ### Avisos por departamento
 
@@ -232,8 +227,10 @@ editar pide MANAGER; desactivar, eliminar y los avisos del departamento, OWNER
 
 Abajo, una frase dice exactamente qué se va a crear. **Crear y agendar**
 crea la tarea, una asignación por local y los eventos en Calendar. Las
-series se agendan por 12 meses y se renuevan solas mientras la tarea siga
-activa.
+series se agendan por 6 meses y se renuevan solas mientras la tarea siga
+activa: `reconciliar` las extiende a hoy + 6 meses cuando les quedan menos de
+60 días. Las creadas antes del 27/09/2026 (a 12 meses) conservan su fecha de
+fin hasta esa primera renovación.
 
 ### Trabajar sobre los locales de una tarea
 
@@ -285,7 +282,8 @@ criterios que `routes/tv.js`: últimos 60 días, semáforo rojo con cualquier
 atrasada, sin "no aplica". Única diferencia: Atrasadas junta **todo** lo vencido
 que no tiene columna a la vista (semanas anteriores **y** sábados y domingos), para
 que una vencida de fin de semana no quede sin mostrarse. Sábado y domingo la vista
-arranca en la semana siguiente. El kiosko no cambió.
+arranca en la semana siguiente (el kiosko, en cambio, sigue mostrando la
+semana en curso aunque sea fin de semana).
 
 **Semana y Mes, para MANAGER y OWNER**:
 
@@ -354,18 +352,67 @@ todos los departamentos.
 
 ## 7. Kiosko (pantalla de oficina, sin login)
 
-```
-https://dc-plataforma-tv.web.app/?depto=<slug>&key=<kiosko_key>
-```
+La TV abre **`https://tv.dcsmart.app`**, o `https://dc-plataforma-tv.web.app`
+(el mismo sitio de Firebase, `hosting:kiosko`). Si no está conectada, muestra
+un **QR** y un código corto. Se conecta con el flujo de dispositivo de las
+Smart TV (OAuth 2.0 Device Authorization Grant, RFC 8628):
 
-- `depto` es el **slug**; `key`, la clave de kiosko de ese departamento (§3).
-- Se actualiza sola cada 2 minutos (reintento a los 30 s si falla, recarga
-  completa cada hora). Sin conexión, muestra lo último con aviso.
-- Muestra: semáforo (🔴 hay atrasadas de los últimos 60 días / 🟡 hay
-  pendientes de hoy / 🟢 al día), contadores, **las atrasadas de esos 60
-  días**, la semana por
-  local, adelanto de la siguiente, clima y reloj. Es de **solo lectura**: no
-  se marca nada desde ahí.
+1. **Pide un código.** La TV hace `POST /api/tv/conexion` y recibe un
+   `device_code` secreto, un `user_code` de 6 letras (`BCD-FGH`) y el QR hacia
+   `${FRONTEND_URL}/tv?codigo=BCD-FGH`.
+2. **Espera.** Cada 5 s consulta `POST /api/tv/conexion/token`. Mientras
+   nadie la conecta recibe `authorization_pending`; si consulta más rápido,
+   `slow_down`.
+3. **Alguien la conecta.** La persona escanea el QR, entra a **Pantallas**,
+   elige una o varias agendas y confirma (`/api/pantallas/conexion/:codigo/aprobar`).
+4. **Recibe su token.** En la siguiente consulta, la TV recibe un token propio.
+   Lo guarda en su navegador y desde ahí pide `GET /api/tv/resumen` cada minuto,
+   con `Authorization: Bearer`.
+
+**Permisos:**
+- **Quién la conecta:** cualquiera que **vea** la agenda (Miembro en adelante).
+- **Qué muestra:** lo que esa persona puede ver, verificado en cada consulta. Si
+  deja de ver un departamento, la TV deja de mostrarlo. Si ya no le queda
+  ninguno, o si la desactivan, la TV vuelve al QR.
+- **Quién la administra:** en **Pantallas** la renombra, le cambia las agendas o
+  la desconecta quien la conectó, o Dirección. El OWNER de un departamento que
+  la TV muestra también la ve y la puede desconectar.
+- **Si Dirección le cambia las agendas** a una pantalla de otra persona, la
+  pantalla pasa a nombre de Dirección.
+
+**Seguridad:**
+- Del `device_code` y del token de la TV solo se guarda el hash (tablas
+  `tv_conexiones` y `tv_pantallas`).
+- El código vence a los 10 min y sirve una sola vez.
+- Buscar o aprobar códigos tiene un límite de 20 intentos cada 10 min por
+  persona; pedir códigos, 10 cada 10 min por IP.
+- El token solo lee el kiosko, nunca es una sesión, y ya no viaja en la URL:
+  antes la clave quedaba en los logs de Cloud Run.
+
+**Funcionamiento de la TV:**
+- Se actualiza cada minuto y reintenta a los 30 s si falla. Además recarga la
+  página completa cada hora.
+- El servidor guarda lo leído de Calendar 30 s por departamento, compartido
+  entre TVs.
+- Sin conexión, muestra lo último con aviso. Si el servidor responde que la
+  pantalla ya no está conectada (401), vuelve al QR.
+
+**Qué muestra:** semáforo (🔴 hay atrasadas de los últimos 60 días / 🟡 hay
+pendientes de hoy / 🟢 al día), contadores, **las atrasadas de esos 60 días**,
+la semana por local, adelanto de la siguiente, clima y reloj. Con varios
+departamentos, cada tarea lleva su etiqueta de color. Es de **solo lectura**: no
+se marca nada desde ahí.
+
+**Los links viejos** con `?depto=<slug>&key=<kiosko_key>` dejaron de funcionar
+el 27/09/2026. Esas TVs toman el HTML nuevo en su recarga de cada hora, y a
+partir de ahí muestran el QR: alguien la escanea y listo.
+
+| Qué pasa | Por qué / qué hacer |
+|---|---|
+| La TV muestra el QR aunque estaba conectada | La desconectaron, o quien la conectó ya no ve ninguna de sus agendas o fue desactivado. Conectarla de nuevo. |
+| "Ese código venció" en el celular | Pasaron 10 minutos. La TV ya muestra otro: escanearlo de nuevo. |
+| Una agenda aparece tachada en Pantallas | Quien conectó la TV ya no ve ese departamento. Cambiarle las agendas o conectarla con otra persona. |
+| "Terminando de conectarse…" que no avanza | La TV se apagó o perdió la red justo después de aprobarla. A los 15 min se descarta sola: volver a escanear. |
 
 ---
 
@@ -463,7 +510,7 @@ npm run job:snapshot -- --instancias-desde=2026-08-08   # completar el tablero h
 | `AVISO_SLUG_DIRECCION` | Slug tratado como Dirección | `direccion` |
 | `AVISO_DIAS_DEPARTAMENTO` / `AVISO_DIAS_DIRECCION` | Umbrales globales (la columna del departamento gana) | `2` / `5` |
 | `MEMBRESIA_FUENTE` | `groups` = departamentos desde Google Groups | `groups` en producción |
-| `FRONTEND_URL` | Link a la plataforma en las cards de Chat | `https://dc-plataforma.web.app` |
+| `FRONTEND_URL` | Link a la plataforma en las cards de Chat, y adónde apunta el QR de las TVs (`/tv`) | `https://dc-plataforma.web.app` |
 
 > **Desde una máquina de desarrollo**: si `gcloud auth application-default
 > login` queda bloqueado por el control de acceso a apps de Workspace, el
@@ -477,7 +524,6 @@ npm run job:snapshot -- --instancias-desde=2026-08-08   # completar el tablero h
 
 | Operación | Cómo se hace |
 |---|---|
-| Ver la clave de kiosko de un departamento ya creado | Guardarla al crearlo, o `SELECT` a la base (§3) |
 | Desactivar un departamento | `UPDATE departamentos SET activo = false WHERE slug = '...'` (base compartida con producción: con cuidado) |
 | Aplicar un cambio de grupo frenado por seguridad | `POST /api/departamentos/membresias/sincronizar?forzar=true` (§2) |
 | Hacer administrador a alguien | Agregarlo a `depto-direccion@dcsmart.app` (o marcarlo `super_admin` en dcsmart) |
