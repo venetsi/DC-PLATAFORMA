@@ -40,6 +40,7 @@ function CheckboxDepartamentos({ departamentos, seleccionados, onCambiar }) {
 function ListaDocumentos({ documentos, onEliminar }) {
   if (!documentos.length) return <p style={{ color: 'var(--texto-tenue)', fontSize: '0.85rem' }}>Todavía no hay documentos acá.</p>
   return (
+    <div className="tabla-scroll">
     <table>
       <thead><tr><th>Nombre</th><th>Tipo</th><th>Estado</th><th></th></tr></thead>
       <tbody>
@@ -58,6 +59,7 @@ function ListaDocumentos({ documentos, onEliminar }) {
         ))}
       </tbody>
     </table>
+    </div>
   )
 }
 
@@ -313,6 +315,8 @@ export default function AdminRepositorios() {
       ) : !repositorios.length ? (
         <p style={{ color: 'var(--texto-tenue)' }}>Todavía no hay ningún repositorio creado.</p>
       ) : (
+        // En celular no entra: se desliza dentro de su caja, sin correr la pagina.
+        <div className="tabla-scroll">
         <table>
           <thead><tr><th>Nombre</th><th>Tipo</th><th>Departamentos</th><th>Documentos</th><th></th></tr></thead>
           <tbody>
@@ -345,6 +349,7 @@ export default function AdminRepositorios() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   )

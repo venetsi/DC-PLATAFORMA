@@ -1,11 +1,20 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useEffect, useRef } from 'react'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore.js'
 import { usePermisos, NOMBRE_ROL } from '../lib/permisos.js'
 
 export default function Layout() {
   const { usuario, departamento, departamentos, esDireccion, esAdminGlobal, logout } = useAuthStore()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const { enAlguno } = usePermisos()
+  const navRef = useRef(null)
+
+  // En celular el menu es una sola fila que se desliza de costado: la pantalla
+  // actual queda a la vista (si no, "Ayuda" o "Documentos" quedaban afuera).
+  useEffect(() => {
+    navRef.current?.querySelector('a.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [pathname])
 
   async function onLogout() {
     await logout()
@@ -23,7 +32,7 @@ export default function Layout() {
       <header className="cabecera">
         <div className="cabecera-izq">
           <strong style={{ color: 'var(--gold)' }}>DC-PLATAFORMA</strong>
-          <nav className="cabecera-nav">
+          <nav className="cabecera-nav" ref={navRef}>
             <NavLink to="/" style={linkStyle} end>Mi agenda</NavLink>
             {departamento && <NavLink to="/mis-tareas" style={linkStyle}>Mis tareas</NavLink>}
             {/* Los reportes los ven MANAGER y OWNER (y Direccion). */}

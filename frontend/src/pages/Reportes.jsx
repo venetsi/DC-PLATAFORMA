@@ -169,6 +169,7 @@ export default function Reportes() {
             <div className="tablero-dos">
               <section className="card tablero-seccion">
                 <h3>Días con tareas</h3>
+                <div className="tabla-scroll">
                 <table className="tabla-dias">
                   <thead><tr><th>Día</th><th>Tareas</th><th>Hechas</th><th>Atrasadas</th><th aria-label="Proporción" /></tr></thead>
                   <tbody>
@@ -183,10 +184,14 @@ export default function Reportes() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </section>
 
               <section className="card tablero-seccion">
                 <h3>Por grupo y local</h3>
+                {/* En celular no entra: se desliza de costado dentro de la tarjeta,
+                    en vez de correr la pagina entera. */}
+                <div className="tabla-scroll">
                 <table className="tabla-grupos">
                   <thead><tr><th>Grupo / local</th><th>Tareas</th><th>Hechas</th><th>Atrasadas</th><th>Cumpl.</th></tr></thead>
                   <tbody>
@@ -226,6 +231,7 @@ export default function Reportes() {
                     })}
                   </tbody>
                 </table>
+                </div>
               </section>
             </div>
           )}

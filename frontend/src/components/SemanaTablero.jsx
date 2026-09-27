@@ -167,17 +167,18 @@ export default function SemanaTablero({ eventos, lunes, hoyISO, mapaLocales, dep
       </div>
 
       <div className="st-semana">
-        <section className="dia-col st-atrasadas" aria-label="Atrasadas">
+        <section className={`dia-col st-atrasadas${atrasadas.length ? '' : ' sin-tareas'}`} aria-label="Atrasadas">
           <div className="dia-nombre">Atrasadas</div>
           <div className="dia-fecha">{atrasadas.length} sin resolver</div>
           <div className="dia-contenido">
             {renderGrupos(atrasadas, "Sin atrasadas", true)}
           </div>
         </section>
+        {/* "sin-tareas": en celular un dia sin tareas ocupa una sola linea. */}
         {diasEsta.map((d) => (
           <section
             key={d.fecha}
-            className={`dia-col${d.fecha === hoyISO ? ' hoy' : ''}${sobre === d.fecha ? ' destino' : ''}`}
+            className={`dia-col${d.fecha === hoyISO ? ' hoy' : ''}${sobre === d.fecha ? ' destino' : ''}${porFecha(d.fecha).length ? '' : ' sin-tareas'}`}
             aria-label={`${d.nombre} ${fechaCorta(d.fecha)}`}
             {...soltarEn(d.fecha)}
           >
@@ -209,7 +210,7 @@ export default function SemanaTablero({ eventos, lunes, hoyISO, mapaLocales, dep
               porTitulo.get(t.titulo).push(t)
             }
             return (
-              <div key={d.fecha} className={`st-mini${sobre === d.fecha ? ' destino' : ''}`} {...soltarEn(d.fecha)}>
+              <div key={d.fecha} className={`st-mini${sobre === d.fecha ? ' destino' : ''}${lista.length ? '' : ' sin-tareas'}`} {...soltarEn(d.fecha)}>
                 <div className="st-mini-cab">
                   <span>{d.nombre} {fechaCorta(d.fecha)}</span>
                   {renderCrear(d.fecha)}

@@ -49,6 +49,9 @@ Tres vistas:
   las atrasadas y un adelanto de la semana que viene. Se explica abajo.
 - **Mes**: el mes completo.
 
+En el celular no aparece **Mes**, porque no entra: quedan **Agenda** y **Semana**,
+que ahí se ven como una lista por día (un día sin tareas ocupa una sola línea).
+
 ### La vista Semana (L-V)
 
 - **Arriba**: el semáforo del día (🔴 hay atrasadas, 🟡 hay pendientes de hoy,
@@ -99,6 +102,9 @@ historial (quién la marcó, notas, cambios de fecha). Desde ahí, según tu rol
   para moverla. En Semana también podés arrastrar desde **Atrasadas** para
   reprogramarla, o soltarla en un día de la próxima semana. Aparece un aviso con
   **Deshacer** por si te equivocaste.
+- Con el dedo (celular o tablet), arrastrar en **Semana** no anda en la mayoría de
+  los equipos: tocá la tarea y usá **Cambiar fecha**. En **Mes** (tablet) sí se
+  puede: mantené apretada la tarea y arrastrala.
 - Para crear una tarea en un día: en **Semana**, el **+** de ese día; en **Mes**,
   tocá el día. También está el botón **+ Nueva tarea**. Arranca como "una sola
   vez, ese día", y la podés cambiar a cualquier frecuencia.
@@ -277,7 +283,8 @@ departamento la marca en todos.
 
 **En Semana (L-V) no veo una tarea del sábado.**
 Esa vista muestra de lunes a viernes: si ya venció sin hacerse, está en
-**Atrasadas**; si todavía no, usá **Mes**.
+**Atrasadas**; si todavía no, usá **Mes** (en la computadora o la tablet) o
+**Agenda**.
 
 **¿Un local puede tener otra fecha que otro para la misma tarea?**
 Sí: cada local tiene su propia agenda. En Agendas, tildá solo ese local y usá

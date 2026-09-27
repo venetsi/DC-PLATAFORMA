@@ -16,6 +16,7 @@ import { clasificarInstancia, hoyEnArgentina } from '../lib/vencimiento.js'
 import { usePermisos } from '../lib/permisos.js'
 import { infoDepartamentos } from '../lib/colores-depto.js'
 import { fechaHumana } from '../lib/agenda-texto.js'
+import { useMedia, CONSULTA_CELULAR, CONSULTA_TACTIL } from '../lib/pantalla.js'
 
 const VISTAS = [
   { id: 'agenda', etiqueta: 'Agenda' },
@@ -92,6 +93,14 @@ export default function Calendario() {
   const elegido = opciones.find((d) => d.id === idElegido)
 
   const [vista, setVista] = useState('agenda')
+  // En un celular el mes no entra (cada dia queda de ~43px y no se lee el
+  // nombre de la tarea): ahi solo Agenda y Semana, que son listas por dia.
+  const celular = useMedia(CONSULTA_CELULAR)
+  const tactil = useMedia(CONSULTA_TACTIL)
+  const vistas = celular ? VISTAS.filter((v) => v.id !== 'mes') : VISTAS
+  useEffect(() => {
+    if (celular && vista === 'mes') setVista('agenda')
+  }, [celular, vista])
   const [eventos, setEventos] = useState([])
   const [locales, setLocales] = useState([])
   const [usuarios, setUsuarios] = useState([])
@@ -337,9 +346,10 @@ export default function Calendario() {
       <div className="agenda-cab">
         <div>
           <h2 style={{ margin: 0, display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            Agenda —
+            <span>Agenda</span>
+            <span className="agenda-guion" aria-hidden="true">—</span>
             {opciones.length > 1 ? (
-              <select value={idElegido} onChange={(e) => setIdElegido(e.target.value)} style={{ fontSize: '1rem', padding: '0.25rem' }} aria-label="Departamento">
+              <select value={idElegido} onChange={(e) => setIdElegido(e.target.value)} style={{ fontSize: '1rem', padding: '0.3rem 2rem 0.3rem 0.6rem' }} aria-label="Departamento">
                 <option value={TODOS}>{esAdminGlobal ? 'Todos los departamentos' : 'Todos mis departamentos'}</option>
                 {opciones.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
               </select>
@@ -367,7 +377,7 @@ export default function Calendario() {
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {puedeCrear && <button className="btn" onClick={() => abrirNueva(null)}>+ Nueva tarea</button>}
-          {VISTAS.map((v) => (
+          {vistas.map((v) => (
             <button key={v.id} className={vista === v.id ? 'btn' : 'btn btn-secondary'} onClick={() => setVista(v.id)}>
               {v.etiqueta}
             </button>
@@ -377,9 +387,15 @@ export default function Calendario() {
 
       {vista !== 'agenda' && puedeCrear && (
         <p className="tenue" style={{ margin: '0 0 0.6rem' }}>
+          {/* Con el dedo, el arrastre de Semana no anda en la mayoria de los
+              celulares, y en Mes (FullCalendar) pide mantener apretado. */}
           {vista === 'semana'
-            ? 'Arrastrá una tarea a otro día para moverla (también desde Atrasadas), o usá + para crear una tarea ese día.'
-            : 'Arrastrá una tarea pendiente a otro día para moverla, o tocá un día para crear una tarea ahí.'}
+            ? (tactil
+                ? 'Tocá una tarea para ver el detalle o cambiarle la fecha, o usá + para crear una tarea ese día.'
+                : 'Arrastrá una tarea a otro día para moverla (también desde Atrasadas), o usá + para crear una tarea ese día.')
+            : (tactil
+                ? 'Mantené apretada una tarea para arrastrarla a otro día, o tocá un día para crear una tarea ahí.'
+                : 'Arrastrá una tarea pendiente a otro día para moverla, o tocá un día para crear una tarea ahí.')}
         </p>
       )}
       {mensaje && (
