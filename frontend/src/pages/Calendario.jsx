@@ -8,10 +8,11 @@ import { instanciasApi, localesApi, departamentosApi, usuariosApi, asignacionesA
 import AgendaAgrupada from '../components/AgendaAgrupada.jsx'
 import DetalleTarea from '../components/DetalleTarea.jsx'
 import NuevaTarea from './agendas/NuevaTarea.jsx'
+import SemanaTablero from '../components/SemanaTablero.jsx'
 import { aTarea } from '../lib/agrupar.js'
 import SinAsignacion from './SinAsignacion.jsx'
 import { AvisoPrerrequisitos } from './MisTareas.jsx'
-import { clasificarInstancia } from '../lib/vencimiento.js'
+import { clasificarInstancia, hoyEnArgentina } from '../lib/vencimiento.js'
 import { usePermisos } from '../lib/permisos.js'
 import { infoDepartamentos } from '../lib/colores-depto.js'
 import { fechaHumana } from '../lib/agenda-texto.js'
@@ -38,14 +39,34 @@ function isoLocal(d) {
 
 // "hasta" es EXCLUSIVO en la API de Calendar: se manda el sabado para que
 // entre el viernes (antes la vista inicial no mostraba el viernes).
+// Sabado y domingo ya no queda nada de la semana laboral: se muestra la que
+// arranca el lunes que viene.
 function semanaActualLunesAViernes() {
   const hoy = new Date()
   const diaIso = hoy.getDay() === 0 ? 7 : hoy.getDay()
   const lunes = new Date(hoy)
-  lunes.setDate(hoy.getDate() - (diaIso - 1))
+  lunes.setDate(hoy.getDate() - (diaIso - 1) + (diaIso >= 6 ? 7 : 0))
   const sabado = new Date(lunes)
   sabado.setDate(lunes.getDate() + 5)
   return { desde: isoLocal(lunes), hasta: isoLocal(sabado) }
+}
+
+function sumarDiasISO(iso, n) {
+  const [a, m, d] = iso.split('-').map(Number)
+  return isoLocal(new Date(a, m - 1, d + n))
+}
+
+// "Semana del 28 sep al 2 oct"
+function textoSemana(lunesISO) {
+  const f = (iso) => { const [a, m, d] = iso.split('-').map(Number); return new Date(a, m - 1, d).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }) }
+  return `Semana del ${f(lunesISO)} al ${f(sumarDiasISO(lunesISO, 4))}`
+}
+
+// Lo que pide la vista Semana (tablero estilo kiosko): 60 dias hacia atras
+// para las atrasadas, y hasta el viernes de la semana siguiente.
+function rangoTablero(lunesISO) {
+  const desdeAtrasadas = sumarDiasISO(hoyEnArgentina(), -60)
+  return { desde: desdeAtrasadas < lunesISO ? desdeAtrasadas : lunesISO, hasta: sumarDiasISO(lunesISO, 12) }
 }
 
 function fechaDe(ev) {
@@ -75,6 +96,9 @@ export default function Calendario() {
   const [locales, setLocales] = useState([])
   const [usuarios, setUsuarios] = useState([])
   const [rango, setRango] = useState(semanaActualLunesAViernes())
+  // Lunes de la semana que muestra la vista Semana (arranca en la actual).
+  const lunesActual = semanaActualLunesAViernes().desde
+  const [semanaLunes, setSemanaLunes] = useState(lunesActual)
   const [marcando, setMarcando] = useState(null)
   const [aviso, setAviso] = useState(null)
   const [mensaje, setMensaje] = useState(null)
@@ -142,6 +166,13 @@ export default function Calendario() {
     if (idsVisibles.length && rango) cargar(rango.desde, rango.hasta)
   }, [claveSeleccion, rango?.desde, rango?.hasta])
 
+  // Cada vista pide su propio rango: Agenda la semana en curso, Semana el
+  // tablero estilo kiosko, y Mes lo que diga FullCalendar (ver onDatesSet).
+  useEffect(() => {
+    if (vista === 'agenda') setRango(semanaActualLunesAViernes())
+    if (vista === 'semana') setRango(rangoTablero(semanaLunes))
+  }, [vista, semanaLunes])
+
   function onDatesSet(info) {
     const desde = info.startStr.slice(0, 10)
     const hasta = info.endStr.slice(0, 10)
@@ -152,7 +183,8 @@ export default function Calendario() {
 
   function avisar(texto, { tono = 'ok', deshacer = null } = {}) {
     setMensaje({ texto, tono, deshacer })
-    setTimeout(() => setMensaje((m) => (m?.texto === texto ? null : m)), 8000)
+    // Con "Deshacer" queda mas tiempo: 8 s no alcanzan para darse cuenta y volver.
+    setTimeout(() => setMensaje((m) => (m?.texto === texto ? null : m)), deshacer ? 15000 : 8000)
   }
 
   async function marcar(instanceId, idDepto) {
@@ -177,24 +209,42 @@ export default function Calendario() {
   }
 
   // Arrastrar en Semana/Mes = "Cambiar fecha" de esa ocurrencia, con la opcion
-  // de deshacer (la instancia conserva su id aunque cambie de dia).
-  async function alSoltar(info) {
-    const [idDepto, instanceId] = info.event.id.split(SEP)
-    const nuevaFecha = info.event.startStr.slice(0, 10)
-    const fechaVieja = info.oldEvent.startStr.slice(0, 10)
+  // de deshacer (la instancia conserva su id aunque cambie de dia). La tarea
+  // pasa al dia nuevo en pantalla en el acto (junto con sus copias en otros
+  // departamentos, que el backend mueve igual) y despues se confirma recargando.
+  async function moverTarea({ idDepto, instanceId, titulo, nuevaFecha, fechaVieja, deshaciendo = false }) {
+    const movido = eventos.find((e) => e.__depto === idDepto && e.id === instanceId)
+    const idAsignacion = movido?.extendedProperties?.private?.id_asignacion
+    setEventos((prev) => prev.map((e) => {
+      const mismaTarea = e.__depto === idDepto && e.id === instanceId
+      const copia = idAsignacion && e.extendedProperties?.private?.id_asignacion === idAsignacion && fechaDe(e) === fechaVieja
+      return mismaTarea || copia ? { ...e, start: { date: nuevaFecha }, end: { date: sumarDiasISO(nuevaFecha, 1) } } : e
+    }))
     try {
       await instanciasApi.reprogramar(instanceId, idDepto, nuevaFecha)
-      avisar(`"${info.event.title}" pasó al ${fechaHumana(nuevaFecha)}.`, {
-        deshacer: async () => {
-          setMensaje(null)
-          await instanciasApi.reprogramar(instanceId, idDepto, fechaVieja)
-          await recargar()
-        }
-      })
-      await recargar()
+      if (deshaciendo) avisar(`"${titulo}" volvió al ${fechaHumana(nuevaFecha)}.`)
+      else {
+        avisar(`"${titulo}" pasó al ${fechaHumana(nuevaFecha)}.`, {
+          deshacer: () => {
+            setMensaje(null)
+            return moverTarea({ idDepto, instanceId, titulo, nuevaFecha: fechaVieja, fechaVieja: nuevaFecha, deshaciendo: true }).catch(() => {})
+          }
+        })
+      }
     } catch (err) {
-      info.revert()
       avisar(err.response?.data?.error || 'No se pudo mover la tarea.', { tono: 'mal' })
+      throw err
+    } finally {
+      recargar()
+    }
+  }
+
+  async function alSoltar(info) {
+    const [idDepto, instanceId] = info.event.id.split(SEP)
+    try {
+      await moverTarea({ idDepto, instanceId, titulo: info.event.title, nuevaFecha: info.event.startStr.slice(0, 10), fechaVieja: info.oldEvent.startStr.slice(0, 10) })
+    } catch {
+      info.revert()
     }
   }
 
@@ -326,7 +376,11 @@ export default function Calendario() {
       </div>
 
       {vista !== 'agenda' && puedeCrear && (
-        <p className="tenue" style={{ margin: '0 0 0.6rem' }}>Arrastrá una tarea pendiente a otro día para moverla, o tocá un día para crear una tarea ahí.</p>
+        <p className="tenue" style={{ margin: '0 0 0.6rem' }}>
+          {vista === 'semana'
+            ? 'Arrastrá una tarea a otro día para moverla (también desde Atrasadas), o usá + para crear una tarea ese día.'
+            : 'Arrastrá una tarea pendiente a otro día para moverla, o tocá un día para crear una tarea ahí.'}
+        </p>
       )}
       {mensaje && (
         <div className={`aviso aviso-${mensaje.tono}`} role="status" style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
@@ -351,9 +405,27 @@ export default function Calendario() {
       )}
 
       {vista === 'semana' && (
-        <div className="card calendario-fc">
-          <FullCalendar {...propsCalendario} initialView="dayGridWeek" hiddenDays={[0, 6]} />
-        </div>
+        <>
+          <div className="st-nav">
+            <button className="btn btn-secondary" onClick={() => setSemanaLunes((l) => sumarDiasISO(l, -7))} aria-label="Semana anterior">‹</button>
+            <strong>{textoSemana(semanaLunes)}</strong>
+            <button className="btn btn-secondary" onClick={() => setSemanaLunes((l) => sumarDiasISO(l, 7))} aria-label="Semana siguiente">›</button>
+            {semanaLunes !== lunesActual && <button className="btn btn-secondary btn-chico" onClick={() => setSemanaLunes(lunesActual)}>Hoy</button>}
+          </div>
+          <SemanaTablero
+            eventos={visibles}
+            lunes={semanaLunes}
+            hoyISO={hoyEnArgentina()}
+            mapaLocales={mapaLocales}
+            deptos={deptos}
+            mostrarDepto={varios}
+            puedeMover={(ev) => puede('editar', ev.__depto)}
+            onAbrir={setAbierta}
+            onMover={(t, fecha) => moverTarea({ idDepto: t.idDepartamento, instanceId: t.id, titulo: `${t.titulo} — ${t.local}`, nuevaFecha: fecha, fechaVieja: t.fechaISO }).catch(() => {})}
+            puedeCrear={puedeCrear}
+            onCrear={abrirNueva}
+          />
+        </>
       )}
 
       {vista === 'mes' && (

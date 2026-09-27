@@ -517,3 +517,65 @@ th, td {
   .ayuda { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
   .ayuda-indice { position: static; }
 }
+
+/* --- Vista Semana (L-V) de Mi agenda: tablero con el armado del kiosko
+   (components/SemanaTablero.jsx). Atrasadas a la izquierda con acento rojo,
+   lunes a viernes agrupados por local, y la semana siguiente mas chica abajo. */
+.st-nav { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+.st-nav strong { min-width: 14rem; text-align: center; }
+.st-nav .btn { padding: 0.3rem 0.7rem; }
+.semana-tablero { display: flex; flex-direction: column; gap: 0.9rem; }
+.st-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; }
+.st-kpi { display: flex; align-items: center; gap: 0.7rem; background: var(--bg-1); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 10px; padding: 0.6rem 0.9rem; }
+.st-kpi b { font-size: 1.45rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.st-kpi div b { font-size: 0.95rem; display: block; }
+.st-kpi span { font-size: 0.68rem; color: var(--texto-tenue); text-transform: uppercase; letter-spacing: 0.05em; }
+.st-kpi > b + span { margin-left: 0.1rem; }
+.st-semaforo { width: 1.5rem; height: 1.5rem; border-radius: 50%; flex: 0 0 auto; }
+.st-semaforo.verde { background: var(--verde); box-shadow: 0 0 12px 1px rgba(63, 182, 106, 0.55); }
+.st-semaforo.amarillo { background: var(--amarillo); box-shadow: 0 0 12px 1px rgba(224, 184, 63, 0.55); }
+.st-semaforo.rojo { background: var(--rojo); box-shadow: 0 0 12px 1px rgba(224, 92, 63, 0.55); }
+
+.st-semana { display: grid; grid-template-columns: minmax(0, 0.85fr) repeat(5, minmax(0, 1fr)); gap: 0.75rem; align-items: stretch; }
+.semana-tablero .dia-col { background: var(--bg-1); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 0.8rem 0.85rem; display: flex; flex-direction: column; min-width: 0; min-height: 14rem; transition: border-color 0.12s, background 0.12s; }
+.semana-tablero .dia-col.hoy { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal) inset; }
+.semana-tablero .dia-col.destino, .st-mini.destino { border-color: var(--teal); background: rgba(63, 182, 189, 0.1); }
+.semana-tablero .dia-contenido { flex: 1; min-height: 0; }
+.dia-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.4rem; }
+.dia-crear { flex: 0 0 auto; width: 1.6rem; height: 1.6rem; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.12); background: none; color: var(--texto-tenue); font-size: 1rem; line-height: 1; padding: 0; }
+.dia-crear:hover, .dia-crear:focus-visible { color: var(--teal); border-color: var(--teal); outline: none; }
+.st-atrasadas { border-color: rgba(224, 92, 63, 0.35) !important; }
+.st-atrasadas .dia-nombre { color: var(--rojo); }
+.st-atrasadas .tarea-bullets li { color: var(--texto); }
+.st-atrasadas .tarea-atraso { display: inline-block; margin: 0.15rem 0 0; }
+.semana-tablero .tarea-bullets li.movible { cursor: grab; }
+.semana-tablero .tarea-bullets li.arrastrando { opacity: 0.4; }
+.semana-tablero .tarea-bullets li:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; border-radius: 4px; }
+
+/* Proxima semana: a proposito mas chica y menos llamativa. */
+.st-titulo-proxima { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--texto-tenue); margin-bottom: 0.4rem; }
+.st-proxima-grid { display: grid; grid-template-columns: minmax(0, 0.85fr) repeat(5, minmax(0, 1fr)); gap: 0.6rem; }
+.st-mini { border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 10px; padding: 0.5rem 0.6rem; min-width: 0; transition: border-color 0.12s, background 0.12s; }
+.st-mini.hueco { visibility: hidden; }
+.st-mini-cab { display: flex; justify-content: space-between; align-items: center; gap: 0.3rem; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--texto-tenue); margin-bottom: 0.3rem; }
+.st-mini-cab .dia-crear { width: 1.3rem; height: 1.3rem; font-size: 0.85rem; }
+.st-mini ul { list-style: none; margin: 0; padding: 0; font-size: 0.72rem; line-height: 1.55; }
+.st-mini li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-mini li button { background: none; border: 0; padding: 0; color: var(--texto-tenue); font: inherit; text-align: left; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.st-mini li button:hover { color: var(--texto); }
+.st-mini-vacio { color: var(--texto-tenue); opacity: 0.55; font-style: italic; }
+
+/* Mas angosto que un escritorio amplio: las atrasadas pasan arriba, a lo
+   ancho, y la semana sigue en 5 columnas. En un telefono, un dia abajo del otro. */
+@media (max-width: 1100px) {
+  .st-semana, .st-proxima-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .st-atrasadas { grid-column: 1 / -1; min-height: 0 !important; }
+  .st-atrasadas .dia-contenido { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; }
+  .st-mini.hueco { display: none; }
+}
+@media (max-width: 700px) {
+  .st-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .st-semana, .st-proxima-grid { grid-template-columns: minmax(0, 1fr); }
+  .semana-tablero .dia-col { min-height: 0; }
+}
+.semana-tablero .dia-vacio { font-size: 0.75rem; color: var(--texto-tenue); font-style: italic; opacity: 0.8; }

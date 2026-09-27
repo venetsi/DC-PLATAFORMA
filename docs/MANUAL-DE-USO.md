@@ -45,8 +45,26 @@ AUD, TES…) y arriba está la referencia. Con el selector de arriba ves uno sol
 Tres vistas:
 
 - **Agenda**: la semana en curso, un día por columna, agrupado por local.
-- **Semana (L-V)**: de lunes a viernes, con flechas para ir y volver.
+- **Semana (L-V)**: de lunes a viernes, armada como la pantalla de oficina: con
+  las atrasadas y un adelanto de la semana que viene. Se explica abajo.
 - **Mes**: el mes completo.
+
+### La vista Semana (L-V)
+
+- **Arriba**: el semáforo del día (🔴 hay atrasadas, 🟡 hay pendientes de hoy,
+  🟢 todo al día) y cuántas tareas hay pendientes hoy, hechas hoy y atrasadas.
+- **A la izquierda, Atrasadas**: todo lo que pasó su día sin hacerse en los últimos
+  60 días, con la fecha y hace cuántos días venció. Las atrasadas de un día de
+  la semana que estás viendo quedan en su día, en rojo; también aparecen acá las
+  de sábado o domingo, que no tienen columna.
+- **Al medio, de lunes a viernes**: cada día con sus tareas agrupadas por local.
+  Hoy está resaltado.
+- **Abajo, Próxima semana**, más chica: solo el nombre de cada tarea y en cuántos
+  locales se hace (por ejemplo, *CMV ×12*). Tocala para ver el detalle.
+
+Con las flechas **‹ ›** vas y volvés de semana, y **Hoy** te trae a la actual.
+Sábado y domingo la vista arranca en la semana que viene. Las tareas "no aplica"
+no se muestran en esta vista (sí en Agenda y Mes).
 
 El punto de color de cada tarea indica cómo viene:
 
@@ -77,10 +95,13 @@ historial (quién la marcó, notas, cambios de fecha). Desde ahí, según tu rol
 
 ### Mover y crear desde el calendario (Manager y Owner)
 
-- En **Semana** o **Mes**, **arrastrá** una tarea pendiente a otro día para
-  moverla. Aparece un aviso con **Deshacer** por si te equivocaste.
-- **Tocá un día vacío** (o el botón **+ Nueva tarea**) para crear una tarea ahí.
-  Arranca como "una sola vez, ese día", y la podés cambiar a cualquier frecuencia.
+- En **Semana** o **Mes**, **arrastrá** una tarea pendiente o atrasada a otro día
+  para moverla. En Semana también podés arrastrar desde **Atrasadas** para
+  reprogramarla, o soltarla en un día de la próxima semana. Aparece un aviso con
+  **Deshacer** por si te equivocaste.
+- Para crear una tarea en un día: en **Semana**, el **+** de ese día; en **Mes**,
+  tocá el día. También está el botón **+ Nueva tarea**. Arranca como "una sola
+  vez, ese día", y la podés cambiar a cualquier frecuencia.
 
 Las tareas hechas o "no aplica" no se pueden arrastrar.
 
@@ -255,7 +276,8 @@ Está compartida con el tuyo: la ves en tu agenda y la podés marcar. Marcarla e
 departamento la marca en todos.
 
 **En Semana (L-V) no veo una tarea del sábado.**
-Esa vista muestra de lunes a viernes. Usá **Mes**.
+Esa vista muestra de lunes a viernes: si ya venció sin hacerse, está en
+**Atrasadas**; si todavía no, usá **Mes**.
 
 **¿Un local puede tener otra fecha que otro para la misma tarea?**
 Sí: cada local tiene su propia agenda. En Agendas, tildá solo ese local y usá

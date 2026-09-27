@@ -278,12 +278,23 @@ departamento (el color sale del orden alfabético de todos los departamentos,
 así es el mismo en todas las vistas). Una tarea compartida entre dos
 departamentos visibles se muestra una sola vez, con la etiqueta de su dueño.
 
+**Vista Semana (L-V)**: mismo armado que el kiosko (semáforo y contadores
+arriba, columna **Atrasadas** a la izquierda, lunes a viernes por local, y la
+**próxima semana** más chica abajo, con cada tarea y en cuántos locales). Mismos
+criterios que `routes/tv.js`: últimos 60 días, semáforo rojo con cualquier
+atrasada, sin "no aplica". Única diferencia: Atrasadas junta **todo** lo vencido
+que no tiene columna a la vista (semanas anteriores **y** sábados y domingos), para
+que una vencida de fin de semana no quede sin mostrarse. Sábado y domingo la vista
+arranca en la semana siguiente. El kiosko no cambió.
+
 **Semana y Mes, para MANAGER y OWNER**:
 
-- **Arrastrar** una tarea pendiente a otro día = Cambiar fecha de esa
-  ocurrencia, con un aviso de **Deshacer**.
-- **Tocar un día vacío** (o **+ Nueva tarea**) abre el formulario de nueva
-  tarea con ese día ya puesto ("una sola vez, ese día").
+- **Arrastrar** una tarea pendiente o atrasada a otro día = Cambiar fecha de
+  esa ocurrencia, con un aviso de **Deshacer** (15 segundos). En Semana se
+  puede arrastrar desde Atrasadas y soltar en la próxima semana.
+- Crear en un día: el **+** del día en Semana, tocar el día en Mes, o
+  **+ Nueva tarea**. Abre el formulario con ese día ya puesto ("una sola vez,
+  ese día").
 
 **El detalle de una tarea** (tocándola, en Mi agenda o Mis tareas). Mientras
 esté pendiente o atrasada:
