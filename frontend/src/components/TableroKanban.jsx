@@ -43,7 +43,15 @@ export default function TableroKanban({ eventos, idsVisibles, deptos, mapaLocale
 
   return (
     <div className="kanban" role="list" aria-label="Tablero por departamento">
-      {listas.map((l) => (
+      {listas.map((l) => !l.tareas.length ? (
+        // Sin tareas abiertas: colapsada, como una lista plegada de Trello
+        // (una franja angosta con el nombre), para que no ocupe una columna entera.
+        <section key={l.id} className="kanban-lista colapsada" role="listitem" aria-label={`${l.info.nombre}: sin tareas abiertas`} title={`${l.info.nombre}: sin tareas abiertas`}>
+          <span className="kanban-color" style={{ background: l.info.color }} aria-hidden="true" />
+          <span className="kanban-vertical">{l.info.nombre}</span>
+          <span className="kanban-cuenta">0</span>
+        </section>
+      ) : (
         <section key={l.id} className="kanban-lista" role="listitem" aria-label={l.info.nombre}>
           <header className="kanban-cab">
             <span className="kanban-color" style={{ background: l.info.color }} aria-hidden="true" />
@@ -85,7 +93,6 @@ export default function TableroKanban({ eventos, idsVisibles, deptos, mapaLocale
                 </li>
               )
             })}
-            {!l.tareas.length && <li className="kanban-vacia">Sin tareas abiertas</li>}
           </ul>
         </section>
       ))}

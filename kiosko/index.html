@@ -128,7 +128,12 @@
   .vence.vencida { background: rgba(224,92,63,0.2); color: var(--rojo); }
   .vence.hoy { background: rgba(224,184,63,0.2); color: var(--amarillo); }
   .vence.futura { background: rgba(255,255,255,0.07); color: var(--texto-tenue); }
-  .tv-vacia { font-size: 12px; color: var(--texto-tenue); font-style: italic; }
+  /* Departamento sin tareas abiertas: franja angosta con el nombre en vertical. */
+  .tv-lista.colapsada { padding: 12px 4px; align-items: center; gap: 10px; background: rgba(255,255,255,0.02); }
+  .tv-lista.colapsada .color { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+  .tv-lista.colapsada .vertical { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; font-size: 15px; font-weight: 800; color: var(--texto-tenue); }
+  .tv-lista.colapsada .cuenta { margin-top: auto; font-size: 12px; color: var(--texto-tenue); background: rgba(255,255,255,0.07); border-radius: 999px; padding: 1px 7px; }
+  .tv-todo-al-dia { display: grid; place-items: center; font-size: 22px; font-weight: 700; color: var(--texto-tenue); }
 
   /* Vista Calendario: el mes en grilla de lunes a domingo. */
   #vista-calendario { display: flex; flex-direction: column; }
@@ -576,8 +581,19 @@
       if (ev.departamento && porDepto[ev.departamento.id]) porDepto[ev.departamento.id].push(ev);
     });
     var cont = document.getElementById('vista-tablero');
+    // Los departamentos sin tareas abiertas van colapsados: una franja angosta
+    // con el nombre en vertical, y las columnas con tareas se reparten el resto.
+    var columnas = deptos.map(function (d) { return porDepto[d.id].length ? 'minmax(0, 1fr)' : '46px'; });
+    var algunaConTareas = columnas.indexOf('minmax(0, 1fr)') >= 0;
+    if (!algunaConTareas) columnas.push('minmax(0, 1fr)');
+    cont.style.gridTemplateColumns = columnas.join(' ');
     cont.innerHTML = deptos.map(function (d) {
       var tarjetas = porDepto[d.id];
+      if (!tarjetas.length) {
+        return '<div class="tv-lista colapsada" title="' + esc(d.nombre) + ': sin tareas abiertas">'
+          + '<span class="color" style="background:' + colorSeguro(d.color) + '"></span>'
+          + '<span class="vertical">' + esc(d.nombre) + '</span><span class="cuenta">0</span></div>';
+      }
       var html = tarjetas.map(function (ev) {
         var clase = ev.estado === 'vencida' ? 'vencida' : ev.fecha === hoy ? 'hoy' : 'futura';
         var texto = clase === 'vencida' ? fechaCorta(ev.fecha) + ' · hace ' + diasEntre(ev.fecha, hoy) + ' d' : clase === 'hoy' ? 'Hoy' : fechaCorta(ev.fecha);
@@ -587,8 +603,8 @@
       }).join('');
       return '<div class="tv-lista"><div class="tv-lista-cab"><span class="color" style="background:' + colorSeguro(d.color) + '"></span>'
         + esc(d.nombre) + '<span class="cuenta">' + tarjetas.length + '</span></div>'
-        + '<div class="tv-tarjetas">' + (html || '<div class="tv-vacia">Sin tareas abiertas</div>') + '</div></div>';
-    }).join('');
+        + '<div class="tv-tarjetas">' + html + '</div></div>';
+    }).join('') + (algunaConTareas ? '' : '<div class="tv-todo-al-dia">Sin tareas abiertas</div>');
     cont.querySelectorAll('.tv-tarjetas').forEach(recortar);
   }
 

@@ -62,6 +62,8 @@ Cinco vistas, con los botones de arriba (la plataforma recuerda la última que u
   si está atrasada ("hace N d"), en amarillo si es de hoy. Tocá la tarjeta para ver
   el detalle; la **casilla** la marca hecha (pide confirmación, porque no se puede
   deshacer). Las tarjetas no se arrastran entre listas: la lista es el departamento.
+  Los departamentos sin tareas abiertas aparecen **colapsados**: una franja angosta
+  con el nombre en vertical, para que el espacio quede para los que tienen tareas.
 - **Calendario**: el mes completo.
 - **Agenda**: la semana en curso, un día por columna, agrupado por local.
 - **Cronograma**: una línea de tiempo de dos semanas, con una fila por
@@ -208,7 +210,8 @@ todo al día) y los contadores. Debajo, la **vista** que se eligió al conectarl
 - **Semana**: las atrasadas de los últimos 60 días, la semana por local y un
   adelanto de la siguiente.
 - **Tablero**: una lista por departamento, con las tareas abiertas por vencimiento
-  (como el Tablero de Mi agenda).
+  (como el Tablero de Mi agenda). Los departamentos sin tareas abiertas se muestran
+  como una franja angosta, y el resto se reparte el ancho de la pantalla.
 - **Calendario**: el mes completo, con las tareas de cada día.
 
 Como en la TV no se puede deslizar, lo que no entra en una lista o en un día se
