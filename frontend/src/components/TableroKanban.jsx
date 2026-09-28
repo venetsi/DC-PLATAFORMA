@@ -39,7 +39,8 @@ export default function TableroKanban({ eventos, idsVisibles, deptos, mapaLocale
       info: deptos.get(id) || { nombre: '…', color: '#8fb3bd', abreviatura: '' },
       tareas: tareas.sort((a, b) => a.fechaISO.localeCompare(b.fechaISO) || a.titulo.localeCompare(b.titulo) || a.local.localeCompare(b.local))
     }))
-    .sort((a, b) => a.info.nombre.localeCompare(b.info.nombre))
+    // Las colapsadas (sin tareas abiertas) van al final; dentro de cada grupo, por nombre.
+    .sort((a, b) => (!a.tareas.length - !b.tareas.length) || a.info.nombre.localeCompare(b.info.nombre))
 
   return (
     <div className="kanban" role="list" aria-label="Tablero por departamento">

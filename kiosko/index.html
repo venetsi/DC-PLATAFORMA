@@ -581,8 +581,10 @@
       if (ev.departamento && porDepto[ev.departamento.id]) porDepto[ev.departamento.id].push(ev);
     });
     var cont = document.getElementById('vista-tablero');
-    // Los departamentos sin tareas abiertas van colapsados: una franja angosta
-    // con el nombre en vertical, y las columnas con tareas se reparten el resto.
+    // Los departamentos sin tareas abiertas van colapsados y al final: una franja
+    // angosta con el nombre en vertical, y las columnas con tareas se reparten el resto.
+    // (sort estable: cada grupo conserva el orden que manda el backend)
+    deptos = deptos.slice().sort(function (a, b) { return (porDepto[a.id].length ? 0 : 1) - (porDepto[b.id].length ? 0 : 1); });
     var columnas = deptos.map(function (d) { return porDepto[d.id].length ? 'minmax(0, 1fr)' : '46px'; });
     var algunaConTareas = columnas.indexOf('minmax(0, 1fr)') >= 0;
     if (!algunaConTareas) columnas.push('minmax(0, 1fr)');

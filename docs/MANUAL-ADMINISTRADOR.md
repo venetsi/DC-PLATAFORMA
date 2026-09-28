@@ -284,7 +284,8 @@ en localStorage `dc_plataforma_vista`): **Tablero**, **Calendario** (el antiguo
   pendientes de los próximos 30), ordenadas por fecha. La casilla marca hecha
   con `puede('marcar')` (MEMBER en adelante) y confirma antes, porque no se
   deshace. No se arrastra entre listas (cambiaría el departamento). Las listas
-  sin abiertas se colapsan en una franja angosta (`.kanban-lista.colapsada`).
+  sin abiertas se colapsan en una franja angosta (`.kanban-lista.colapsada`) y
+  van al final.
 - **Cronograma** (`components/Cronograma.jsx`): 14 días desde el lunes, una
   fila por departamento, y en cada celda las tareas del día agrupadas por
   nombre ("×N" = N locales) con el color del peor estado del grupo. Solo lectura
@@ -423,8 +424,9 @@ vista**:
 - **Semana**: las atrasadas de esos 60 días, la semana por local y un adelanto de
   la siguiente.
 - **Tablero**: una lista por departamento con las abiertas (60 días atrás, 30
-  adelante), por vencimiento. Los departamentos sin abiertas van colapsados en
-  una franja de 46 px y las listas con tareas se reparten el resto del ancho.
+  adelante), por vencimiento. Los departamentos sin abiertas van colapsados y al
+  final, en una franja de 46 px, y las listas con tareas se reparten el resto del
+  ancho.
 - **Calendario**: la grilla del mes en curso (de lunes a domingo).
 
 `/api/tv/resumen` lee de Calendar la unión de la ventana de la Semana (para el
