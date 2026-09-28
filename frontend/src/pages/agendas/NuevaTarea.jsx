@@ -4,10 +4,24 @@ import EditorFrecuencia from '../../components/EditorFrecuencia.jsx'
 import SelectorAlcance, { ALCANCE_VACIO, alcanceCompleto, describirAlcance } from './SelectorAlcance.jsx'
 import { valorInicial, agendaDesdeValor, errorDeValor, describirAgenda, fechaCorta } from '../../lib/agenda-texto.js'
 
+// Lo que se le dice a la persona despues de crear (o de sumar locales a una
+// tarea que ya existia).
+export function mensajeDeCreacion(r) {
+  const errores = r.errores?.length ? ` Errores: ${r.errores.join('; ')}` : ''
+  if (r.sumada) {
+    const ya = r.ya_existian ? ` (${r.ya_existian} ya ${r.ya_existian === 1 ? 'estaba' : 'estaban'})` : ''
+    return `Se ${r.asignaciones === 1 ? 'sumó 1 local' : `sumaron ${r.asignaciones} locales`} a "${r.tarea.nombre}"${ya}.${errores}`
+  }
+  return `"${r.tarea.nombre}" creada: ${r.agendadas} de ${r.asignaciones} agendadas.${errores}`
+}
+
 // Nueva tarea en un paso: que + donde + cuando + quien, y la frase de abajo
 // dice exactamente que se va a crear antes de tocar "Crear y agendar".
 // `fechaInicial` (YYYY-MM-DD): al tocar un dia vacio en el calendario, la tarea
 // arranca como "una sola vez, ese dia" (se puede cambiar a una frecuencia).
+//
+// El nombre de una tarea es unico: una tarea se hace en muchos locales. Si ya
+// existe, en vez de solo el error se ofrece sumarle estos locales.
 export default function NuevaTarea({ departamentos, idDepartamentoInicial, locales, grupos, usuariosDe, onCreada, onCerrar, fechaInicial }) {
   const [nombre, setNombre] = useState('')
   const [idDepto, setIdDepto] = useState(departamentos.some((d) => d.id === idDepartamentoInicial) ? idDepartamentoInicial : departamentos[0]?.id || '')
@@ -19,6 +33,7 @@ export default function NuevaTarea({ departamentos, idDepartamentoInicial, local
   const [compartir, setCompartir] = useState([])
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
+  const [existente, setExistente] = useState(null) // la tarea con ese nombre, si ya habia una
 
   const usuarios = usuariosDe(idDepto)
   const depto = departamentos.find((d) => d.id === idDepto)
@@ -44,10 +59,30 @@ export default function NuevaTarea({ departamentos, idDepartamentoInicial, local
       })
       onCreada(r)
     } catch (err) {
-      setError(err.response?.data?.error || 'No se pudo crear la tarea')
+      if (err.response?.status === 409 && err.response.data?.existente) {
+        setExistente(err.response.data.existente)
+        setError('')
+      } else {
+        setError(err.response?.data?.error || 'No se pudo crear la tarea')
+      }
       setGuardando(false)
     }
   }
+
+  // Sumar estos locales (con esta agenda y este responsable) a la que ya existe.
+  async function sumarAExistente() {
+    setError('')
+    setGuardando(true)
+    try {
+      const r = await agendasApi.agregarAlcance(existente.id, { alcance, agenda, asignado_a: responsable || null, compartir_con: compartir })
+      onCreada({ ...r, sumada: true, tarea: { id: existente.id, nombre: existente.nombre, id_departamento: existente.id_departamento } })
+    } catch (err) {
+      setError(err.response?.data?.error || 'No se pudieron sumar los locales')
+      setGuardando(false)
+    }
+  }
+
+  const mismoDepto = existente && existente.id_departamento === idDepto
 
   return (
     <form className="card panel-nueva" onSubmit={crear}>
@@ -58,12 +93,12 @@ export default function NuevaTarea({ departamentos, idDepartamentoInicial, local
       <div className="campos-nueva">
         <label className="campo">
           <span>Qué</span>
-          <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Control de caja" autoFocus required />
+          <input value={nombre} onChange={(e) => { setNombre(e.target.value); setExistente(null) }} placeholder="Control de caja" autoFocus required />
         </label>
         {departamentos.length > 1 && (
           <label className="campo">
             <span>Departamento</span>
-            <select value={idDepto} onChange={(e) => { setIdDepto(e.target.value); setResponsable(''); setCompartir([]) }}>
+            <select value={idDepto} onChange={(e) => { setIdDepto(e.target.value); setResponsable(''); setCompartir([]); setExistente(null) }}>
               {departamentos.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
             </select>
           </label>
@@ -114,9 +149,29 @@ export default function NuevaTarea({ departamentos, idDepartamentoInicial, local
         {frecuencia.tipo !== 'UNICA' ? ` desde el ${fechaCorta(frecuencia.desde)}` : ''}, {quien}
         {compartir.length ? `, compartida con ${compartir.map((id) => departamentos.find((d) => d.id === id)?.nombre).join(', ')}` : ''}.
       </p>
+      {existente && (
+        <div className="aviso-existente" role="status">
+          {!existente.activa ? (
+            <p>Hay una tarea desactivada llamada <strong>{existente.nombre}</strong> ({existente.departamento}). Para reusar el nombre, eliminala definitivamente desde Agendas (tildá «Desactivadas»), o elegí otro nombre.</p>
+          ) : mismoDepto ? (
+            <p>
+              Ya existe <strong>{existente.nombre}</strong> en {existente.departamento}. Una tarea se hace en muchos locales:
+              ¿le sumo estos, con esta agenda y este responsable?
+            </p>
+          ) : (
+            <p>Ya existe <strong>{existente.nombre}</strong> en {existente.departamento}. Para sumarle locales, elegí ese departamento; si es otra tarea, cambiale el nombre.</p>
+          )}
+        </div>
+      )}
       {error && <p className="error-texto">{error}</p>}
       <div className="acciones">
-        <button className="btn" disabled={guardando}>{guardando ? 'Creando…' : 'Crear y agendar'}</button>
+        {existente?.activa && mismoDepto ? (
+          <button type="button" className="btn" onClick={sumarAExistente} disabled={guardando}>
+            {guardando ? 'Sumando…' : `Sumar a «${existente.nombre}»`}
+          </button>
+        ) : (
+          <button className="btn" disabled={guardando}>{guardando ? 'Creando…' : 'Crear y agendar'}</button>
+        )}
         <button type="button" className="btn btn-secondary" onClick={onCerrar} disabled={guardando}>Cancelar</button>
       </div>
     </form>

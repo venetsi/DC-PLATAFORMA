@@ -1,4 +1,4 @@
-import { DIAS_SEMANA } from '../lib/agenda-texto.js'
+import { DIAS_SEMANA, MAX_DIA_HABIL } from '../lib/agenda-texto.js'
 
 // Editor de "cuándo" controlado: `valor` tiene la forma de valorInicial()
 // (lib/agenda-texto.js). Lo usan crear tarea y los cambios en lote de Agendas.
@@ -15,8 +15,17 @@ export default function EditorFrecuencia({ valor, onChange }) {
         <option value="DIARIA">Todos los días</option>
         <option value="SEMANAL">Algunos días de la semana</option>
         <option value="INTERVALO_MESES">Un día del mes</option>
+        <option value="DIA_HABIL">Un día hábil del mes</option>
         <option value="UNICA">Una sola vez</option>
       </select>
+
+      {valor.tipo === 'DIA_HABIL' && (
+        <span className="en-linea" title="Cuenta de lunes a viernes; no descuenta feriados">
+          día hábil
+          <input type="number" min="1" max={MAX_DIA_HABIL} value={valor.diaHabil} onChange={(e) => set('diaHabil', e.target.value)} aria-label="Día hábil del mes" />
+          de cada mes (lunes a viernes)
+        </span>
+      )}
 
       {valor.tipo === 'SEMANAL' && (
         <div className="dias-semana" role="group" aria-label="Días de la semana">

@@ -85,36 +85,50 @@ function aplicable(asignacion) {
 
 // Las instancias de UNA asignacion, leidas del calendario de su departamento
 // dueño (las copias de los compartidos tienen las mismas fechas y el marcado se
-// propaga), memoizadas por pedido: la misma asignacion aparece en muchas
-// instancias y no tiene sentido preguntarle a Calendar una vez por cada una.
+// propaga).
+//
+// Se lee CADA CALENDARIO una sola vez por pedido y se reparte por
+// id_asignacion. Antes era una lectura por asignacion (filtrando por
+// extendedProperty): con el cronograma de informes cargado (31 P&L que
+// esperan a 18 Auditar) eran 36 lecturas de Calendar por listado, ~5 s; asi
+// son 2 (Reportes y Auditoria).
 function lectorDeInstancias(gcal, { desde, hasta }, log = console) {
-  const memo = new Map()
-  return (asignacion) => {
-    if (!memo.has(asignacion.id)) {
-      memo.set(asignacion.id, leerInstancias(gcal, asignacion, desde, hasta).catch((err) => {
-        log.warn?.({ err: err.message, idAsignacion: asignacion.id }, 'dependencias: no se pudo leer la agenda')
-        return []
+  const porCalendario = new Map() // calendarId -> Promise<Map<idAsignacion, instancias[]>>
+  function leerCalendario(calendarId) {
+    if (!porCalendario.has(calendarId)) {
+      porCalendario.set(calendarId, leerCalendarioEntero(gcal, calendarId, desde, hasta).catch((err) => {
+        log.warn?.({ err: err.message, calendarId }, 'dependencias: no se pudo leer la agenda')
+        return new Map()
       }))
     }
-    return memo.get(asignacion.id)
+    return porCalendario.get(calendarId)
+  }
+  return async (asignacion) => {
+    if (!aplicable(asignacion)) return []
+    const porAsignacion = await leerCalendario(asignacion.tarea.departamento.id_calendar_google)
+    return porAsignacion.get(asignacion.id) || []
   }
 }
 
-async function leerInstancias(gcal, asignacion, desde, hasta) {
-  if (!aplicable(asignacion)) return []
+async function leerCalendarioEntero(gcal, calendarId, desde, hasta) {
   // Un dia de margen a cada lado: los eventos son de dia completo y el corte
   // de timeMin/timeMax depende de la zona del calendario. Despues se filtra
   // por la fecha real de cada instancia.
   const items = await gcal.listarInstancias({
-    calendarId: asignacion.tarea.departamento.id_calendar_google,
+    calendarId,
     timeMin: `${correrDias(desde, -1)}T00:00:00Z`,
-    timeMax: `${correrDias(hasta, 1)}T23:59:59Z`,
-    propiedades: { id_asignacion: asignacion.id }
+    timeMax: `${correrDias(hasta, 1)}T23:59:59Z`
   })
-  return items
-    .map((evento) => ({ id: evento.id, fecha: fechaDeInstancia(evento), props: evento.extendedProperties?.private || {}, evento }))
-    .filter((i) => i.fecha && i.fecha >= desde && i.fecha <= hasta)
-    .sort((a, b) => a.fecha.localeCompare(b.fecha))
+  const porAsignacion = new Map()
+  for (const evento of items) {
+    const props = evento.extendedProperties?.private || {}
+    const fecha = fechaDeInstancia(evento)
+    if (!props.id_asignacion || !fecha || fecha < desde || fecha > hasta) continue
+    if (!porAsignacion.has(props.id_asignacion)) porAsignacion.set(props.id_asignacion, [])
+    porAsignacion.get(props.id_asignacion).push({ id: evento.id, fecha, props, evento })
+  }
+  for (const lista of porAsignacion.values()) lista.sort((a, b) => a.fecha.localeCompare(b.fecha))
+  return porAsignacion
 }
 
 // ── Lo que sale hacia afuera ─────────────────────────────────────────────────

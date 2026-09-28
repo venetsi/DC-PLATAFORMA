@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { asignacionesApi } from '../../api/recursos.js'
+import { MAX_DIA_HABIL } from '../../lib/agenda-texto.js'
 
 const DIAS = [
   { valor: 1, etiqueta: 'Lun' }, { valor: 2, etiqueta: 'Mar' }, { valor: 3, etiqueta: 'Mie' },
@@ -20,6 +21,7 @@ function describirAgenda(ag) {
   if (ag.recurrencia_tipo === 'DIARIA') regla = c.excluir_fines_de_semana ? 'Diaria, de lunes a viernes' : 'Diaria, todos los días'
   if (ag.recurrencia_tipo === 'SEMANAL') regla = `Los ${(c.dias_semana || []).map((d) => DIAS.find((x) => x.valor === d)?.etiqueta).join(', ')}`
   if (ag.recurrencia_tipo === 'INTERVALO_MESES') regla = `Día ${c.dia_hasta} ${c.cada_n_meses > 1 ? `cada ${c.cada_n_meses} meses` : 'de cada mes'}`
+  if (ag.recurrencia_tipo === 'DIA_HABIL') regla = `Día hábil ${c.dia_habil} de cada mes`
   return `${regla}, desde el ${fechaCorta(ag.vigencia_desde)}`
 }
 
@@ -31,6 +33,7 @@ export default function AgendaForm({ asignacion, usuarios = [], onGuardado }) {
   const [diasSemana, setDiasSemana] = useState([])
   const [cadaNMeses, setCadaNMeses] = useState(1)
   const [diaHasta, setDiaHasta] = useState(10)
+  const [diaHabil, setDiaHabil] = useState(10)
   const [fecha, setFecha] = useState('')
   const [vigenciaDesde, setVigenciaDesde] = useState(new Date().toISOString().slice(0, 10))
   // Precargado con lo que ya tiene la asignacion: sin esto, guardar un cambio
@@ -53,6 +56,7 @@ export default function AgendaForm({ asignacion, usuarios = [], onGuardado }) {
       if (c.dias_semana) setDiasSemana(c.dias_semana)
       if (c.cada_n_meses) setCadaNMeses(c.cada_n_meses)
       if (c.dia_hasta) setDiaHasta(c.dia_hasta)
+      if (c.dia_habil) setDiaHabil(c.dia_habil)
       if (c.fecha) setFecha(c.fecha)
     }).catch(() => {})
   }, [asignacion.id, asignacion.id_calendar_event])
@@ -68,6 +72,7 @@ export default function AgendaForm({ asignacion, usuarios = [], onGuardado }) {
     if (tipo === 'DIARIA_HABIL') recurrencia_config = { excluir_fines_de_semana: true }
     if (tipo === 'SEMANAL') recurrencia_config = { dias_semana: diasSemana }
     if (tipo === 'INTERVALO_MESES') recurrencia_config = { cada_n_meses: Number(cadaNMeses), dia_hasta: Number(diaHasta) }
+    if (tipo === 'DIA_HABIL') recurrencia_config = { dia_habil: Number(diaHabil) }
     if (tipo === 'UNICA') recurrencia_config = { fecha }
 
     setGuardando(true)
@@ -99,8 +104,15 @@ export default function AgendaForm({ asignacion, usuarios = [], onGuardado }) {
         <option value="DIARIA">Diaria, todos los días</option>
         <option value="SEMANAL">Semanal</option>
         <option value="INTERVALO_MESES">Cada N meses</option>
+        <option value="DIA_HABIL">Día hábil del mes</option>
         <option value="UNICA">Una vez</option>
       </select>
+
+      {tipo === 'DIA_HABIL' && (
+        <label style={{ fontSize: '0.8rem' }} title="Cuenta de lunes a viernes; no descuenta feriados">día hábil
+          <input type="number" min="1" max={MAX_DIA_HABIL} value={diaHabil} onChange={(e) => setDiaHabil(e.target.value)} style={{ width: 50, marginLeft: 4 }} /> de cada mes
+        </label>
+      )}
 
       {tipo === 'SEMANAL' && (
         <div style={{ display: 'flex', gap: '0.25rem' }}>

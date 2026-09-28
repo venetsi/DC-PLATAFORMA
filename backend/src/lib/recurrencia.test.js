@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MESES_DE_HORIZONTE, horizontePorDefecto, construirRecurrence } from './recurrencia.js'
+import { MESES_DE_HORIZONTE, horizontePorDefecto, construirRecurrence, leerRecurrence, primeraFecha, diaHabilDelMes } from './recurrencia.js'
 
 test('el horizonte por defecto es de 6 meses', () => {
   assert.equal(MESES_DE_HORIZONTE, 6)
@@ -10,6 +10,35 @@ test('el horizonte por defecto es de 6 meses', () => {
 test('una serie sin vigencia_hasta termina a los 6 meses de su inicio', () => {
   const [regla] = construirRecurrence('SEMANAL', { dias_semana: [1, 4] }, null, '2026-09-27')
   assert.equal(regla, 'RRULE:FREQ=WEEKLY;BYDAY=MO,TH;UNTIL=20270327T000000Z')
+})
+
+test('dia habil N: el N-esimo lunes-a-viernes del mes, sin contar feriados', () => {
+  // Octubre 2026 arranca jueves: 1 jue, 2 vie, 5 lun... el 10 es el miercoles 14.
+  assert.equal(diaHabilDelMes(2026, 9, 1).toISOString().slice(0, 10), '2026-10-01')
+  assert.equal(diaHabilDelMes(2026, 9, 4).toISOString().slice(0, 10), '2026-10-06')
+  assert.equal(diaHabilDelMes(2026, 9, 10).toISOString().slice(0, 10), '2026-10-14')
+  assert.equal(diaHabilDelMes(2026, 9, 17).toISOString().slice(0, 10), '2026-10-23')
+  // Septiembre 2026 (arranca martes): el 17 cae el miercoles 23.
+  assert.equal(diaHabilDelMes(2026, 8, 17).toISOString().slice(0, 10), '2026-09-23')
+  // Mes que se pasa de 11: enero del año siguiente.
+  assert.equal(diaHabilDelMes(2026, 12, 1).toISOString().slice(0, 10), '2027-01-01')
+  assert.equal(diaHabilDelMes(2026, 1, 25), null)
+})
+
+test('dia habil N: la regla, la primera fecha y la lectura de vuelta', () => {
+  const [regla] = construirRecurrence('DIA_HABIL', { dia_habil: 10 }, null, '2026-09-28')
+  assert.equal(regla, 'RRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=10;UNTIL=20270328T000000Z')
+  // El 10 de septiembre (el 14/9) ya paso: arranca en octubre.
+  assert.equal(primeraFecha('DIA_HABIL', { dia_habil: 10 }, '2026-09-28'), '2026-10-14')
+  // El mismo dia cuenta.
+  assert.equal(primeraFecha('DIA_HABIL', { dia_habil: 10 }, '2026-10-14'), '2026-10-14')
+  assert.deepEqual(leerRecurrence([regla], '2026-10-14'), {
+    vigencia_desde: '2026-10-14',
+    vigencia_hasta: '2027-03-28',
+    recurrencia_tipo: 'DIA_HABIL',
+    recurrencia_config: { dia_habil: 10 }
+  })
+  assert.throws(() => construirRecurrence('DIA_HABIL', { dia_habil: 21 }, null, '2026-09-28'))
 })
 
 test('una vigencia_hasta explicita gana sobre el horizonte', () => {

@@ -161,6 +161,14 @@ Siendo Miembro la ves en modo lectura. Siendo Manager u Owner:
   quién, y una frase abajo te dice exactamente qué se va a crear antes de
   confirmar. En **Más opciones** podés compartirla con otros departamentos: cada
   uno la ve en su agenda, y marcarla en uno la marca en todos.
+- **Una tarea, muchos locales**: el nombre no se repite, porque una misma tarea
+  se hace en todos sus locales y se ve como «P&L — TI AMO», «P&L — UAT». Si en
+  **+ Nueva tarea** ponés un nombre que ya existe, te ofrece **sumarle esos
+  locales** con la agenda y el responsable que cargaste.
+- **Cuándo** puede ser lunes a viernes, todos los días, algunos días de la
+  semana, un día del mes, **un día hábil del mes** o una sola vez. El día hábil
+  cuenta de lunes a viernes: el día hábil 10 es el décimo del mes sin sábados ni
+  domingos. Los feriados no se descuentan.
 - Tocá una tarea para ver sus locales. Tildá varios para **cambiar cuándo** o
   **cambiar responsable** a todos juntos, o para **quitarlos**. Con **+ Agregar
   locales** sumás un grupo o locales sueltos con la misma agenda.

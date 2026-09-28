@@ -480,6 +480,9 @@ th, td {
 .campos-nueva { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 0.75rem; }
 .frase-resumen { margin: 0; font-size: 0.85rem; color: var(--texto-tenue); line-height: 1.5; }
 .frase-resumen strong { color: var(--texto); }
+/* "+ Nueva tarea" con un nombre que ya existe: se ofrece sumar los locales. */
+.aviso-existente { border: 1px solid rgba(224, 184, 63, 0.45); background: rgba(224, 184, 63, 0.08); border-radius: 8px; padding: 0.55rem 0.75rem; font-size: 0.85rem; }
+.aviso-existente p { margin: 0; }
 .editor-frecuencia, .selector-alcance { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
 .editor-frecuencia select, .selector-alcance select, .editor-frecuencia input[type="date"] { padding: 0.35rem; }
 .editor-frecuencia select, .selector-alcance select { padding-right: 2rem; }

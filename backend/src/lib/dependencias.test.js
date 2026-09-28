@@ -100,12 +100,14 @@ function escenario() {
     extendedProperties: { private: { id_asignacion: id, asignado_a: `${id}@dcsmart.app`, ...estados[`${id}|${fecha}`] } }
   })
 
+  // Como Calendar: un pedido trae TODO el calendario del departamento.
   let lecturas = 0
   const gcal = {
-    async listarInstancias({ propiedades }) {
+    async listarInstancias({ calendarId }) {
       lecturas++
-      const id = propiedades.id_asignacion
-      return (eventos[id] || []).map((fecha) => aEvento(id, fecha))
+      return Object.values(porId)
+        .filter((a) => a.tarea.departamento.id_calendar_google === calendarId)
+        .flatMap((a) => (eventos[a.id] || []).map((fecha) => aEvento(a.id, fecha)))
     }
   }
 
@@ -159,6 +161,13 @@ test('mapa: con todo hecho, el reporte queda "lista"', async () => {
   const reporte = mapa.get('reporte|2026-10-03')
   assert.equal(reporte.espera, undefined)
   assert.deepEqual(reporte.listas.map((p) => p.estado).sort(), ['no_aplica', 'realizada'])
+})
+
+test('mapa: lee cada calendario una sola vez, no una por asignacion', async () => {
+  const { deps, aEvento, lecturas } = escenario()
+  await mapaDependencias(deps, { instancias: [aEvento('reporte', '2026-10-03'), aEvento('cierre', '2026-10-02'), aEvento('cmv', '2026-10-01')] })
+  // Tres asignaciones en tres departamentos: tres lecturas, no una por instancia ni por dependencia.
+  assert.equal(lecturas(), 3)
 })
 
 test('mapa: sin dependencias cargadas no llama a Calendar', async () => {

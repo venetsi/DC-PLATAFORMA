@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/authStore.js'
 import { agendasApi, departamentosApi, localesApi, tareasApi, usuariosApi } from '../api/recursos.js'
 import DepartamentosAvisos from '../components/DepartamentosAvisos.jsx'
 import DuplicarTarea from './admin/DuplicarTarea.jsx'
-import NuevaTarea from './agendas/NuevaTarea.jsx'
+import NuevaTarea, { mensajeDeCreacion } from './agendas/NuevaTarea.jsx'
 import DetalleAgenda from './agendas/DetalleAgenda.jsx'
 import { dondeTexto, cuandoTexto, responsableTexto, estadoTarea } from './agendas/resumen.js'
 import { usePermisos } from '../lib/permisos.js'
@@ -161,7 +161,7 @@ export default function Agendas() {
               onCerrar={() => setPanel(null)}
               onCreada={async (r) => {
                 setPanel(null)
-                avisar(`"${r.tarea.nombre}" creada: ${r.agendadas} de ${r.asignaciones} agendadas.${r.errores.length ? ` Errores: ${r.errores.join('; ')}` : ''}`, r.errores.length ? 'mal' : 'ok')
+                avisar(mensajeDeCreacion(r), r.errores.length ? 'mal' : 'ok')
                 if (idDepto && idDepto !== r.tarea.id_departamento) setIdDepto(r.tarea.id_departamento)
                 else await cargar()
                 setAbierta(r.tarea.id)

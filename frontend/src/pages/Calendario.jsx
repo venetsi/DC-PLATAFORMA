@@ -7,7 +7,7 @@ import { useAuthStore } from '../store/authStore.js'
 import { instanciasApi, localesApi, departamentosApi, usuariosApi, asignacionesApi } from '../api/recursos.js'
 import AgendaAgrupada from '../components/AgendaAgrupada.jsx'
 import DetalleTarea from '../components/DetalleTarea.jsx'
-import NuevaTarea from './agendas/NuevaTarea.jsx'
+import NuevaTarea, { mensajeDeCreacion } from './agendas/NuevaTarea.jsx'
 import SemanaTablero from '../components/SemanaTablero.jsx'
 import TableroKanban from '../components/TableroKanban.jsx'
 import Cronograma from '../components/Cronograma.jsx'
@@ -595,7 +595,7 @@ export default function Calendario() {
               onCerrar={() => setNueva(null)}
               onCreada={async (r) => {
                 setNueva(null)
-                avisar(`"${r.tarea.nombre}" creada: ${r.agendadas} de ${r.asignaciones} agendadas.${r.errores.length ? ` Errores: ${r.errores.join('; ')}` : ''}`, { tono: r.errores.length ? 'mal' : 'ok' })
+                avisar(mensajeDeCreacion(r), { tono: r.errores.length ? 'mal' : 'ok' })
                 await recargar()
               }}
             />

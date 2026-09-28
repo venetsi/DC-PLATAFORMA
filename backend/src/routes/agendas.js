@@ -1,5 +1,5 @@
 import { usuarioActual, puede, esAdminGlobal, departamentosDe, departamentosCon } from '../lib/permisos.js'
-import { leerRecurrence } from '../lib/recurrencia.js'
+import { leerRecurrence, MAX_DIA_HABIL } from '../lib/recurrencia.js'
 import { clasificarInstancia, fechaDeInstancia, hoyEnArgentina } from '../lib/vencimiento.js'
 import { definirAgenda, asegurarAsignacion, cerrarAsignacion, INCLUDES_AGENDA, sumarDias } from '../lib/agenda.js'
 
@@ -17,6 +17,9 @@ function validarAgenda(agenda) {
   if (!recurrencia_tipo || !vigencia_desde) return 'La agenda necesita frecuencia y fecha de inicio'
   if (recurrencia_tipo === 'SEMANAL' && !recurrencia_config?.dias_semana?.length) return 'Elegí al menos un día de la semana'
   if (recurrencia_tipo === 'INTERVALO_MESES' && !recurrencia_config?.dia_hasta) return 'Elegí el día del mes'
+  if (recurrencia_tipo === 'DIA_HABIL' && !(Number(recurrencia_config?.dia_habil) >= 1 && Number(recurrencia_config?.dia_habil) <= MAX_DIA_HABIL)) {
+    return `El día hábil va de 1 a ${MAX_DIA_HABIL}`
+  }
   if (recurrencia_tipo === 'UNICA' && !recurrencia_config?.fecha) return 'Elegí la fecha'
   return null
 }
@@ -146,8 +149,25 @@ export default async function agendasRoutes(fastify) {
     try {
       tarea = await fastify.db.tarea.create({ data: { nombre, descripcion: descripcion || null, id_departamento } })
     } catch (err) {
-      if (err.code === 'P2002') return reply.code(409).send({ error: `Ya existe una tarea llamada "${nombre}"` })
-      throw err
+      if (err.code !== 'P2002') throw err
+      // El nombre es unico: una tarea se hace en muchos locales, no se crea una
+      // por local. Se devuelve cual es, para que el formulario ofrezca sumarle
+      // estos locales en vez de dejar solo el error (que llevaba a inventar
+      // nombres como "P&L 3MONOS").
+      const existente = await fastify.db.tarea.findUnique({
+        where: { nombre },
+        select: { id: true, nombre: true, id_departamento: true, activa: true, departamento: { select: { nombre: true } } }
+      })
+      return reply.code(409).send({
+        error: `Ya existe una tarea llamada "${nombre}"`,
+        existente: existente && {
+          id: existente.id,
+          nombre: existente.nombre,
+          id_departamento: existente.id_departamento,
+          departamento: existente.departamento?.nombre || '',
+          activa: existente.activa
+        }
+      })
     }
     const r = await aplicarAlcance(tarea, { locales, agenda, asignado_a, compartir_con })
     return reply.code(201).send({ tarea, ...r })

@@ -18,6 +18,10 @@ const DIAS_ISO_A_RRULE = { 1: 'MO', 2: 'TU', 3: 'WE', 4: 'TH', 5: 'FR', 6: 'SA',
 // creadas conservan su UNTIL y pasan a 6 meses cuando el job las renueva.
 export const MESES_DE_HORIZONTE = 6
 
+// Todo mes tiene al menos 20 días de lunes a viernes: con un número mayor,
+// BYSETPOS salteaba los meses cortos en silencio.
+export const MAX_DIA_HABIL = 20
+
 export function horizontePorDefecto(desdeISO, meses = MESES_DE_HORIZONTE) {
   const [a, m, d] = String(desdeISO).split('-').map(Number)
   return new Date(Date.UTC(a, m - 1 + meses, d)).toISOString().slice(0, 10)
@@ -52,6 +56,15 @@ export function construirRecurrence(tipo, config, vigenciaHasta, vigenciaDesde) 
       if (!diaHasta) throw new Error('INTERVALO_MESES requiere dia_hasta')
       return [`RRULE:FREQ=MONTHLY;INTERVAL=${cadaNMeses};BYMONTHDAY=${diaHasta}${until}`]
     }
+    case 'DIA_HABIL': {
+      // "El día hábil 10 de cada mes": el décimo lunes-a-viernes del mes
+      // (BYSETPOS sobre los días de semana). NO descuenta feriados --
+      // decisión del usuario (2026-09-28): RRULE no los conoce, y ajustarlos
+      // obligaría a mover instancias sueltas cada vez que se renueva la serie.
+      const n = Number(config?.dia_habil)
+      if (!(n >= 1 && n <= MAX_DIA_HABIL)) throw new Error(`DIA_HABIL requiere dia_habil entre 1 y ${MAX_DIA_HABIL}`)
+      return [`RRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=${n}${until}`]
+    }
     default:
       throw new Error(`recurrencia_tipo desconocido: ${tipo}`)
   }
@@ -80,6 +93,9 @@ export function leerRecurrence(recurrence, startDate) {
     const dias = partes.BYDAY.split(',').map((d) => RRULE_A_DIAS_ISO[d])
     if (dias.some((d) => !d)) return null
     return { ...base, recurrencia_tipo: 'SEMANAL', recurrencia_config: { dias_semana: dias } }
+  }
+  if (partes.FREQ === 'MONTHLY' && partes.BYSETPOS && partes.BYDAY === 'MO,TU,WE,TH,FR' && !partes.BYMONTHDAY && (!partes.INTERVAL || partes.INTERVAL === '1')) {
+    return { ...base, recurrencia_tipo: 'DIA_HABIL', recurrencia_config: { dia_habil: Number(partes.BYSETPOS) } }
   }
   if (partes.FREQ === 'MONTHLY' && partes.BYMONTHDAY) {
     return {
@@ -126,5 +142,27 @@ export function primeraFecha(tipo, config, vigenciaDesde) {
       if (f.getUTCDate() === config.dia_hasta && f >= desde) return iso(f)
     }
   }
+  if (tipo === 'DIA_HABIL' && config?.dia_habil) {
+    // Primer mes cuyo día hábil N (lunes a viernes) no haya pasado.
+    for (let i = 0; i < 24; i++) {
+      const f = diaHabilDelMes(a, m - 1 + i, Number(config.dia_habil))
+      if (f && f >= desde) return iso(f)
+    }
+  }
   return vigenciaDesde
+}
+
+// El día hábil N de un mes (contando lunes a viernes; los feriados NO se
+// descuentan, igual que en la RRULE), o null si el mes no llega a N.
+// `mes` es 0-based y puede pasarse de 11 (Date.UTC lo normaliza).
+export function diaHabilDelMes(anio, mes, n) {
+  const f = new Date(Date.UTC(anio, mes, 1))
+  const mesReal = f.getUTCMonth()
+  let cuenta = 0
+  while (f.getUTCMonth() === mesReal) {
+    const dia = f.getUTCDay()
+    if (dia !== 0 && dia !== 6 && ++cuenta === n) return f
+    f.setUTCDate(f.getUTCDate() + 1)
+  }
+  return null
 }

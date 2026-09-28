@@ -214,13 +214,20 @@ editar pide MANAGER; desactivar, eliminar y los avisos del departamento, OWNER
 
 **+ Nueva tarea** abre un formulario con:
 
-1. **Qué** — el nombre (único en toda la plataforma).
+1. **Qué** — el nombre (único en toda la plataforma: una tarea se hace en
+   muchos locales y se ve como «P&L — TI AMO», «P&L — UAT»…). Si ya existe
+   en ese departamento, en vez del error ofrece **Sumar a «P&L»** esos
+   locales, con la agenda y el responsable cargados (`POST /api/agendas/tareas`
+   devuelve 409 con `existente`). Si existe en otro departamento o está
+   desactivada, lo dice.
 2. **Departamento** — si tenés más de uno.
 3. **Dónde** — toda la empresa, un grupo de locales entero, o locales
    puntuales (se agregan de a uno).
 4. **Cuándo** — lunes a viernes / todos los días / algunos días de la
-   semana / un día del mes (cada 1, 2, 3, 6 o 12 meses) / una sola vez, y
-   desde qué fecha.
+   semana / un día del mes (cada 1, 2, 3, 6 o 12 meses) / **un día hábil del
+   mes** / una sola vez, y desde qué fecha. El día hábil N es el N-ésimo de
+   lunes a viernes (`FREQ=MONTHLY;BYDAY=MO..FR;BYSETPOS=N`, de 1 a 20) y **no
+   descuenta feriados** (decisión del 2026-09-28: RRULE no los conoce).
 5. **Quién** — una persona del departamento o "Equipo (sin responsable fijo)".
 6. **Más opciones** — descripción, y compartir con otros departamentos (cada
    uno la ve en su agenda; marcarla en uno la marca en todos).
