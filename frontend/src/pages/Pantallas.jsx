@@ -10,6 +10,27 @@ const TV_URL = (import.meta.env.VITE_TV_URL || 'https://tv.dcsmart.app').replace
 // La TV avisa que esta viva como mucho cada 10 min (ver routes/tv.js).
 const MINUTOS_EN_LINEA = 15
 
+// Lo que puede mostrar una TV (mismas que VISTAS_TV en backend lib/tv-conexion.js).
+const VISTAS_TV = [
+  { id: 'semana', nombre: 'Semana', detalle: 'Atrasadas, lunes a viernes por local y la próxima semana' },
+  { id: 'tablero', nombre: 'Tablero', detalle: 'Una lista por departamento, por vencimiento' },
+  { id: 'calendario', nombre: 'Calendario', detalle: 'El mes completo' }
+]
+const nombreVista = (id) => VISTAS_TV.find((v) => v.id === id)?.nombre || 'Semana'
+
+function ElegirVista({ valor, onCambio, nombre }) {
+  return (
+    <div className="pantalla-vistas" role="radiogroup" aria-label="Vista de la TV">
+      {VISTAS_TV.map((v) => (
+        <label key={v.id} className={`pantalla-vista${valor === v.id ? ' sel' : ''}`}>
+          <input type="radio" name={nombre} value={v.id} checked={valor === v.id} onChange={() => onCambio(v.id)} />
+          <span><b>{v.nombre}</b><small>{v.detalle}</small></span>
+        </label>
+      ))}
+    </div>
+  )
+}
+
 function haceTexto(fecha) {
   if (!fecha) return null
   const min = Math.round((Date.now() - new Date(fecha).getTime()) / 60000)
@@ -70,6 +91,7 @@ function ConectarPantalla({ codigoInicial, onListo, onCerrar }) {
   const [buscando, setBuscando] = useState(false)
   const [seleccion, setSeleccion] = useState(() => new Set())
   const [nombre, setNombre] = useState('')
+  const [vista, setVista] = useState('semana')
   const [enviando, setEnviando] = useState(false)
   const [, setTic] = useState(0)
 
@@ -113,7 +135,7 @@ function ConectarPantalla({ codigoInicial, onListo, onCerrar }) {
     setEnviando(true)
     setError('')
     try {
-      const r = await pantallasApi.aprobar(pedido.codigo, { ids_departamento: elegidos.map((d) => d.id), nombre: nombre.trim() || undefined })
+      const r = await pantallasApi.aprobar(pedido.codigo, { ids_departamento: elegidos.map((d) => d.id), nombre: nombre.trim() || undefined, vista })
       setPedido(null)
       onListo(`Listo: «${r.pantalla.nombre}» ya muestra ${r.pantalla.departamentos.join(', ')}. La TV cambia sola en unos segundos.`)
     } catch (err) {
@@ -179,6 +201,10 @@ function ConectarPantalla({ codigoInicial, onListo, onCerrar }) {
           <legend>¿Qué agendas muestra?</legend>
           <ElegirDepartamentos opciones={pedido.departamentos} seleccion={seleccion} onCambio={setSeleccion} />
         </fieldset>
+        <fieldset>
+          <legend>¿Qué vista muestra?</legend>
+          <ElegirVista valor={vista} onCambio={setVista} nombre="vista-nueva" />
+        </fieldset>
         <label className="campo">
           Nombre de la pantalla
           <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder={nombrePorDefecto(elegidos.map((d) => d.nombre))} maxLength={60} />
@@ -194,7 +220,8 @@ function ConectarPantalla({ codigoInicial, onListo, onCerrar }) {
 }
 
 function TarjetaPantalla({ p, opciones, cargarOpciones, onCambio, avisar }) {
-  const [modo, setModo] = useState(null) // null | 'agendas' | 'nombre'
+  const [modo, setModo] = useState(null) // null | 'agendas' | 'nombre' | 'vista'
+  const [vista, setVista] = useState(p.vista)
   const [seleccion, setSeleccion] = useState(() => new Set())
   const [nombre, setNombre] = useState(p.nombre)
   const [guardando, setGuardando] = useState(false)
@@ -262,7 +289,7 @@ function TarjetaPantalla({ p, opciones, cargarOpciones, onCambio, avisar }) {
         </span>
       </div>
       <p className="tenue" style={{ margin: 0 }}>
-        La conectó {p.conectada_por_nombre} {haceTexto(p.creada)} · {p.equipo}
+        Vista <b>{nombreVista(p.vista)}</b> · la conectó {p.conectada_por_nombre} {haceTexto(p.creada)} · {p.equipo}
       </p>
       {!p.duenio_activo && (
         <p className="pantalla-alerta">Quien la conectó ya no tiene acceso: la TV volvió a mostrar el QR. Desconectala y conectala de nuevo.</p>
@@ -282,6 +309,15 @@ function TarjetaPantalla({ p, opciones, cargarOpciones, onCambio, avisar }) {
           </div>
         </div>
       )}
+      {modo === 'vista' && (
+        <div className="pantalla-editor">
+          <ElegirVista valor={vista} onCambio={setVista} nombre={`vista-${p.id}`} />
+          <div className="acciones">
+            <button className="btn" disabled={guardando || vista === p.vista} onClick={() => guardar({ vista })}>Guardar</button>
+            <button className="btn btn-secondary" onClick={() => { setVista(p.vista); setModo(null) }}>Cancelar</button>
+          </div>
+        </div>
+      )}
       {modo === 'nombre' && (
         <form className="pantalla-editor en-linea" onSubmit={(e) => { e.preventDefault(); guardar({ nombre }) }}>
           <input value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={60} aria-label="Nombre de la pantalla" autoFocus />
@@ -294,6 +330,7 @@ function TarjetaPantalla({ p, opciones, cargarOpciones, onCambio, avisar }) {
       {!modo && (p.puede_editar || p.puede_desconectar) && (
         <div className="acciones">
           {p.puede_editar && <button className="btn btn-secondary btn-chico" onClick={abrirAgendas}>Cambiar agendas</button>}
+          {p.puede_editar && <button className="btn btn-secondary btn-chico" onClick={() => { setError(''); setVista(p.vista); setModo('vista') }}>Cambiar vista</button>}
           {p.puede_editar && <button className="btn btn-secondary btn-chico" onClick={() => { setError(''); setModo('nombre') }}>Renombrar</button>}
           {p.puede_desconectar && <button className="btn btn-secondary btn-chico" disabled={guardando} onClick={desconectar}>Desconectar</button>}
         </div>

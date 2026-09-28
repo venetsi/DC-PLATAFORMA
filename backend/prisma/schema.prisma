@@ -481,6 +481,9 @@ model TvPantalla {
   nombre             String
   token_hash         String?   @unique
   conectada_por      String // email
+  // Que muestra la TV: semana | tablero | calendario. Null = semana (la de
+  // siempre). Nullable a proposito: la base es compartida con produccion.
+  vista              String?
   activa             Boolean   @default(true)
   ultima_conexion_at DateTime?
   user_agent         String?

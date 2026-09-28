@@ -18,6 +18,12 @@ export const ALFABETO = 'BCDFGHJKLMNPQRSTVWXZ'
 export const LARGO_CODIGO = 6 // 20^6 ~ 64 millones; adivinar esta limitado por persona
 export const VIDA_PEDIDO_SEG = 10 * 60
 export const INTERVALO_SEG = 5
+// Vistas que puede mostrar una TV (decision del usuario, 2026-09-28). La
+// primera es la de siempre y la que vale si la pantalla no tiene ninguna.
+export const VISTAS_TV = ['semana', 'tablero', 'calendario']
+export function vistaTv(valor) {
+  return VISTAS_TV.includes(valor) ? valor : VISTAS_TV[0]
+}
 // Una TV que consulta justo a los 5 s puede llegar un poco antes por la red.
 const TOLERANCIA_MS = 1000
 

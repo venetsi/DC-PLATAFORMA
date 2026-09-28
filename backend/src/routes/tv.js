@@ -1,7 +1,7 @@
 import QRCode from 'qrcode'
 import { clasificarInstancia, hoyEnArgentina } from '../lib/vencimiento.js'
 import { infoDepartamentos } from '../lib/colores-depto.js'
-import { crearPedido, consultarToken, resolverPantalla, formatearUserCode, VIDA_PEDIDO_SEG, INTERVALO_SEG } from '../lib/tv-conexion.js'
+import { crearPedido, consultarToken, resolverPantalla, formatearUserCode, vistaTv, VIDA_PEDIDO_SEG, INTERVALO_SEG } from '../lib/tv-conexion.js'
 
 // Cuantos dias hacia atras se buscan tareas vencidas sin hacer para la
 // columna "Atrasadas" -- una tarea que nunca se marca realizada no debe
@@ -27,6 +27,31 @@ function rangos() {
   return { desdeAtrasadas, lunesEsta, viernesEsta, lunesProxima, viernesProxima }
 }
 
+function sumarDiasISO(iso, n) {
+  const [a, m, d] = iso.split('-').map(Number)
+  return new Date(Date.UTC(a, m - 1, d + n)).toISOString().slice(0, 10)
+}
+function diaSemana(iso) { // 1 = lunes ... 7 = domingo
+  const [a, m, d] = iso.split('-').map(Number)
+  return new Date(Date.UTC(a, m - 1, d)).getUTCDay() || 7
+}
+
+// Las vistas Tablero y Calendario piden mas dias que la Semana. Devuelve el
+// tramo propio de la vista (fechas inclusive) o null para la Semana.
+const TABLERO_ATRAS = 60
+const TABLERO_ADELANTE = 30
+function tramoDeVista(vista, hoyISO) {
+  if (vista === 'tablero') return { desde: sumarDiasISO(hoyISO, -TABLERO_ATRAS), hasta: sumarDiasISO(hoyISO, TABLERO_ADELANTE) }
+  if (vista === 'calendario') {
+    // La grilla del mes: del lunes de la semana del 1 al domingo de la del ultimo dia.
+    const primero = `${hoyISO.slice(0, 8)}01`
+    const [a, m] = hoyISO.split('-').map(Number)
+    const ultimo = new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10)
+    return { desde: sumarDiasISO(primero, 1 - diaSemana(primero)), hasta: sumarDiasISO(ultimo, 7 - diaSemana(ultimo)), mes: hoyISO.slice(0, 7) }
+  }
+  return null
+}
+
 let cacheClima = null // { data, en } -- el clima cambia mucho mas lento que las tareas
 const CLIMA_TTL_MS = 30 * 60 * 1000
 
@@ -37,14 +62,14 @@ const CACHE_CALENDARIO_MS = 30 * 1000
 const cacheCalendario = new Map() // `${id}|${lunes}` -> { items, en }
 
 async function instanciasDe(fastify, departamento, r) {
-  const clave = `${departamento.id}|${r.lunesEsta.toISOString().slice(0, 10)}`
+  const clave = `${departamento.id}|${r.timeMin}|${r.timeMax}`
   const ahora = Date.now()
   const enCache = cacheCalendario.get(clave)
   if (enCache && ahora - enCache.en < CACHE_CALENDARIO_MS) return enCache.items
   const items = await fastify.gcal.listarInstancias({
     calendarId: departamento.id_calendar_google,
-    timeMin: r.desdeAtrasadas.toISOString(),
-    timeMax: r.viernesProxima.toISOString()
+    timeMin: r.timeMin,
+    timeMax: r.timeMax
   })
   cacheCalendario.set(clave, { items, en: ahora })
   if (cacheCalendario.size > 200) {
@@ -65,8 +90,13 @@ function nombreCorto(email) {
 
 // Resumen del kiosko para uno o varios departamentos juntos. Cada item lleva
 // su departamento (nombre, abreviatura y color, los mismos que en Mi agenda).
-async function armarResumen(fastify, departamentos) {
+async function armarResumen(fastify, departamentos, vista = 'semana') {
   const r = rangos()
+  const tramo = tramoDeVista(vista, hoyEnArgentina())
+  const minISO = (a, b) => (a < b ? a : b)
+  const maxISO = (a, b) => (a > b ? a : b)
+  r.timeMin = tramo ? `${minISO(r.desdeAtrasadas.toISOString().slice(0, 10), tramo.desde)}T00:00:00.000Z` : r.desdeAtrasadas.toISOString()
+  r.timeMax = tramo ? `${maxISO(r.viernesProxima.toISOString().slice(0, 10), tramo.hasta)}T23:59:59.000Z` : r.viernesProxima.toISOString()
   const activos = await fastify.db.departamento.findMany({ where: { activo: true }, select: { id: true, nombre: true } })
   const info = infoDepartamentos(activos)
   const etiqueta = (d) => ({ id: d.id, ...(info.get(d.id) || { nombre: d.nombre, abreviatura: d.nombre.slice(0, 3).toUpperCase(), color: '#8fb3bd' }) })
@@ -88,6 +118,7 @@ async function armarResumen(fastify, departamentos) {
   const eventos = []
   const atrasadas = []
   const proximaSemana = []
+  const deLaVista = [] // Tablero: abiertas del tramo; Calendario: todo el mes
   const ahora = new Date()
   // Dia en curso en Argentina, no en UTC: con toISOString() el "hoy" del
   // kiosko cambiaba a las 21:00 hora local (ver lib/vencimiento.js).
@@ -134,6 +165,10 @@ async function armarResumen(fastify, departamentos) {
         fin: evento.end?.dateTime || evento.end?.date
       }
 
+      if (tramo && fechaEvento >= tramo.desde && fechaEvento <= tramo.hasta) {
+        if (vista === 'calendario' || estado === 'pendiente' || estado === 'vencida') deLaVista.push({ ...item, fecha: fechaEvento })
+      }
+
       if (fechaMs < r.lunesEsta.getTime()) {
         // Atrasadas: solo lo que sigue sin hacerse -- lo ya realizado en el
         // pasado no aporta nada a "que falta resolver ya mismo".
@@ -161,7 +196,9 @@ async function armarResumen(fastify, departamentos) {
     eventos,
     atrasadas,
     proximaSemana,
-    sin_leer: lecturas.flatMap((l, i) => (l.status === 'rejected' ? [conCalendario[i].nombre] : []))
+    sin_leer: lecturas.flatMap((l, i) => (l.status === 'rejected' ? [conCalendario[i].nombre] : [])),
+    vista,
+    ...(tramo ? { tramo, items: deLaVista.sort((a, b) => a.fecha.localeCompare(b.fecha) || String(a.titulo).localeCompare(String(b.titulo))) } : {})
   }
 }
 
@@ -217,8 +254,9 @@ export default async function tvRoutes(fastify) {
         .catch((err) => request.log.warn({ err: err.message }, 'tv: no se pudo guardar la ultima conexion'))
     }
 
-    const resumen = await armarResumen(fastify, departamentos)
-    return { ...resumen, pantalla: { nombre: pantalla.nombre } }
+    const vista = vistaTv(pantalla.vista)
+    const resumen = await armarResumen(fastify, departamentos, vista)
+    return { ...resumen, pantalla: { nombre: pantalla.nombre, vista } }
   })
 
   // Clima del kiosko (Google Weather API), cacheado en memoria -- cambia

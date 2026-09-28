@@ -275,6 +275,22 @@ departamento (el color sale del orden alfabético de todos los departamentos,
 así es el mismo en todas las vistas). Una tarea compartida entre dos
 departamentos visibles se muestra una sola vez, con la etiqueta de su dueño.
 
+**Vistas** (desde el 28/09/2026; la última elegida se recuerda por navegador,
+en localStorage `dc_plataforma_vista`): **Tablero**, **Calendario** (el antiguo
+"Mes"), **Agenda**, **Cronograma** y **Semana (L-V)**.
+
+- **Tablero** (`components/TableroKanban.jsx`): una lista por departamento
+  visible, con las instancias **abiertas** (vencidas de los últimos 60 días y
+  pendientes de los próximos 30), ordenadas por fecha. La casilla marca hecha
+  con `puede('marcar')` (MEMBER en adelante) y confirma antes, porque no se
+  deshace. No se arrastra entre listas (cambiaría el departamento).
+- **Cronograma** (`components/Cronograma.jsx`): 14 días desde el lunes, una
+  fila por departamento, y en cada celda las tareas del día agrupadas por
+  nombre ("×N" = N locales) con el color del peor estado del grupo. Solo lectura
+  (el detalle se abre al tocar).
+- En celular no se ofrece Calendario; Tablero y Cronograma se deslizan de
+  costado.
+
 **Vista Semana (L-V)**: mismo armado que el kiosko (semáforo y contadores
 arriba, columna **Atrasadas** a la izquierda, lunes a viernes por local, y la
 **próxima semana** más chica abajo, con cada tarea y en cuántos locales). Mismos
@@ -285,7 +301,7 @@ que una vencida de fin de semana no quede sin mostrarse. Sábado y domingo la vi
 arranca en la semana siguiente (el kiosko, en cambio, sigue mostrando la
 semana en curso aunque sea fin de semana).
 
-**Semana y Mes, para MANAGER y OWNER**:
+**Semana y Calendario, para MANAGER y OWNER**:
 
 - **Arrastrar** una tarea pendiente o atrasada a otro día = Cambiar fecha de
   esa ocurrencia, con un aviso de **Deshacer** (15 segundos). En Semana se
@@ -397,11 +413,23 @@ Smart TV (OAuth 2.0 Device Authorization Grant, RFC 8628):
 - Sin conexión, muestra lo último con aviso. Si el servidor responde que la
   pantalla ya no está conectada (401), vuelve al QR.
 
-**Qué muestra:** semáforo (🔴 hay atrasadas de los últimos 60 días / 🟡 hay
-pendientes de hoy / 🟢 al día), contadores, **las atrasadas de esos 60 días**,
-la semana por local, adelanto de la siguiente, clima y reloj. Con varios
-departamentos, cada tarea lleva su etiqueta de color. Es de **solo lectura**: no
-se marca nada desde ahí.
+**Qué muestra:** siempre el semáforo (🔴 hay atrasadas de los últimos 60 días /
+🟡 hay pendientes de hoy / 🟢 al día), contadores, clima y reloj. Debajo, la
+**vista** de la pantalla (`tv_pantallas.vista`: `semana` —o vacío—, `tablero` o
+`calendario`), que se elige al conectarla y se cambia en Pantallas → **Cambiar
+vista**:
+
+- **Semana**: las atrasadas de esos 60 días, la semana por local y un adelanto de
+  la siguiente.
+- **Tablero**: una lista por departamento con las abiertas (60 días atrás, 30
+  adelante), por vencimiento.
+- **Calendario**: la grilla del mes en curso (de lunes a domingo).
+
+`/api/tv/resumen` lee de Calendar la unión de la ventana de la Semana (para el
+semáforo, que es igual en las tres) y la de la vista, y devuelve `vista`,
+`tramo` e `items` para Tablero y Calendario. Lo que no entra en pantalla se
+resume como "+N más" (la TV no se desliza). Con varios departamentos, cada tarea
+lleva su etiqueta de color. Es de **solo lectura**: no se marca nada desde ahí.
 
 **Los links viejos** con `?depto=<slug>&key=<kiosko_key>` dejaron de funcionar
 el 27/09/2026. Esas TVs toman el HTML nuevo en su recarga de cada hora, y a

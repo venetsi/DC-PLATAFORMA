@@ -9,6 +9,8 @@ import AgendaAgrupada from '../components/AgendaAgrupada.jsx'
 import DetalleTarea from '../components/DetalleTarea.jsx'
 import NuevaTarea from './agendas/NuevaTarea.jsx'
 import SemanaTablero from '../components/SemanaTablero.jsx'
+import TableroKanban from '../components/TableroKanban.jsx'
+import Cronograma from '../components/Cronograma.jsx'
 import { aTarea } from '../lib/agrupar.js'
 import SinAsignacion from './SinAsignacion.jsx'
 import { AvisoPrerrequisitos } from './MisTareas.jsx'
@@ -18,11 +20,31 @@ import { infoDepartamentos } from '../lib/colores-depto.js'
 import { fechaHumana } from '../lib/agenda-texto.js'
 import { useMedia, CONSULTA_CELULAR, CONSULTA_TACTIL } from '../lib/pantalla.js'
 
+// Tablero (listas por departamento, estilo Trello), Calendario (el mes),
+// Agenda (la semana por dia y local), Cronograma (linea de tiempo por
+// departamento) y Semana (armada como el kiosko).
 const VISTAS = [
+  { id: 'tablero', etiqueta: 'Tablero' },
+  { id: 'mes', etiqueta: 'Calendario' },
   { id: 'agenda', etiqueta: 'Agenda' },
-  { id: 'semana', etiqueta: 'Semana (L-V)' },
-  { id: 'mes', etiqueta: 'Mes' }
+  { id: 'cronograma', etiqueta: 'Cronograma' },
+  { id: 'semana', etiqueta: 'Semana (L-V)' }
 ]
+// La ultima vista elegida se recuerda en este navegador.
+const CLAVE_VISTA = 'dc_plataforma_vista'
+function vistaGuardada() {
+  try {
+    const v = localStorage.getItem(CLAVE_VISTA)
+    return VISTAS.some((x) => x.id === v) ? v : 'agenda'
+  } catch {
+    return 'agenda'
+  }
+}
+// Cronograma: dos semanas a la vista, se avanza de a una.
+const CRONO_DIAS = 14
+// Tablero: las atrasadas de los ultimos 60 dias y lo pendiente de los proximos 30.
+const TABLERO_ATRAS = 60
+const TABLERO_ADELANTE = 30
 
 const COLOR_ESTADO = { pendiente: '#e0b83f', vencida: '#e05c3f', realizada: '#3fb66a', no_aplica: '#6b7686' }
 
@@ -55,6 +77,12 @@ function semanaActualLunesAViernes() {
 function sumarDiasISO(iso, n) {
   const [a, m, d] = iso.split('-').map(Number)
   return isoLocal(new Date(a, m - 1, d + n))
+}
+
+// "Del 28 sept al 11 oct"
+function textoRango(desdeISO, dias) {
+  const f = (iso) => { const [a, m, d] = iso.split('-').map(Number); return new Date(a, m - 1, d).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }) }
+  return `Del ${f(desdeISO)} al ${f(sumarDiasISO(desdeISO, dias - 1))}`
 }
 
 // "Semana del 28 sep al 2 oct"
@@ -92,7 +120,11 @@ export default function Calendario() {
   const varios = idsVisibles.length > 1
   const elegido = opciones.find((d) => d.id === idElegido)
 
-  const [vista, setVista] = useState('agenda')
+  const [vista, setVistaEstado] = useState(vistaGuardada)
+  function setVista(v) {
+    setVistaEstado(v)
+    try { localStorage.setItem(CLAVE_VISTA, v) } catch { /* sin almacenamiento: no se recuerda */ }
+  }
   // En un celular el mes no entra (cada dia queda de ~43px y no se lee el
   // nombre de la tarea): ahi solo Agenda y Semana, que son listas por dia.
   const celular = useMedia(CONSULTA_CELULAR)
@@ -108,6 +140,9 @@ export default function Calendario() {
   // Lunes de la semana que muestra la vista Semana (arranca en la actual).
   const lunesActual = semanaActualLunesAViernes().desde
   const [semanaLunes, setSemanaLunes] = useState(lunesActual)
+  const [cronoDesde, setCronoDesde] = useState(lunesActual)
+  // Grupo de tareas iguales del mismo dia en el Cronograma ("CMV ×12").
+  const [grupo, setGrupo] = useState(null)
   const [marcando, setMarcando] = useState(null)
   const [aviso, setAviso] = useState(null)
   const [mensaje, setMensaje] = useState(null)
@@ -180,7 +215,12 @@ export default function Calendario() {
   useEffect(() => {
     if (vista === 'agenda') setRango(semanaActualLunesAViernes())
     if (vista === 'semana') setRango(rangoTablero(semanaLunes))
-  }, [vista, semanaLunes])
+    if (vista === 'tablero') {
+      const hoy = hoyEnArgentina()
+      setRango({ desde: sumarDiasISO(hoy, -TABLERO_ATRAS), hasta: sumarDiasISO(hoy, TABLERO_ADELANTE + 1) })
+    }
+    if (vista === 'cronograma') setRango({ desde: cronoDesde, hasta: sumarDiasISO(cronoDesde, CRONO_DIAS) })
+  }, [vista, semanaLunes, cronoDesde])
 
   function onDatesSet(info) {
     const desde = info.startStr.slice(0, 10)
@@ -323,6 +363,25 @@ export default function Calendario() {
     if (ev) setAbierta({ ...aTarea(ev, mapaLocales), idDepartamento: ev.__depto, departamento: deptos.get(ev.__depto)?.nombre })
   }
 
+  // La casilla del Tablero: marcar no se puede deshacer, asi que se confirma.
+  function marcarDesdeTablero(t) {
+    if (!window.confirm(`¿Marcar "${t.titulo} — ${t.local}" como hecha? No se puede deshacer.`)) return
+    marcar(t.id, t.idDepartamento)
+  }
+
+  // Con el dedo, el arrastre de Semana no anda en la mayoria de los celulares,
+  // y en Mes (FullCalendar) pide mantener apretado.
+  const textoAyuda = {
+    tablero: 'Tocá una tarjeta para ver el detalle; la casilla la marca hecha. Están las atrasadas de los últimos 60 días y lo pendiente de los próximos 30, por vencimiento.',
+    cronograma: 'Una fila por departamento y un día por columna. Tocá una tarea para ver el detalle; ×N quiere decir que se hace en N locales.',
+    semana: puedeCrear && (tactil
+      ? 'Tocá una tarea para ver el detalle o cambiarle la fecha, o usá + para crear una tarea ese día.'
+      : 'Arrastrá una tarea a otro día para moverla (también desde Atrasadas), o usá + para crear una tarea ese día.'),
+    mes: puedeCrear && (tactil
+      ? 'Mantené apretada una tarea para arrastrarla a otro día, o tocá un día para crear una tarea ahí.'
+      : 'Arrastrá una tarea pendiente a otro día para moverla, o tocá un día para crear una tarea ahí.')
+  }[vista]
+
   if (!esAdminGlobal && !propios.length) return <SinAsignacion />
 
   const propsCalendario = {
@@ -385,19 +444,7 @@ export default function Calendario() {
         </div>
       </div>
 
-      {vista !== 'agenda' && puedeCrear && (
-        <p className="tenue" style={{ margin: '0 0 0.6rem' }}>
-          {/* Con el dedo, el arrastre de Semana no anda en la mayoria de los
-              celulares, y en Mes (FullCalendar) pide mantener apretado. */}
-          {vista === 'semana'
-            ? (tactil
-                ? 'Tocá una tarea para ver el detalle o cambiarle la fecha, o usá + para crear una tarea ese día.'
-                : 'Arrastrá una tarea a otro día para moverla (también desde Atrasadas), o usá + para crear una tarea ese día.')
-            : (tactil
-                ? 'Mantené apretada una tarea para arrastrarla a otro día, o tocá un día para crear una tarea ahí.'
-                : 'Arrastrá una tarea pendiente a otro día para moverla, o tocá un día para crear una tarea ahí.')}
-        </p>
-      )}
+      {textoAyuda && <p className="tenue" style={{ margin: '0 0 0.6rem' }}>{textoAyuda}</p>}
       {mensaje && (
         <div className={`aviso aviso-${mensaje.tono}`} role="status" style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
           <span>{mensaje.texto}</span>
@@ -442,6 +489,70 @@ export default function Calendario() {
             onCrear={abrirNueva}
           />
         </>
+      )}
+
+      {vista === 'tablero' && (
+        <TableroKanban
+          eventos={visibles}
+          idsVisibles={idsVisibles}
+          deptos={deptos}
+          mapaLocales={mapaLocales}
+          hoyISO={hoyEnArgentina()}
+          puedeMarcar={(id) => puede('marcar', id)}
+          onAbrir={setAbierta}
+          onMarcar={marcarDesdeTablero}
+          marcando={marcando}
+        />
+      )}
+
+      {vista === 'cronograma' && (
+        <>
+          <div className="st-nav">
+            <button className="btn btn-secondary" onClick={() => setCronoDesde((l) => sumarDiasISO(l, -7))} aria-label="Semana anterior">‹</button>
+            <strong>{textoRango(cronoDesde, CRONO_DIAS)}</strong>
+            <button className="btn btn-secondary" onClick={() => setCronoDesde((l) => sumarDiasISO(l, 7))} aria-label="Semana siguiente">›</button>
+            {cronoDesde !== lunesActual && <button className="btn btn-secondary btn-chico" onClick={() => setCronoDesde(lunesActual)}>Hoy</button>}
+          </div>
+          <Cronograma
+            eventos={visibles}
+            desdeISO={cronoDesde}
+            cantidadDias={CRONO_DIAS}
+            idsVisibles={idsVisibles}
+            deptos={deptos}
+            mapaLocales={mapaLocales}
+            hoyISO={hoyEnArgentina()}
+            onAbrir={setAbierta}
+            onAbrirGrupo={setGrupo}
+          />
+        </>
+      )}
+
+      {grupo && (
+        <div className="detalle-fondo" onClick={() => setGrupo(null)}>
+          <div className="card detalle-tarea" role="dialog" aria-label={grupo.titulo} onClick={(e) => e.stopPropagation()}>
+            <div className="detalle-encabezado">
+              <div>
+                <h3 style={{ margin: 0 }}>{grupo.titulo}</h3>
+                <p className="detalle-sub">{fechaHumana(grupo.fecha)} · {grupo.tareas.length} locales</p>
+              </div>
+              <button className="btn btn-secondary" onClick={() => setGrupo(null)} aria-label="Cerrar">✕</button>
+            </div>
+            <ul className="tarea-bullets">
+              {grupo.tareas.map((t) => (
+                <li
+                  key={t.clave}
+                  className={`${t.estado} clickable`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => { setGrupo(null); setAbierta(t) }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setGrupo(null); setAbierta(t) } }}
+                >
+                  <span className="tarea-texto"><span>{t.local}</span></span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       )}
 
       {vista === 'mes' && (

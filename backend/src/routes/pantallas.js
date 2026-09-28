@@ -1,5 +1,5 @@
 import { conPermisos, departamentosCon, departamentosDe, esAdminGlobal, puede, usuarioActual } from '../lib/permisos.js'
-import { describirEquipo, formatearUserCode, nombrePorDefecto, normalizarUserCode, pedidoVigente } from '../lib/tv-conexion.js'
+import { describirEquipo, formatearUserCode, nombrePorDefecto, normalizarUserCode, pedidoVigente, vistaTv, VISTAS_TV } from '../lib/tv-conexion.js'
 import { infoDepartamentos } from '../lib/colores-depto.js'
 
 // Pantallas de TV (kiosko) desde la app: confirmar la conexion que pide una
@@ -124,6 +124,7 @@ export default async function pantallasRoutes(fastify) {
             nombre,
             conectada_por: usuario.email,
             user_agent: conexion.user_agent,
+            vista: vistaTv(request.body?.vista),
             departamentos: { create: departamentos.map((d) => ({ id_departamento: d.id })) }
           }
         })
@@ -229,6 +230,7 @@ export default async function pantallasRoutes(fastify) {
       lista.push({
         id: p.id,
         nombre: p.nombre,
+        vista: vistaTv(p.vista),
         conectada_por: p.conectada_por,
         conectada_por_nombre: dueno?.nombre || p.conectada_por.split('@')[0],
         duenio_activo: !!dueno,
@@ -257,6 +259,10 @@ export default async function pantallasRoutes(fastify) {
       const nombre = limpiarNombre(request.body.nombre)
       if (!nombre) return reply.code(400).send({ error: 'El nombre no puede quedar vacío.' })
       data.nombre = nombre
+    }
+    if (request.body?.vista !== undefined) {
+      if (!VISTAS_TV.includes(request.body.vista)) return reply.code(400).send({ error: 'Esa vista no existe.' })
+      data.vista = request.body.vista
     }
     let departamentos = null
     if (request.body?.ids_departamento !== undefined) {

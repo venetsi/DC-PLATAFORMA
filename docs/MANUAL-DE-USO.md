@@ -5,7 +5,18 @@ hacer, en qué local, cuándo, quién la tiene, y si ya se hizo. Todo vive en Go
 Calendar y se opera desde la plataforma o desde Google Chat.
 
 > Este manual es el que ves en **Ayuda** dentro de la plataforma. Se actualiza
-> cada vez que cambia algo. Actualizado el 27/09/2026.
+> cada vez que cambia algo. Actualizado el 28/09/2026.
+
+**Direcciones:**
+
+| Para | Dirección |
+|---|---|
+| La plataforma (computadora o celular) | **dc-plataforma.dcsmart.app** |
+| Una TV de oficina (pantalla del QR) | **tv.dcsmart.app** |
+
+Si tenés guardada la dirección vieja (`dc-plataforma.web.app`), te lleva sola a la
+nueva. La primera vez en la dirección nueva puede pedirte entrar de nuevo: tocá **Ir a
+dcsmart** y después **Tareas**.
 
 ## Cómo entrar
 
@@ -43,15 +54,26 @@ Es la pantalla principal. Si estás en varios departamentos, arranca mostrando
 **todos juntos**: cada tarea lleva una etiqueta de color con su departamento (ADM,
 AUD, TES…) y arriba está la referencia. Con el selector de arriba ves uno solo.
 
-Tres vistas:
+Cinco vistas, con los botones de arriba (la plataforma recuerda la última que usaste):
 
+- **Tablero**: como Trello. Una lista por departamento y una tarjeta por tarea
+  abierta (las atrasadas de los últimos 60 días y lo pendiente de los próximos 30),
+  ordenadas por vencimiento. La etiqueta de cada tarjeta dice cuándo vence: en rojo
+  si está atrasada ("hace N d"), en amarillo si es de hoy. Tocá la tarjeta para ver
+  el detalle; la **casilla** la marca hecha (pide confirmación, porque no se puede
+  deshacer). Las tarjetas no se arrastran entre listas: la lista es el departamento.
+- **Calendario**: el mes completo.
 - **Agenda**: la semana en curso, un día por columna, agrupado por local.
+- **Cronograma**: una línea de tiempo de dos semanas, con una fila por
+  departamento y un día por columna. Las tareas iguales del mismo día se juntan:
+  *CMV ×12* quiere decir que se hace en 12 locales; tocala para ver cuáles. Con
+  **‹ ›** avanzás o volvés de a una semana.
 - **Semana (L-V)**: de lunes a viernes, armada como la pantalla de oficina: con
   las atrasadas y un adelanto de la semana que viene. Se explica abajo.
-- **Mes**: el mes completo.
 
-En el celular no aparece **Mes**, porque no entra: quedan **Agenda** y **Semana**,
-que ahí se ven como una lista por día (un día sin tareas ocupa una sola línea).
+En el celular no aparece **Calendario**, porque no entra. El Tablero y el
+Cronograma se deslizan de costado; Agenda y Semana se ven como una lista por día
+(un día sin tareas ocupa una sola línea).
 
 ### La vista Semana (L-V)
 
@@ -99,14 +121,14 @@ historial (quién la marcó, notas, cambios de fecha). Desde ahí, según tu rol
 
 ### Mover y crear desde el calendario (Manager y Owner)
 
-- En **Semana** o **Mes**, **arrastrá** una tarea pendiente o atrasada a otro día
+- En **Semana** o **Calendario**, **arrastrá** una tarea pendiente o atrasada a otro día
   para moverla. En Semana también podés arrastrar desde **Atrasadas** para
   reprogramarla, o soltarla en un día de la próxima semana. Aparece un aviso con
   **Deshacer** por si te equivocaste.
 - Con el dedo (celular o tablet), arrastrar en **Semana** no anda en la mayoría de
-  los equipos: tocá la tarea y usá **Cambiar fecha**. En **Mes** (tablet) sí se
+  los equipos: tocá la tarea y usá **Cambiar fecha**. En **Calendario** (tablet) sí se
   puede: mantené apretada la tarea y arrastrala.
-- Para crear una tarea en un día: en **Semana**, el **+** de ese día; en **Mes**,
+- Para crear una tarea en un día: en **Semana**, el **+** de ese día; en **Calendario**,
   tocá el día. También está el botón **+ Nueva tarea**. Arranca como "una sola
   vez, ese día", y la podés cambiar a cualquier frecuencia.
 
@@ -180,9 +202,18 @@ Pensada para una TV fija en la oficina, sin login, que se actualiza sola cada
 minuto. Puede mostrar una agenda o varias juntas, con la etiqueta de color de cada
 departamento.
 
-Muestra un semáforo (🔴 hay atrasadas, 🟡 hay pendientes de hoy, 🟢 todo al día), los
-contadores, las atrasadas de los últimos 60 días, la semana por local y un adelanto
-de la siguiente. Si se corta internet, sigue mostrando lo último y se reconecta sola.
+Arriba siempre muestra el semáforo (🔴 hay atrasadas, 🟡 hay pendientes de hoy, 🟢
+todo al día) y los contadores. Debajo, la **vista** que se eligió al conectarla:
+
+- **Semana**: las atrasadas de los últimos 60 días, la semana por local y un
+  adelanto de la siguiente.
+- **Tablero**: una lista por departamento, con las tareas abiertas por vencimiento
+  (como el Tablero de Mi agenda).
+- **Calendario**: el mes completo, con las tareas de cada día.
+
+Como en la TV no se puede deslizar, lo que no entra en una lista o en un día se
+resume como *+N más*. Si se corta internet, sigue mostrando lo último y se reconecta
+sola.
 
 ### Conectar una TV
 
@@ -203,8 +234,8 @@ de la siguiente. Si se corta internet, sigue mostrando lo último y se reconecta
      pantalla de conexión.
 4. Revisá que el código y el equipo ("pedida hace 1 min desde Chrome en Android
    TV") sean los de la TV que tenés adelante.
-5. Elegí qué agendas muestra (una o varias), ponele un nombre (por ejemplo, *TV
-   Tesorería*) y tocá **Conectar**.
+5. Elegí qué agendas muestra (una o varias), **qué vista** (Semana, Tablero o
+   Calendario), ponele un nombre (por ejemplo, *TV Tesorería*) y tocá **Conectar**.
 
 **Listo:** en unos segundos la TV deja el QR y pasa sola a la agenda. Queda conectada
 aunque se apague o se recargue.
@@ -223,8 +254,8 @@ Cosas a tener en cuenta:
 ### Pantallas
 
 En **Pantallas** ves las TVs que conectaste, con su estado (en línea, o desde cuándo
-no se conecta). Desde ahí podés **Cambiar agendas**, **Renombrar** o
-**Desconectar**. La TV toma el cambio en menos de un minuto, y al desconectarla
+no se conecta) y la vista que muestra. Desde ahí podés **Cambiar agendas**, **Cambiar
+vista**, **Renombrar** o **Desconectar**. La TV toma el cambio en menos de un minuto, y al desconectarla
 vuelve a mostrar el QR. Dirección ve todas las pantallas. El Owner de un
 departamento ve las que muestran su agenda y las puede desconectar.
 
@@ -332,7 +363,7 @@ departamento la marca en todos.
 
 **En Semana (L-V) no veo una tarea del sábado.**
 Esa vista muestra de lunes a viernes: si ya venció sin hacerse, está en
-**Atrasadas**; si todavía no, usá **Mes** (en la computadora o la tablet) o
+**Atrasadas**; si todavía no, usá **Calendario** (en la computadora o la tablet) o
 **Agenda**.
 
 **¿Un local puede tener otra fecha que otro para la misma tarea?**
@@ -342,3 +373,18 @@ Sí: cada local tiene su propia agenda. En Agendas, tildá solo ese local y usá
 **Mi departamento no recibe los avisos de Chat.**
 Le falta un Space vinculado. Sus atrasadas igual escalan a Dirección. Pedile a
 Dirección que escriba `/vincular` en el Space del departamento.
+
+**La TV volvió a mostrar el QR.**
+La desconectaron desde **Pantallas**, o quien la conectó ya no ve esas agendas.
+Conectala de nuevo (ver *Conectar una TV*).
+
+**Escaneé el QR y dice que el código venció o ya se usó.**
+El código dura 10 minutos y sirve una sola vez. La TV ya muestra uno nuevo:
+escanealo otra vez.
+
+**La TV quedó en "Sin conexión".**
+Se cortó internet en la TV. Sigue mostrando lo último que tenía y se reconecta sola
+cuando vuelve la red; no hace falta escanear de nuevo.
+
+**Tengo una TV con un link viejo (con `depto=` y `key=`).**
+Esos links ya no andan. Abrí **tv.dcsmart.app** en esa TV y conectala con el QR.
