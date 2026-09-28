@@ -4,7 +4,7 @@ import { resumenDeNodos, todasLasEtiquetas, textoLista } from '../lib/dependenci
 // en todas las vistas:
 //   ⏳ Espera a Cierre de caja — Tesorería   (le falta un prerrequisito)
 //   ✅ Lista: ya se hizo Cierre de caja       (ya no le falta nada)
-//   🔗 La espera Reporte de ventas — Auditoría (esta tarea frena a otra)
+//   🔗 Sigue con Reporte de ventas — Auditoría (otra tarea espera a esta)
 // Avisan, no bloquean: por eso no cambian el color de la tarea.
 // `compacta`: una línea chica debajo del nombre, para las listas (Agenda, Semana).
 export default function EtiquetasDependencia({ tarea, compacta = false }) {
@@ -22,8 +22,8 @@ export default function EtiquetasDependencia({ tarea, compacta = false }) {
       )}
       {lista && <span className="dep-chip lista" title={textoLista(listaPor)}>✅ {textoLista(listaPor)}</span>}
       {frena && (
-        <span className="dep-chip frena" title={`La esperan: ${todasLasEtiquetas(laEspera, local)}`}>
-          🔗 La espera {resumenDeNodos(laEspera, local)}
+        <span className="dep-chip frena" title={`Sigue con: ${todasLasEtiquetas(laEspera, local)}`}>
+          🔗 Sigue con {resumenDeNodos(laEspera, local)}
         </span>
       )}
     </span>

@@ -67,7 +67,7 @@ export default function Cronograma({ eventos, desdeISO, cantidadDias, idsVisible
                     // ⏳ si alguna del grupo espera a otra tarea; 🔗 si alguna frena a otra.
                     const espera = tareas.some((t) => t.esperaA?.length)
                     const frena = tareas.some((t) => t.laEspera?.length)
-                    const nota = espera ? ' (espera a otra tarea)' : frena ? ' (otra tarea la espera)' : ''
+                    const nota = espera ? ' (espera a otra tarea)' : frena ? ' (sigue con otra tarea)' : ''
                     return (
                       <button
                         key={titulo}

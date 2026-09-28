@@ -271,7 +271,7 @@ Y siempre disponibles:
 - **Qué se calcula**: en los listados y la TV, `espera_a` (lo que falta),
   `lista_por` (ya no falta nada) y `la_espera` (lo que esa instancia frena), un
   solo nivel. En el detalle, `GET /api/instancias/:id/cadena` sube hasta 4
-  niveles y trae quién la espera. Todo corre con la service account sobre los
+  niveles y trae con qué sigue (quién la espera; en pantalla, «🔗 Sigue con»). Todo corre con la service account sobre los
   calendarios de otros departamentos, pero solo sale nombre, departamento, local,
   fecha, estado y personas. Si no hay dependencias cargadas, es una consulta a
   Postgres y **cero** a Calendar.

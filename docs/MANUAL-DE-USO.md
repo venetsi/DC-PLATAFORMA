@@ -109,7 +109,7 @@ Una tarea vence a la medianoche de su día (hora argentina).
 ### Sobre una tarea
 
 Tocá cualquier tarea para ver su detalle: estado, responsable, su **cadena** (lo que
-espera y quién la espera, ver [Tareas que dependen de otra](#tareas-que-dependen-de-otra))
+espera y con qué sigue, ver [Tareas que dependen de otra](#tareas-que-dependen-de-otra))
 e historial (quién la marcó, notas, cambios de fecha). Desde ahí, según tu rol:
 
 - **Marcar hecha**: queda registrada a tu nombre. Pide confirmación porque no se
@@ -200,13 +200,26 @@ tarea no tuvo ninguna fecha, esa vez la dependencia no aplica. Una que quedó co
 
 **Qué se ve.** En todas las vistas (y en la TV), una etiqueta en la tarea:
 
-- **⏳ Espera a Cierre de caja — Tesorería**: todavía falta lo que espera.
-- **✅ Lista: ya se hizo Cierre de caja**: ya no le falta nada, se puede hacer.
-- **🔗 La espera Reporte de ventas — Auditoría**: esta tarea está frenando a otra.
+| Ícono | Etiqueta | Qué quiere decir |
+|---|---|---|
+| ⏳ | **Espera a** Cierre de caja — Tesorería | Todavía falta lo que espera. Se puede marcar igual, pero te avisa. |
+| ✅ | **Lista:** ya se hizo Cierre de caja | Ya no le falta nada: se puede hacer. |
+| 🔗 | **Sigue con** Reporte de ventas — Auditoría | Cuando esta se hace, sigue esa otra: hay alguien esperándola. |
 
-En el detalle, la **cadena** completa en el orden en que se hacen las cosas: lo que
-espera (y lo que esperan esas), la tarea, y quién la espera, con el estado y quién
-la tiene a cargo.
+Si la otra tarea es de otro local, se agrega el local (por ejemplo, «Sigue con
+P&L — Reportes · UAT»). Con varias, se muestra la primera y «y N más»; pasando el
+mouse se ven todas. En **Calendario** y **Cronograma**, donde no entra la etiqueta
+completa, queda solo el ícono ⏳ o 🔗 delante del nombre.
+
+En el detalle, la **cadena** completa en el orden en que se hacen las cosas:
+
+| Ícono | En la cadena |
+|---|---|
+| ✓ | Paso ya hecho (con quién y cuándo) |
+| ⏳ | Paso pendiente o atrasado (con su fecha y responsable) |
+| ⊘ | Paso que quedó como «no aplica» |
+| ● | Esta tarea |
+| ↓ | **Sigue con:** la tarea que viene después
 
 **Avisa, no bloquea.** Si la marcás igual, se marca: la confirmación te dice qué
 falta, queda anotado en el historial, y te avisa qué quedó pendiente.

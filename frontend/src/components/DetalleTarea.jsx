@@ -33,7 +33,7 @@ function Cadena({ cadena, tarea }) {
       {cadena.despues.map((n, i) => (
         <li key={`despues-${i}`} className="despues">
           <span className="icono" aria-hidden="true">↓</span>
-          <span>La espera: {etiquetaDeNodo(n)} · {n.local}</span>
+          <span>Sigue con: {etiquetaDeNodo(n)} · {n.local}</span>
           <span className="sub">{detalleDeNodo(n, hoyISO)}</span>
         </li>
       ))}

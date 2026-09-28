@@ -343,7 +343,7 @@ export default function Calendario() {
           // Solo se arrastra lo que sigue abierto, y si el rol lo permite.
           startEditable: abiertaAun && puede('editar', ev.__depto),
           durationEditable: false,
-          // ⏳ espera a otra, 🔗 otra la espera (ver EtiquetasDependencia).
+          // ⏳ espera a otra, 🔗 sigue con otra (ver EtiquetasDependencia).
           extendedProps: { estado, depto: deptos.get(ev.__depto), espera: !!ev.espera_a?.length, frena: !!ev.la_espera?.length }
         }
       }),
@@ -353,7 +353,7 @@ export default function Calendario() {
   function contenidoEvento(arg) {
     const { estado, depto, espera, frena } = arg.event.extendedProps
     const marca = espera ? '⏳ ' : frena ? '🔗 ' : ''
-    const nota = espera ? ' (espera a otra tarea)' : frena ? ' (otra tarea la espera)' : ''
+    const nota = espera ? ' (espera a otra tarea)' : frena ? ' (sigue con otra tarea)' : ''
     return (
       <span className={`fc-tarea estado-${estado}`} title={`${depto ? `${depto.nombre}: ` : ''}${arg.event.title}${nota}`}>
         <span className="fc-punto" style={{ background: COLOR_ESTADO[estado] }} />

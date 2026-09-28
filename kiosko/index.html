@@ -484,7 +484,7 @@
     var partes = [];
     if (d.espera && d.espera.length) partes.push('<span class="dep espera">⏳ Espera a ' + esc(resumenDeps(d.espera)) + '</span>');
     else if (d.lista && d.lista.length) partes.push('<span class="dep lista">✅ Lista: ya está ' + esc(d.lista.join(' y ')) + '</span>');
-    if (d.la_espera && d.la_espera.length) partes.push('<span class="dep frena">🔗 La espera ' + esc(resumenDeps(d.la_espera)) + '</span>');
+    if (d.la_espera && d.la_espera.length) partes.push('<span class="dep frena">🔗 Sigue con ' + esc(resumenDeps(d.la_espera)) + '</span>');
     return partes.length ? '<span class="deps">' + partes.join('') + '</span>' : '';
   }
   function marcaDeps(ev) {
