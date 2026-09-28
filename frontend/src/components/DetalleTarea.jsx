@@ -1,8 +1,45 @@
 import { useEffect, useState } from 'react'
 import { usePermisos } from '../lib/permisos.js'
-import { agendasApi, asignacionesApi, tareasApi, usuariosApi } from '../api/recursos.js'
+import { agendasApi, asignacionesApi, tareasApi, usuariosApi, instanciasApi } from '../api/recursos.js'
 import EditorFrecuencia from './EditorFrecuencia.jsx'
 import { describirAgenda, valorDesdeAgenda, agendaDesdeValor, errorDeValor } from '../lib/agenda-texto.js'
+import { etiquetaDeNodo, detalleDeNodo, avisoAntesDeMarcar } from '../lib/dependencias.js'
+import { hoyEnArgentina } from '../lib/vencimiento.js'
+
+const ICONO_PASO = { realizada: '✓', no_aplica: '⊘', vencida: '⏳', pendiente: '⏳' }
+
+// Los prerrequisitos de mas arriba primero: la cadena se lee en el orden en
+// que se hacen las cosas (CMV -> Cierre -> esta tarea -> la que la espera).
+function aplanar(nodos) {
+  return (nodos || []).flatMap((n) => [...aplanar(n.previos), n])
+}
+
+function Cadena({ cadena, tarea }) {
+  const hoyISO = hoyEnArgentina()
+  return (
+    <ol className="cadena">
+      {aplanar(cadena.antes).map((n, i) => (
+        <li key={`antes-${i}`} className={n.estado}>
+          <span className="icono" aria-hidden="true">{ICONO_PASO[n.estado] || '•'}</span>
+          <span>{etiquetaDeNodo(n)} · {n.local}</span>
+          <span className="sub">{detalleDeNodo(n, hoyISO)}</span>
+        </li>
+      ))}
+      <li className="esta">
+        <span className="icono" aria-hidden="true">●</span>
+        <span>{tarea.titulo}{tarea.departamento ? ` — ${tarea.departamento}` : ''} · {tarea.local}</span>
+        <span className="sub">Esta tarea</span>
+      </li>
+      {cadena.despues.map((n, i) => (
+        <li key={`despues-${i}`} className="despues">
+          <span className="icono" aria-hidden="true">↓</span>
+          <span>La espera: {etiquetaDeNodo(n)} · {n.local}</span>
+          <span className="sub">{detalleDeNodo(n, hoyISO)}</span>
+        </li>
+      ))}
+    </ol>
+  )
+}
 
 function fechaLarga(iso) {
   if (!iso) return ''
@@ -38,6 +75,20 @@ export default function DetalleTarea({ tarea, onCerrar, onMarcar, onNoAplica, on
     window.addEventListener('keydown', alTeclear)
     return () => window.removeEventListener('keydown', alTeclear)
   }, [marcando, onCerrar])
+
+  // La cadena se pide solo si la tarea tiene alguna dependencia a la vista:
+  // leerla sube por los calendarios de otros departamentos (en el backend).
+  const tieneDependencias = !!(tarea?.esperaA?.length || tarea?.listaPor?.length || tarea?.laEspera?.length)
+  const [cadena, setCadena] = useState(null) // null | 'cargando' | 'error' | { antes, despues }
+  useEffect(() => {
+    if (!tarea?.id || !tarea.idDepartamento || !tieneDependencias) return undefined
+    let vigente = true
+    setCadena('cargando')
+    instanciasApi.cadena(tarea.id, tarea.idDepartamento)
+      .then((c) => vigente && setCadena(c))
+      .catch(() => vigente && setCadena('error'))
+    return () => { vigente = false }
+  }, [tarea?.id, tarea?.idDepartamento, tieneDependencias])
 
   if (!tarea) return null
   const abierta = tarea.estado === 'pendiente' || tarea.estado === 'vencida'
@@ -134,13 +185,20 @@ export default function DetalleTarea({ tarea, onCerrar, onMarcar, onNoAplica, on
           <dd className={`estado-${tarea.estado}`}>{textoEstado(tarea)}</dd>
           <dt>Responsable</dt>
           <dd>{tarea.asignadoA || 'Equipo (sin responsable fijo)'}</dd>
-          {tarea.esperaA?.length > 0 && (
-            <>
-              <dt>Espera a</dt>
-              <dd>{tarea.esperaA.map((p) => `${p.nombre_tarea} — ${p.departamento}`).join('; ')}</dd>
-            </>
-          )}
         </dl>
+
+        {tieneDependencias && confirmando !== 'editar' && (
+          <div>
+            <div className="detalle-etiqueta">Cadena</div>
+            {cadena === 'cargando' && <p className="tenue" style={{ margin: 0, fontSize: '0.8rem' }}>Leyendo la cadena…</p>}
+            {cadena === 'error' && (
+              <p className="tenue" style={{ margin: 0, fontSize: '0.8rem' }}>
+                No se pudo leer la cadena.{tarea.esperaA?.length ? ` Espera a ${tarea.esperaA.map((n) => etiquetaDeNodo(n, tarea.local)).join('; ')}.` : ''}
+              </p>
+            )}
+            {cadena?.antes && <Cadena cadena={cadena} tarea={tarea} />}
+          </div>
+        )}
 
         {tarea.historial?.length > 0 && confirmando !== 'editar' && (
           <div>
@@ -251,6 +309,7 @@ export default function DetalleTarea({ tarea, onCerrar, onMarcar, onNoAplica, on
         {confirmando === 'hecha' && (
           <div className="detalle-confirmar">
             <p style={{ margin: 0 }}>¿Confirmás que <strong>{tarea.titulo}</strong> ({tarea.local}) está hecha? Queda registrada a tu nombre y no se puede deshacer.</p>
+            {avisoAntesDeMarcar(tarea) && <p style={{ margin: 0, color: 'var(--amarillo)', fontSize: '0.85rem' }}>{avisoAntesDeMarcar(tarea)}</p>}
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               <button className="btn detalle-accion" onClick={confirmar} disabled={marcando}>{marcando ? 'Marcando…' : 'Sí, marcar hecha'}</button>
               <button className="btn btn-secondary detalle-accion" onClick={() => setConfirmando(null)} disabled={marcando}>Volver</button>

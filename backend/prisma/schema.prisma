@@ -322,9 +322,11 @@ model TareaAsignacionDepto {
 
 // --- Dependencia BLANDA entre asignaciones: avisa, NO bloquea (decision
 // explicita del usuario). La instancia que espera muestra "espera a <X>"
-// mientras el prerrequisito de la MISMA FECHA siga sin hacerse, y al marcar
-// se devuelve un aviso -- pero la marca se aplica igual y queda asentada en
-// el historial append-only de description.
+// mientras siga sin hacerse la ultima instancia del prerrequisito desde su
+// fecha anterior (ver lib/dependencias.js), y al marcar se devuelve un aviso
+// -- pero la marca se aplica igual y queda asentada en el historial
+// append-only de description. Cuando se completa lo que esperaba, sale el
+// aviso de Chat "Ya podés hacerla" (lib/avisos-dependencias.js).
 //
 // Es entre TareaAsignacion y no entre Tarea (el catalogo) porque Tarea.nombre
 // es unico GLOBAL: "CMV" es una sola Tarea pero se asigna por local, asi que

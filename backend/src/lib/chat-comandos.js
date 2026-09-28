@@ -14,7 +14,7 @@ import { lineaDeTarea } from './mensajes-chat.js'
 import { esAdminGlobal, puede, conPermisos, departamentosDe } from './permisos.js'
 import { SLUG_DIRECCION } from './direccion.js'
 import { marcarInstanciaYPropagar } from './marcar-instancia.js'
-import { prerrequisitosPendientes } from './dependencias.js'
+import { ganchosDeDependencias } from './avisos-dependencias.js'
 import { pagosRecientesDeLocal, pagoPorId, formatearMonto } from './pagos.js'
 
 // Minusculas y sin acentos, para comparar lo que alguien escribio a mano
@@ -786,7 +786,7 @@ async function comandoMarcar(deps, { departamentos, modoTodo, email, argumento }
     calendarId: departamento.id_calendar_google,
     instanceId: evento.id,
     emailUsuario: email,
-    evaluarAvisos: ({ idAsignacion, fechaISO }) => prerrequisitosPendientes(deps, { idAsignacion, fechaISO }),
+    ...ganchosDeDependencias(deps),
     // Mismo motivo que el click de boton: Chat corta a los 30s y el backoff
     // ante un 429 puede dormir hasta 30s solo, asi que la propagacion a
     // departamentos compartidos se resuelve en background.
@@ -1475,7 +1475,7 @@ export async function marcarVarias(deps, { space, extUser, email, instanceIds })
         calendarId: departamento.id_calendar_google,
         instanceId,
         emailUsuario: email,
-        evaluarAvisos: ({ idAsignacion, fechaISO }) => prerrequisitosPendientes(deps, { idAsignacion, fechaISO }),
+        ...ganchosDeDependencias(deps),
         propagarEnBackground: true
       })
       if (yaEstaba) yaEstaban.push(nombre)

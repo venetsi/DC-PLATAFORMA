@@ -249,7 +249,40 @@ Y siempre disponibles:
   reactiva con una serie nueva.
 - **Opciones avanzadas** — el panel de siempre, una asignación por vez: agenda
   individual, compartir con otros departamentos y **dependencias** ("espera
-  a": avisa, no bloquea; se rechazan ciclos y auto-dependencias).
+  a": avisa, no bloquea; se rechazan ciclos y auto-dependencias). Con **En
+  todos los locales** (`POST /api/dependencias/lote`) cada local de la tarea
+  pasa a esperar a la otra tarea en su mismo local ("Toda la empresa" con
+  "Toda la empresa"); informa los locales sin par y los que cerrarían un ciclo.
+
+### Dependencias entre tareas (`lib/dependencias.js`)
+
+- **Regla** (desde el 2026-09-28): una instancia de la tarea que espera (A, fecha
+  d) espera a la **última instancia del prerrequisito entre la fecha anterior de
+  A (sin incluirla) y d**, con un tope de 62 días hacia atrás. Antes era "la del
+  mismo día", y dos tareas con agendas distintas no se conectaban nunca. Si en el
+  tramo no hay ninguna, no aplica. "No aplica" cuenta como resuelta.
+- **Qué se calcula**: en los listados y la TV, `espera_a` (lo que falta),
+  `lista_por` (ya no falta nada) y `la_espera` (lo que esa instancia frena), un
+  solo nivel. En el detalle, `GET /api/instancias/:id/cadena` sube hasta 4
+  niveles y trae quién la espera. Todo corre con la service account sobre los
+  calendarios de otros departamentos, pero solo sale nombre, departamento, local,
+  fecha, estado y personas. Si no hay dependencias cargadas, es una consulta a
+  Postgres y **cero** a Calendar.
+- **Aviso "Ya podés hacerla"** (`lib/avisos-dependencias.js`): al marcar (o poner
+  "no aplica") desde la plataforma o desde Chat, se buscan las instancias que
+  esperaban a esa y a las que ya no les falta nada. Sale una tarjeta al Space del
+  departamento dueño de la tarea que esperaba (si tiene) y un mensaje privado a su
+  responsable (salvo que sea quien marcó). Se espera antes de responder, con tope
+  de 8 s: el servicio de Cloud Run corre con CPU solo durante el request.
+- **Mensaje privado**: la app necesita el id de Chat de la persona (`users/<id>`);
+  con la cuenta de la app, Chat no acepta el email. Hoy sale de
+  `ext_users.chat_user_name`, que se guarda cuando la persona usa la app. Para
+  cubrir a todos, autorizar `https://www.googleapis.com/auth/admin.directory.user.readonly`
+  en Delegación de todo el dominio (mismo cliente que los Grupos, sin borrar sus
+  otros permisos): el servicio lo empieza a usar al reiniciar. Sin ese permiso,
+  a quien no tiene id le llega solo el aviso del Space.
+- **En desarrollo**: con `AVISO_DRY_RUN=1` el aviso se arma y queda en el log,
+  sin postear.
 
 ### Renombrar, duplicar, desactivar, eliminar
 

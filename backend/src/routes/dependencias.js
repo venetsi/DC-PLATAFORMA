@@ -71,6 +71,64 @@ export default async function dependenciasRoutes(fastify) {
     }
   })
 
+  // POST /api/dependencias/lote  { id_asignacion, id_tarea_prerequisito }
+  //
+  // El atajo "En todos los locales": cada local de la tarea de `id_asignacion`
+  // pasa a esperar a la tarea prerrequisito DEL MISMO LOCAL (y "Toda la
+  // empresa" a "Toda la empresa"). Crea solo lo que falta; lo que no tiene par
+  // o cerraria un ciclo se informa en vez de fallar entero.
+  fastify.post('/lote', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { id_asignacion, id_tarea_prerequisito } = request.body || {}
+    if (!id_asignacion || !id_tarea_prerequisito) {
+      return reply.code(400).send({ error: 'id_asignacion e id_tarea_prerequisito son requeridos' })
+    }
+    const base = await cargarAsignacion(id_asignacion)
+    if (!base) return reply.code(404).send({ error: 'Asignación no encontrada' })
+    if (base.id_tarea === id_tarea_prerequisito) {
+      return reply.code(400).send({ error: 'Una tarea no puede depender de sí misma' })
+    }
+
+    const usuario = await usuarioActual(fastify, request)
+    if (!puede(usuario, 'editar', base.tarea.id_departamento)) {
+      return reply.code(403).send({ error: 'Definir dependencias lo puede hacer un MANAGER u OWNER del grupo del departamento' })
+    }
+
+    const [propias, delPrerequisito] = await Promise.all([
+      fastify.db.tareaAsignacion.findMany({ where: { id_tarea: base.id_tarea, activa: true }, include: { local: true } }),
+      fastify.db.tareaAsignacion.findMany({ where: { id_tarea: id_tarea_prerequisito, activa: true }, include: { tarea: true } })
+    ])
+    if (!delPrerequisito.length) return reply.code(404).send({ error: 'Esa tarea no tiene locales asignados' })
+    const EMPRESA = '__empresa__'
+    const parDe = new Map(delPrerequisito.map((a) => [a.id_local_ext || EMPRESA, a]))
+
+    const resultado = { creadas: 0, ya_existian: 0, sin_par: [], ciclos: [] }
+    for (const propia of propias) {
+      const nombreLocal = propia.local?.nombre || 'Toda la empresa'
+      const par = parDe.get(propia.id_local_ext || EMPRESA)
+      if (!par) {
+        resultado.sin_par.push(nombreLocal)
+        continue
+      }
+      if (await crearianCiclo(fastify.db, { idAsignacion: propia.id, idPrerequisito: par.id })) {
+        resultado.ciclos.push(nombreLocal)
+        continue
+      }
+      try {
+        await fastify.db.tareaAsignacionDependencia.create({ data: { id_asignacion: propia.id, id_asignacion_prerequisito: par.id } })
+        resultado.creadas++
+      } catch (err) {
+        if (err.code !== 'P2002') throw err
+        // Ya estaba: si habia quedado inactiva, vuelve a valer.
+        await fastify.db.tareaAsignacionDependencia.updateMany({
+          where: { id_asignacion: propia.id, id_asignacion_prerequisito: par.id, activa: false },
+          data: { activa: true }
+        })
+        resultado.ya_existian++
+      }
+    }
+    return reply.code(201).send(resultado)
+  })
+
   fastify.delete('/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const fila = await fastify.db.tareaAsignacionDependencia.findUnique({
       where: { id: request.params.id },

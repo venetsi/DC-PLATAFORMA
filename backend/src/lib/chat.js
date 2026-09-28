@@ -44,6 +44,63 @@ export async function actualizarMensaje(name, cuerpo) {
   }
 }
 
+// La conversacion privada entre la persona y la app, o null si no existe.
+// `chatUserName` es `users/<id>`: con la cuenta de la app, Chat NO acepta el
+// email como alias (probado: 403 "Service account authentication doesn't
+// support ... email aliases"), asi que hace falta el id.
+export async function buscarMensajeDirecto(chatUserName) {
+  const chat = await getChat()
+  try {
+    const { data } = await chat.spaces.findDirectMessage({ name: chatUserName })
+    return data?.name || null
+  } catch (err) {
+    const codigo = err.code || err.response?.status
+    if (codigo === 404) return null
+    throw err
+  }
+}
+
+// Si el Directory ya contesto que no tiene permiso, no se vuelve a preguntar
+// en esta instancia del servicio: hoy admin.directory.user.readonly NO esta
+// autorizado (401 unauthorized_client) y cada intento seria una llamada perdida.
+// Cuando se autorice, alcanza con que el servicio arranque de nuevo.
+let directorySinPermiso = false
+
+// `users/<id>` de una persona para escribirle en privado. Primero el que quedo
+// guardado cuando uso la app; si no hay, el Directory (que devuelve el mismo
+// id). null = hoy no se le puede escribir.
+export async function idDeChatPorEmail({ db, email, log = console }) {
+  const limpio = String(email || '').toLowerCase().trim()
+  if (!limpio) return null
+  const guardado = await db.extUser.findFirst({
+    where: { email: { equals: limpio, mode: 'insensitive' }, chat_user_name: { not: null } },
+    select: { chat_user_name: true }
+  })
+  if (guardado?.chat_user_name) return guardado.chat_user_name
+  if (directorySinPermiso) return null
+
+  try {
+    const { getDirectoryUsuarios } = await import('./directory-auth.js')
+    const directory = await getDirectoryUsuarios()
+    const { data } = await directory.users.get({ userKey: limpio, fields: 'id' })
+    if (!data?.id) return null
+    const chatUserName = `users/${data.id}`
+    await db.extUser
+      .updateMany({ where: { email: { equals: limpio, mode: 'insensitive' } }, data: { chat_user_name: chatUserName } })
+      .catch(() => {})
+    return chatUserName
+  } catch (err) {
+    const codigo = err.code || err.response?.status
+    if (codigo === 401 || codigo === 403 || /unauthorized_client/.test(err.message || '')) {
+      directorySinPermiso = true
+      log.info?.('chat: el Directory no tiene permiso de lectura de usuarios; los avisos privados salen solo para quien ya uso la app')
+    } else if (codigo !== 404) {
+      log.warn?.({ err: err.message }, 'chat: no se pudo resolver el id de Chat')
+    }
+    return null
+  }
+}
+
 // El email de quien clickea viene en el payload de interaccion, pero NO esta
 // documentado en el recurso REST User, asi que no se puede depender de el.
 // Cuando falta, `users/<id>` es el id de Directory y se resuelve por ahi.

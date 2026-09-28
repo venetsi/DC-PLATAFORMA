@@ -13,14 +13,31 @@ import { estaHecha } from './vencimiento.js'
 // `deps` tiene el mismo shape que usa asegurarDepartamento: desde una ruta se
 // pasa `fastify` tal cual; desde un job standalone, { db, gcal, log }.
 
-// Se le pasa desde afuera (routes/instancias.js) para no acoplar este modulo
-// a las dependencias: si no viene, no evalua nada y `avisos` queda vacio.
+// Tope para el aviso a las tareas que esperaban a esta (`alMarcar`). Se
+// ESPERA en vez de dispararlo suelto: el servicio de Cloud Run corre con CPU
+// solo mientras atiende un request, y un trabajo que sigue despues de
+// responder puede quedar congelado y no terminar nunca. Si tarda mas que el
+// tope, se responde igual y sigue como puede.
+const TOPE_AL_MARCAR_MS = 8000
+
+async function conTope(promesa, ms, log) {
+  let reloj
+  const tope = new Promise((resolve) => { reloj = setTimeout(() => resolve('tope'), ms) })
+  const r = await Promise.race([promesa.catch((err) => log.warn?.({ err: err.message }, 'alMarcar fallo')), tope])
+  clearTimeout(reloj)
+  if (r === 'tope') log.warn?.({ ms }, 'alMarcar supero el tope: se responde sin esperarlo')
+}
+
+// `evaluarAvisos` y `alMarcar` se pasan desde afuera (ganchosDeDependencias en
+// lib/avisos-dependencias.js) para no acoplar este modulo a las dependencias:
+// si no vienen, no se evalua ni se avisa nada y `avisos` queda vacio.
 export async function marcarInstanciaYPropagar(deps, {
   calendarId,
   instanceId,
   emailUsuario,
   ahora = new Date(),
   evaluarAvisos = null,
+  alMarcar = null,
   propagarEnBackground = false,
   // NO_APLICA cierra la instancia sin contarla como hecha (ver lib/vencimiento.js).
   estado = 'REALIZADA',
@@ -101,12 +118,20 @@ export async function marcarInstanciaYPropagar(deps, {
     return propagadas
   }
 
+  // Recien marcada: avisar a las tareas que la esperaban y ya no esperan a nada.
+  const avisarDependientes = () => (alMarcar && idAsignacion && fechaISO
+    ? conTope(Promise.resolve().then(() => alMarcar({ idAsignacion, fechaISO, estado, emailUsuario })), TOPE_AL_MARCAR_MS, log)
+    : null)
+
   // Chat corta a los 30s y `withBackoff` puede dormir hasta 30s por si solo
   // ante un 429: ahi conviene responder apenas termino el marcado principal.
   if (propagarEnBackground) {
     propagar().catch((err) => log.error?.({ err: err.message }, 'propagacion en background fallo'))
+    await avisarDependientes()
     return { evento, yaEstaba: false, propagadas: [], avisos }
   }
 
-  return { evento, yaEstaba: false, propagadas: await propagar(), avisos }
+  const propagadas = await propagar()
+  await avisarDependientes()
+  return { evento, yaEstaba: false, propagadas, avisos }
 }

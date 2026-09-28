@@ -11,6 +11,7 @@ import NuevaTarea from './agendas/NuevaTarea.jsx'
 import SemanaTablero from '../components/SemanaTablero.jsx'
 import TableroKanban from '../components/TableroKanban.jsx'
 import Cronograma from '../components/Cronograma.jsx'
+import EtiquetasDependencia from '../components/EtiquetasDependencia.jsx'
 import { aTarea } from '../lib/agrupar.js'
 import SinAsignacion from './SinAsignacion.jsx'
 import { AvisoPrerrequisitos } from './MisTareas.jsx'
@@ -18,6 +19,7 @@ import { clasificarInstancia, hoyEnArgentina } from '../lib/vencimiento.js'
 import { usePermisos } from '../lib/permisos.js'
 import { infoDepartamentos } from '../lib/colores-depto.js'
 import { fechaHumana } from '../lib/agenda-texto.js'
+import { todasLasEtiquetas } from '../lib/dependencias.js'
 import { useMedia, CONSULTA_CELULAR, CONSULTA_TACTIL } from '../lib/pantalla.js'
 
 // Tablero (listas por departamento, estilo Trello), Calendario (el mes),
@@ -341,19 +343,22 @@ export default function Calendario() {
           // Solo se arrastra lo que sigue abierto, y si el rol lo permite.
           startEditable: abiertaAun && puede('editar', ev.__depto),
           durationEditable: false,
-          extendedProps: { estado, depto: deptos.get(ev.__depto) }
+          // ⏳ espera a otra, 🔗 otra la espera (ver EtiquetasDependencia).
+          extendedProps: { estado, depto: deptos.get(ev.__depto), espera: !!ev.espera_a?.length, frena: !!ev.la_espera?.length }
         }
       }),
     [visibles, deptos]
   )
 
   function contenidoEvento(arg) {
-    const { estado, depto } = arg.event.extendedProps
+    const { estado, depto, espera, frena } = arg.event.extendedProps
+    const marca = espera ? '⏳ ' : frena ? '🔗 ' : ''
+    const nota = espera ? ' (espera a otra tarea)' : frena ? ' (otra tarea la espera)' : ''
     return (
-      <span className={`fc-tarea estado-${estado}`} title={depto ? `${depto.nombre}: ${arg.event.title}` : arg.event.title}>
+      <span className={`fc-tarea estado-${estado}`} title={`${depto ? `${depto.nombre}: ` : ''}${arg.event.title}${nota}`}>
         <span className="fc-punto" style={{ background: COLOR_ESTADO[estado] }} />
         {varios && depto && <span className="chip-depto" style={{ color: depto.color, background: `${depto.color}26` }}>{depto.abreviatura}</span>}
-        <span className="fc-titulo">{arg.event.title}</span>
+        <span className="fc-titulo">{marca}{arg.event.title}</span>
       </span>
     )
   }
@@ -364,8 +369,13 @@ export default function Calendario() {
   }
 
   // La casilla del Tablero: marcar no se puede deshacer, asi que se confirma.
+  // Si todavia espera a otra tarea se dice en la misma pregunta: la
+  // confirmacion ya existia, asi que avisar no suma un paso (y no bloquea).
   function marcarDesdeTablero(t) {
-    if (!window.confirm(`¿Marcar "${t.titulo} — ${t.local}" como hecha? No se puede deshacer.`)) return
+    const pregunta = t.esperaA?.length
+      ? `"${t.titulo} — ${t.local}" espera a ${todasLasEtiquetas(t.esperaA, t.local)}, que todavía no está hecha. ¿Marcarla igual? No se puede deshacer.`
+      : `¿Marcar "${t.titulo} — ${t.local}" como hecha? No se puede deshacer.`
+    if (!window.confirm(pregunta)) return
     marcar(t.id, t.idDepartamento)
   }
 
@@ -547,7 +557,7 @@ export default function Calendario() {
                   onClick={() => { setGrupo(null); setAbierta(t) }}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setGrupo(null); setAbierta(t) } }}
                 >
-                  <span className="tarea-texto"><span>{t.local}</span></span>
+                  <span className="tarea-texto"><span>{t.local}</span><EtiquetasDependencia tarea={t} compacta /></span>
                 </li>
               ))}
             </ul>

@@ -2,6 +2,7 @@ import QRCode from 'qrcode'
 import { clasificarInstancia, hoyEnArgentina } from '../lib/vencimiento.js'
 import { infoDepartamentos } from '../lib/colores-depto.js'
 import { crearPedido, consultarToken, resolverPantalla, formatearUserCode, vistaTv, VIDA_PEDIDO_SEG, INTERVALO_SEG } from '../lib/tv-conexion.js'
+import { mapaDependencias } from '../lib/dependencias.js'
 
 // Cuantos dias hacia atras se buscan tareas vencidas sin hacer para la
 // columna "Atrasadas" -- una tarea que nunca se marca realizada no debe
@@ -78,6 +79,41 @@ async function instanciasDe(fastify, departamento, r) {
   return items
 }
 
+// Las dependencias de lo que muestra la TV, con el mismo cache de 30 s: si no
+// hay ninguna cargada es una sola consulta a Postgres.
+const cacheDependencias = new Map() // `${ids}|${timeMin}|${timeMax}` -> { mapa, en }
+async function dependenciasDe(fastify, departamentos, r, eventos) {
+  const clave = `${departamentos.map((d) => d.id).sort().join(',')}|${r.timeMin}|${r.timeMax}`
+  const ahora = Date.now()
+  const enCache = cacheDependencias.get(clave)
+  if (enCache && ahora - enCache.en < CACHE_CALENDARIO_MS) return enCache.mapa
+  const mapa = await mapaDependencias(fastify, { instancias: eventos })
+  cacheDependencias.set(clave, { mapa, en: ahora })
+  if (cacheDependencias.size > 50) {
+    for (const [k, v] of cacheDependencias) if (ahora - v.en > CACHE_CALENDARIO_MS) cacheDependencias.delete(k)
+  }
+  return mapa
+}
+
+// En la TV, cada dependencia va como texto corto: el nombre, y el
+// departamento o el local solo si no son los de la propia tarea.
+function etiquetaDependencia(nodo, departamento, local) {
+  let texto = nodo.nombre_tarea
+  if (nodo.departamento && nodo.departamento !== departamento) texto += ` — ${nodo.departamento}`
+  if (nodo.local && nodo.local !== local) texto += ` · ${nodo.local}`
+  return texto
+}
+
+function dependenciaDelItem(dep, departamento, local) {
+  if (!dep) return null
+  const etiquetas = (nodos) => (nodos || []).map((n) => etiquetaDependencia(n, departamento, local))
+  const resultado = {}
+  if (dep.espera) resultado.espera = etiquetas(dep.espera)
+  if (dep.listas) resultado.lista = etiquetas(dep.listas)
+  if (dep.la_espera) resultado.la_espera = etiquetas(dep.la_espera)
+  return Object.keys(resultado).length ? resultado : null
+}
+
 function tokenDe(request) {
   const m = /^Bearer\s+(\S+)$/i.exec(request.headers.authorization || '')
   return m ? m[1] : null
@@ -113,6 +149,12 @@ async function armarResumen(fastify, departamentos, vista = 'semana') {
 
   const locales = await fastify.db.extLocal.findMany({ select: { id: true, nombre: true } })
   const nombreLocal = new Map(locales.map((l) => [l.id, l.nombre]))
+  const dependencias = await dependenciasDe(
+    fastify,
+    conCalendario,
+    r,
+    lecturas.flatMap((l) => (l.status === 'fulfilled' ? l.value : []))
+  )
 
   const porLocalHoy = {} // solo para el semaforo/KPIs, acotado al dia de hoy
   const eventos = []
@@ -148,6 +190,8 @@ async function armarResumen(fastify, departamentos, vista = 'semana') {
         else if (!vencida) porLocalHoy[idLocal || '_general'].pendientes++
       }
 
+      const localDelItem = idLocal ? nombreLocal.get(idLocal) || 'Local sin nombre' : 'Toda la empresa'
+      const dependencia = dependenciaDelItem(dependencias.get(`${props.id_asignacion}|${fechaEvento}`), departamento.nombre, localDelItem)
       const item = {
         id: evento.id,
         // El summary del evento lleva el local/grupo (ver lib/titulo.js) para
@@ -156,13 +200,14 @@ async function armarResumen(fastify, departamentos, vista = 'semana') {
         // para eventos creados antes de que existiera nombre_tarea.
         titulo: props.nombre_tarea || evento.summary,
         id_local: idLocal,
-        nombre_local: idLocal ? nombreLocal.get(idLocal) || 'Local sin nombre' : 'Toda la empresa',
+        nombre_local: localDelItem,
         estado,
         departamento,
         asignado_a: nombreCorto(props.asignado_a),
         realizada_por: nombreCorto(props.realizada_por),
         inicio: evento.start?.dateTime || evento.start?.date,
-        fin: evento.end?.dateTime || evento.end?.date
+        fin: evento.end?.dateTime || evento.end?.date,
+        ...(dependencia ? { dependencia } : {})
       }
 
       if (tramo && fechaEvento >= tramo.desde && fechaEvento <= tramo.hasta) {

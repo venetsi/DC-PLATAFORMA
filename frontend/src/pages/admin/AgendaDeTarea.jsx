@@ -18,6 +18,9 @@ export default function AgendaDeTarea({ tarea, locales, grupos, departamentos, u
   const [asignaciones, setAsignaciones] = useState([])
   const [mensaje, setMensaje] = useState('')
   const [error, setError] = useState('')
+  // "En todos los locales" crea dependencias en TODAS las asignaciones de la
+  // tarea: sube este numero para que cada bloque vuelva a leer las suyas.
+  const [versionDependencias, setVersionDependencias] = useState(0)
 
   // Vuelve el formulario de "agregar asignacion" a su estado inicial, sin
   // guardar nada -- para cuando el usuario elige mal el alcance/grupo/local
@@ -148,7 +151,12 @@ export default function AgendaDeTarea({ tarea, locales, grupos, departamentos, u
               </div>
             )}
             <AgendaForm asignacion={a} usuarios={usuarios} onGuardado={cargarAsignaciones} />
-            <DependenciasAsignacion asignacion={a} departamentos={departamentos} />
+            <DependenciasAsignacion
+              asignacion={a}
+              departamentos={departamentos}
+              version={versionDependencias}
+              onCambioEnLote={() => setVersionDependencias((v) => v + 1)}
+            />
           </div>
         ))}
         {asignaciones.length === 0 && <p style={{ color: 'var(--texto-tenue)' }}>Sin asignaciones todavía para esta tarea.</p>}

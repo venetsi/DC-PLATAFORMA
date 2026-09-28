@@ -581,6 +581,15 @@ https://www.googleapis.com/auth/admin.directory.user.readonly
 Está en un cliente JWT separado a propósito: si el scope no se autoriza, lo único que
 deja de funcionar es el fallback — las llamadas de Google Groups siguen intactas.
 
+**El mismo scope habilita los mensajes privados de «Ya podés hacerla»** (aviso de
+dependencias, ver `lib/avisos-dependencias.js`). Para escribirle en privado a una persona
+la app necesita su id de Chat (`users/<id>`): con la cuenta de la app, Chat **no**
+acepta el email como alias (probado el 2026-09-28: 403 *"Service account authentication
+doesn't support access to user information using email aliases"*). Sin el scope, el id
+sale solo de `ext_users.chat_user_name`, que se guarda cuando la persona usa la app
+(ese día: 6 de 32). Con el scope, se resuelve por Directory para todos; el servicio lo
+empieza a usar al reiniciar (un 401 hace que deje de intentarlo hasta entonces).
+
 ## Rollback
 
 Si algo sale mal, `chat_webhook_url` sigue en la base y no se borró. Basta con

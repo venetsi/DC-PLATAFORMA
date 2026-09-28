@@ -64,16 +64,20 @@ export default function Cronograma({ eventos, desdeISO, cantidadDias, idsVisible
                   {grupos.map(([titulo, tareas]) => {
                     const estado = PRIORIDAD.find((p) => tareas.some((t) => t.estado === p))
                     const unica = tareas.length === 1
+                    // ⏳ si alguna del grupo espera a otra tarea; 🔗 si alguna frena a otra.
+                    const espera = tareas.some((t) => t.esperaA?.length)
+                    const frena = tareas.some((t) => t.laEspera?.length)
+                    const nota = espera ? ' (espera a otra tarea)' : frena ? ' (otra tarea la espera)' : ''
                     return (
                       <button
                         key={titulo}
                         type="button"
                         className={`crono-barra ${estado}`}
                         style={{ borderLeftColor: f.info.color }}
-                        title={unica ? `${titulo} — ${tareas[0].local}` : `${titulo}: ${tareas.map((t) => t.local).join(', ')}`}
+                        title={(unica ? `${titulo} — ${tareas[0].local}` : `${titulo}: ${tareas.map((t) => t.local).join(', ')}`) + nota}
                         onClick={() => (unica ? onAbrir(tareas[0]) : onAbrirGrupo({ titulo, fecha: d.fecha, tareas }))}
                       >
-                        <span className="crono-titulo">{titulo}</span>
+                        <span className="crono-titulo">{espera ? '⏳ ' : frena ? '🔗 ' : ''}{titulo}</span>
                         <span className="crono-extra">{unica ? tareas[0].local : `×${tareas.length}`}</span>
                       </button>
                     )

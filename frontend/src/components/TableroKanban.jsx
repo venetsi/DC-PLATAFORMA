@@ -1,5 +1,6 @@
 import { aTarea } from '../lib/agrupar.js'
 import { clasificarInstancia } from '../lib/vencimiento.js'
+import EtiquetasDependencia from './EtiquetasDependencia.jsx'
 
 // Vista "Tablero" de Mi agenda, al estilo Trello: una lista por departamento y
 // una tarjeta por tarea abierta (atrasadas + pendientes de los proximos 30
@@ -76,6 +77,7 @@ export default function TableroKanban({ eventos, idsVisibles, deptos, mapaLocale
                 >
                   <div className="kanban-titulo">{t.titulo}</div>
                   <div className="kanban-meta">{t.local} · {persona}</div>
+                  <EtiquetasDependencia tarea={t} />
                   <div className="kanban-pie">
                     {puede && (
                       <button
@@ -89,7 +91,6 @@ export default function TableroKanban({ eventos, idsVisibles, deptos, mapaLocale
                       />
                     )}
                     <span className={`kanban-vence ${v.clase}`}>{v.texto}</span>
-                    {t.esperaA?.length > 0 && <span className="kanban-espera" title="Espera a otra tarea">⏳</span>}
                   </div>
                 </li>
               )

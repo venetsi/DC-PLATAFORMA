@@ -51,10 +51,11 @@ import {
   CAMPO_TAREA_PAGO,
   CAMPO_PAGOS,
   CAMPO_DEPARTAMENTOS_VINCULAR,
-  CAMPO_ACCION
+  CAMPO_ACCION,
+  ORIGEN_LIBERADA
 } from '../lib/chat-cards.js'
 import { marcarInstanciaYPropagar } from '../lib/marcar-instancia.js'
-import { prerrequisitosPendientes } from '../lib/dependencias.js'
+import { ganchosDeDependencias } from '../lib/avisos-dependencias.js'
 import { esAdminGlobal, conPermisos, puede } from '../lib/permisos.js'
 import { asegurarMembresiasFrescas, usuarioPorEmail, motivoSinAcceso } from '../lib/membresias.js'
 import { emailCanonico } from '../lib/alias-email.js'
@@ -496,25 +497,43 @@ async function vincular(fastify, space, { extUser, usuario, params }) {
   })
 }
 
-async function marcar(fastify, space, { extUser, email, usuario, params }) {
-  // El departamento sale del SPACE, no de los parametros de la card: es el
-  // unico dato de este request que el cliente no eligio. departamentosDelSpace
-  // trae el dueño MAS los compartidos (/compartir) -- el primero es el dueño,
-  // que es contra el que se marca la tarea (su calendario).
+// El departamento contra el que se marca, y si quien clickeo puede.
+//
+// Por defecto sale del SPACE, no de los parametros de la card: es el unico
+// dato de este request que el cliente no eligio. departamentosDelSpace trae el
+// dueño MAS los compartidos (/compartir) -- el primero es el dueño, que es
+// contra el que se marca la tarea (su calendario).
+//
+// Las cards de "Ya podés hacerla" traen `idDepartamento`, porque tambien van
+// por mensaje privado, donde no hay Space vinculado. Ese dato viene del
+// cliente: fuera del ambito del Space, se exige puede('marcar') sobre ESE
+// departamento, que es el mismo permiso que pide la plataforma.
+async function departamentoParaMarcar(fastify, space, extUser, params) {
   const ambito = space ? await departamentosDelSpace(fastify.db, space) : []
-  const departamento = ambito[0] ?? null
-  if (!departamento?.id_calendar_google) {
-    return mensajePrivado(usuario, '⚠️ Este Space no está vinculado a ningún departamento.')
+  const pedido = params.idDepartamento || null
+  const enAmbito = pedido ? ambito.find((d) => d.id === pedido) : ambito[0]
+
+  if (enAmbito) {
+    // Un Space es semi-publico dentro de la organizacion: que alguien lo vea no
+    // significa que pueda cerrar tareas de ese departamento. Excepto el Space de
+    // Dirección, y los Spaces compartidos con /compartir: ahi el control de
+    // acceso es la membresia del Space en si (ver puedeOperarEnChat), no
+    // pertenecer puntualmente al departamento dueño.
+    if (!enAmbito.id_calendar_google) return { error: '⚠️ Este Space no está vinculado a ningún departamento.' }
+    if (!puedeOperarEnChat(extUser, ambito)) return { error: `⚠️ No tenés permiso para marcar tareas de ${enAmbito.nombre}.` }
+    return { departamento: enAmbito }
   }
 
-  // Un Space es semi-publico dentro de la organizacion: que alguien lo vea no
-  // significa que pueda cerrar tareas de ese departamento. Excepto el Space de
-  // Dirección, y los Spaces compartidos con /compartir: ahi el control de
-  // acceso es la membresia del Space en si (ver puedeOperarEnChat), no
-  // pertenecer puntualmente al departamento dueño.
-  if (!puedeOperarEnChat(extUser, ambito)) {
-    return mensajePrivado(usuario, `⚠️ No tenés permiso para marcar tareas de ${departamento.nombre}.`)
-  }
+  if (!pedido) return { error: '⚠️ Este Space no está vinculado a ningún departamento.' }
+  const departamento = await fastify.db.departamento.findUnique({ where: { id: pedido } })
+  if (!departamento?.activo || !departamento.id_calendar_google) return { error: '⚠️ Ese departamento ya no tiene agenda.' }
+  if (!puede(extUser, 'marcar', departamento.id)) return { error: `⚠️ No tenés permiso para marcar tareas de ${departamento.nombre}.` }
+  return { departamento }
+}
+
+async function marcar(fastify, space, { extUser, email, usuario, params }) {
+  const { departamento, error } = await departamentoParaMarcar(fastify, space, extUser, params)
+  if (error) return mensajePrivado(usuario, error)
 
   const instanceId = params.instanceId
   if (!instanceId) return mensajePrivado(usuario, '⚠️ No pude identificar la tarea.')
@@ -524,8 +543,7 @@ async function marcar(fastify, space, { extUser, email, usuario, params }) {
       calendarId: departamento.id_calendar_google,
       instanceId,
       emailUsuario: email,
-      evaluarAvisos: ({ idAsignacion, fechaISO }) =>
-        prerrequisitosPendientes(fastify, { idAsignacion, fechaISO }),
+      ...ganchosDeDependencias(fastify),
       // Chat corta a los 30 s y withBackoff puede dormir hasta 30 s solo ante
       // un 429: se responde apenas termina el marcado principal.
       propagarEnBackground: true
@@ -547,6 +565,14 @@ async function marcar(fastify, space, { extUser, email, usuario, params }) {
     // cargados por un admin, no de un placeholder libre, pero no cuesta nada
     // aplicar la misma guarda para el widget de texto de la card.
     const nota = escaparPseudoEtiquetas(`✅ *${titulo}* marcada por ${email}.${sufijo}`)
+
+    // Desde un "Ya podés hacerla": si la card tenia una sola tarea, queda
+    // reemplazada por la confirmacion (el boton ya no aplica); si tenia varias,
+    // se contesta aparte para no borrar las que siguen pendientes. NO se
+    // reconstruye el recordatorio diario: esta card no era esa.
+    if (params.origen === ORIGEN_LIBERADA) {
+      return Number(params.filas) > 1 ? mensajeNuevo({ text: nota }) : mensajeActualizado({ text: nota })
+    }
 
     // Se actualiza la card EN SU LUGAR (misma tarjeta, no un mensaje nuevo):
     // el boton que se acaba de clickear ya no aplica -- la tarea esta hecha

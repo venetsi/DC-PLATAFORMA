@@ -2,7 +2,8 @@ import { usuarioActual, puede, departamentosDe } from '../lib/permisos.js'
 import { hoyEnArgentina, clasificarInstancia } from '../lib/vencimiento.js'
 import { marcarInstanciaYPropagar } from '../lib/marcar-instancia.js'
 import { reprogramarInstanciaYPropagar } from '../lib/reprogramar-instancia.js'
-import { prerrequisitosPendientes, mapaPrerrequisitos } from '../lib/dependencias.js'
+import { mapaDependencias, cadenaDeInstancia } from '../lib/dependencias.js'
+import { ganchosDeDependencias } from '../lib/avisos-dependencias.js'
 
 // El "hoy" del checklist es el dia en curso en Argentina, no en UTC: antes
 // cambiaba a las 21:00 hora local (ver lib/vencimiento.js). Los eventos son
@@ -27,19 +28,25 @@ function normalizarEmail(email) {
   return String(email || '').trim().toLowerCase()
 }
 
-// Agrega `espera_a` a cada instancia que tenga prerrequisitos sin cumplir.
-// Detras de un flag porque el kiosko refresca cada 2 minutos y no tiene por
-// que pagar la evaluacion (que igual sale gratis si no hay dependencias
-// cargadas -- ver mapaPrerrequisitos).
+// Suma a cada instancia abierta lo que dicen sus dependencias (ver
+// mapaDependencias): `espera_a` (lo que falta), `lista_por` (ya no falta nada)
+// y `la_espera` (lo que esta frenando). Sale gratis si no hay dependencias
+// cargadas: una sola consulta a Postgres, cero a Calendar.
 async function conDependencias(fastify, items, activar) {
   if (!activar) return items
-  const mapa = await mapaPrerrequisitos(fastify, { instancias: items })
+  const mapa = await mapaDependencias(fastify, { instancias: items })
   if (!mapa.size) return items
   return items.map((evento) => {
     const props = evento.extendedProperties?.private || {}
     const fechaISO = evento.start?.date || String(evento.start?.dateTime || '').slice(0, 10)
-    const avisos = mapa.get(`${props.id_asignacion}|${fechaISO}`)
-    return avisos?.length ? { ...evento, espera_a: avisos } : evento
+    const dep = mapa.get(`${props.id_asignacion}|${fechaISO}`)
+    if (!dep) return evento
+    return {
+      ...evento,
+      ...(dep.espera ? { espera_a: dep.espera } : {}),
+      ...(dep.listas ? { lista_por: dep.listas } : {}),
+      ...(dep.la_espera ? { la_espera: dep.la_espera } : {})
+    }
   })
 }
 
@@ -178,17 +185,34 @@ export default async function instanciasRoutes(fastify) {
     const usuario = await fastify.db.extUser.findUnique({ where: { id: request.user.id } })
 
     // El marcado + la propagacion a los departamentos compartidos viven en
-    // lib/marcar-instancia.js (lo comparten esta ruta y, mas adelante, la
-    // Chat App). Los prerrequisitos AVISAN: la marca se aplica igual.
+    // lib/marcar-instancia.js (lo comparten esta ruta y la Chat App). Los
+    // prerrequisitos AVISAN: la marca se aplica igual. Y si esta tarea era lo
+    // ultimo que otra esperaba, sale el aviso de Chat "Ya podés hacerla".
     const { evento, avisos } = await marcarInstanciaYPropagar(fastify, {
       calendarId: departamento.id_calendar_google,
       instanceId: request.params.instanceId,
       emailUsuario: usuario.email,
-      evaluarAvisos: ({ idAsignacion, fechaISO }) =>
-        prerrequisitosPendientes(fastify, { idAsignacion, fechaISO })
+      ...ganchosDeDependencias(fastify)
     })
 
     return { evento, avisos }
+  })
+
+  // La cadena de una tarea para su detalle: lo que espera (y lo que esperan
+  // esas, hasta 4 niveles) y quien la espera a ella. Los otros departamentos
+  // se leen con la service account, pero solo sale lo minimo (dependencias.js).
+  fastify.get('/:instanceId/cadena', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { departamento: idDepartamento } = request.query
+    if (!idDepartamento) return reply.code(400).send({ error: 'departamento requerido' })
+    const departamento = await resolverDepartamentoConAcceso(fastify, request, reply, idDepartamento, 'ver')
+    if (!departamento) return
+
+    const instancia = await fastify.gcal.leerInstancia({ calendarId: departamento.id_calendar_google, instanceId: request.params.instanceId })
+    if (!instancia) return reply.code(404).send({ error: 'La tarea no existe' })
+    const idAsignacion = instancia.extendedProperties?.private?.id_asignacion
+    const fechaISO = instancia.start?.date || String(instancia.start?.dateTime || '').slice(0, 10)
+    if (!idAsignacion || !fechaISO) return { antes: [], despues: [] }
+    return cadenaDeInstancia(fastify, { idAsignacion, fechaISO })
   })
 
   // "No aplica": cierra la instancia sin contarla como hecha (local cerrado,
@@ -203,12 +227,14 @@ export default async function instanciasRoutes(fastify) {
     if (!departamento) return
 
     const usuario = await fastify.db.extUser.findUnique({ where: { id: request.user.id } })
+    // "No aplica" tambien libera a las que esperaban (no frena dependencias).
     const { evento, yaEstaba } = await marcarInstanciaYPropagar(fastify, {
       calendarId: departamento.id_calendar_google,
       instanceId: request.params.instanceId,
       emailUsuario: usuario.email,
       estado: 'NO_APLICA',
-      motivo: motivoLimpio
+      motivo: motivoLimpio,
+      alMarcar: ganchosDeDependencias(fastify).alMarcar
     })
     if (yaEstaba) return reply.code(409).send({ error: 'Esa tarea ya estaba cerrada' })
     return { evento }

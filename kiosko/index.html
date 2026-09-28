@@ -87,6 +87,14 @@
   .tarea-texto { display: flex; flex-direction: column; min-width: 0; }
   .tarea-persona { font-size: 10px; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none; }
   .tarea-bullets li.realizada .tarea-persona { color: var(--verde); }
+  /* Dependencias entre tareas: avisan, no bloquean (no cambian el color de la tarea). */
+  .deps { display: flex; flex-wrap: wrap; gap: 2px 8px; margin-top: 2px; min-width: 0; }
+  .deps .dep { font-size: 10px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .deps .dep.espera { color: var(--amarillo); }
+  .deps .dep.lista { color: var(--verde); }
+  .deps .dep.frena { color: var(--teal); }
+  .tv-tarjeta .deps { margin-top: 5px; }
+  .tv-tarjeta .deps .dep { font-size: 11px; white-space: normal; }
   .dia-vacio { font-size: 12px; color: var(--texto-tenue); font-style: italic; }
   /* Etiqueta de departamento cuando la pantalla muestra varios (mismo color
      que en Mi agenda: lo manda el backend). */
@@ -465,6 +473,26 @@
     return '<span class="chip-depto" style="color:' + color + ';background:' + color + '26">' + esc(d.abreviatura) + '</span>';
   }
 
+  // Dependencias (el backend las manda ya como texto corto, ver routes/tv.js):
+  // ⏳ lo que falta, ✅ ya no falta nada, 🔗 a quien esta frenando.
+  function resumenDeps(lista) {
+    return lista.length > 1 ? lista[0] + ' y ' + (lista.length - 1) + ' más' : lista[0];
+  }
+  function depsHtml(ev) {
+    var d = ev.dependencia;
+    if (!d) return '';
+    var partes = [];
+    if (d.espera && d.espera.length) partes.push('<span class="dep espera">⏳ Espera a ' + esc(resumenDeps(d.espera)) + '</span>');
+    else if (d.lista && d.lista.length) partes.push('<span class="dep lista">✅ Lista: ya está ' + esc(d.lista.join(' y ')) + '</span>');
+    if (d.la_espera && d.la_espera.length) partes.push('<span class="dep frena">🔗 La espera ' + esc(resumenDeps(d.la_espera)) + '</span>');
+    return partes.length ? '<span class="deps">' + partes.join('') + '</span>' : '';
+  }
+  function marcaDeps(ev) {
+    var d = ev.dependencia;
+    if (!d) return '';
+    return d.espera && d.espera.length ? '⏳ ' : d.la_espera && d.la_espera.length ? '🔗 ' : '';
+  }
+
   function bulletsHtml(grupos) {
     return Object.keys(grupos).sort().map(function (local) {
       var itemsHtml = grupos[local].map(function (ev) {
@@ -474,6 +502,7 @@
           : (ev.asignado_a ? '→ ' + ev.asignado_a : '');
         return '<li class="' + esc(ev.estado) + '"><span class="tarea-texto"><span>' + chipDepto(ev.departamento) + esc(ev.titulo) + '</span>'
           + (persona ? '<span class="tarea-persona">' + esc(persona) + '</span>' : '')
+          + depsHtml(ev)
           + '</span></li>';
       }).join('');
       return '<div class="local-grupo"><div class="local-nombre">' + esc(local) + '</div><ul class="tarea-bullets">' + itemsHtml + '</ul></div>';
@@ -601,6 +630,7 @@
         var texto = clase === 'vencida' ? fechaCorta(ev.fecha) + ' · hace ' + diasEntre(ev.fecha, hoy) + ' d' : clase === 'hoy' ? 'Hoy' : fechaCorta(ev.fecha);
         return '<div class="tv-tarjeta"><div class="t">' + esc(ev.titulo) + '</div>'
           + '<div class="m">' + esc(ev.nombre_local) + ' · ' + esc(ev.asignado_a || 'equipo') + '</div>'
+          + depsHtml(ev)
           + '<span class="vence ' + clase + '">' + esc(texto) + '</span></div>';
       }).join('');
       return '<div class="tv-lista"><div class="tv-lista-cab"><span class="color" style="background:' + colorSeguro(d.color) + '"></span>'
@@ -625,14 +655,17 @@
       var grupos = {};
       (porFecha[fecha] || []).forEach(function (ev) {
         var k = (ev.departamento ? ev.departamento.id : '') + '|' + ev.titulo;
-        var g = grupos[k] = grupos[k] || { ev: ev, n: 0, estado: 'realizada' };
+        var g = grupos[k] = grupos[k] || { ev: ev, n: 0, estado: 'realizada', marca: '' };
         g.n++;
         if (orden[ev.estado] < orden[g.estado]) g.estado = ev.estado;
+        // ⏳ gana sobre 🔗: si alguna del grupo espera, es lo que importa ver.
+        var m = marcaDeps(ev);
+        if (m && (!g.marca || m === '⏳ ')) g.marca = m;
       });
       var items = Object.keys(grupos).map(function (k) { return grupos[k]; })
         .sort(function (a, b) { return orden[a.estado] - orden[b.estado] || String(a.ev.titulo).localeCompare(String(b.ev.titulo)); })
         .map(function (g) {
-          return '<div class="cal-item ' + esc(g.estado) + '">' + chipDepto(g.ev.departamento) + esc(g.ev.titulo) + (g.n > 1 ? ' ×' + g.n : '') + '</div>';
+          return '<div class="cal-item ' + esc(g.estado) + '">' + chipDepto(g.ev.departamento) + g.marca + esc(g.ev.titulo) + (g.n > 1 ? ' ×' + g.n : '') + '</div>';
         }).join('');
       var fuera = tramo.mes && fecha.slice(0, 7) !== tramo.mes;
       return '<div class="cal-dia' + (fuera ? ' fuera' : '') + (fecha === hoy ? ' hoy' : '') + '">'

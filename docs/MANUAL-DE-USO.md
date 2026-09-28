@@ -108,8 +108,9 @@ Una tarea vence a la medianoche de su día (hora argentina).
 
 ### Sobre una tarea
 
-Tocá cualquier tarea para ver su detalle: estado, responsable, de qué depende, e
-historial (quién la marcó, notas, cambios de fecha). Desde ahí, según tu rol:
+Tocá cualquier tarea para ver su detalle: estado, responsable, su **cadena** (lo que
+espera y quién la espera, ver [Tareas que dependen de otra](#tareas-que-dependen-de-otra))
+e historial (quién la marcó, notas, cambios de fecha). Desde ahí, según tu rol:
 
 - **Marcar hecha**: queda registrada a tu nombre. Pide confirmación porque no se
   puede deshacer.
@@ -177,12 +178,39 @@ Las agendas se crean por 6 meses y se renuevan solas mientras la tarea siga acti
 ### Tareas que dependen de otra
 
 Una tarea puede **esperar** a otra, incluso de otro departamento: por ejemplo, que
-el reporte de Auditoría espere al CMV del mismo día. Se configura en **Opciones
-avanzadas → Depende de otra tarea**.
+el reporte de Auditoría espere al CMV de Costos. Se configura en **Opciones
+avanzadas → + Depende de otra tarea**: elegís el departamento, la tarea y el local.
+Con **En todos los locales**, cada local de la tarea espera a la otra tarea en su
+mismo local, sin cargarlos de a uno; si la otra tarea no está en algún local, te lo
+dice.
 
-**Avisa, no bloquea**: mientras el prerrequisito siga sin hacerse, la tarea muestra
-**⏳ espera a CMV — Costos**. Si la marcás igual, se marca, y te avisa qué quedó
-pendiente. Si el prerrequisito no tiene tarea ese día, la dependencia no aplica.
+**A qué espera.** Cada vez que le toca a la tarea, espera a la **última vez que le
+tocó a la otra desde su fecha anterior**. Ejemplo: si el CMV es el día 1 y el
+reporte el día 3, el reporte del 3 espera al CMV del 1. Si en ese tramo la otra
+tarea no tuvo ninguna fecha, esa vez la dependencia no aplica. Una que quedó como
+**no aplica** cuenta como resuelta.
+
+**Qué se ve.** En todas las vistas (y en la TV), una etiqueta en la tarea:
+
+- **⏳ Espera a Cierre de caja — Tesorería**: todavía falta lo que espera.
+- **✅ Lista: ya se hizo Cierre de caja**: ya no le falta nada, se puede hacer.
+- **🔗 La espera Reporte de ventas — Auditoría**: esta tarea está frenando a otra.
+
+En el detalle, la **cadena** completa en el orden en que se hacen las cosas: lo que
+espera (y lo que esperan esas), la tarea, y quién la espera, con el estado y quién
+la tiene a cargo.
+
+**Avisa, no bloquea.** Si la marcás igual, se marca: la confirmación te dice qué
+falta, queda anotado en el historial, y te avisa qué quedó pendiente.
+
+**Aviso en Chat cuando se resuelve.** Cuando se marca la última tarea que otra
+esperaba, llega un mensaje **Ya podés hacerla**, con el botón **Marcar hecha**:
+
+- al **Space del departamento** de la tarea que esperaba, si tiene uno vinculado;
+- en **privado a su responsable**, si tiene uno. Por ahora le llega solo a quien ya
+  usó la app de Chat alguna vez; al resto, el aviso le llega por el Space.
+
+Si esperaba a varias, el aviso sale cuando se completa la última.
 
 ## Reportes (Manager y Owner)
 
@@ -277,6 +305,13 @@ tarea. La tarjeta se actualiza sola al marcar.
 El atraso se cuenta en **días hábiles**. Pasado el umbral del departamento (por
 defecto 2 días hábiles) la tarea aparece como atrasada; pasado el de Dirección (por
 defecto 5), además entra en un mensaje consolidado a Dirección.
+
+### «Ya podés hacerla»
+
+Cuando se marca (desde la plataforma o desde Chat) la última tarea que otra
+esperaba, llega un aviso al Space del departamento que esperaba y, en privado, a su
+responsable. Trae el botón **Marcar hecha**, que funciona también desde el mensaje
+privado. Ver [Tareas que dependen de otra](#tareas-que-dependen-de-otra).
 
 ### Comandos
 

@@ -27,6 +27,8 @@ export const tareasApi = {
 export const dependenciasApi = {
   listar: (idAsignacion) => api.get('/dependencias', { params: { asignacion: idAsignacion } }).then((r) => r.data),
   crear: (body) => api.post('/dependencias', body).then((r) => r.data),
+  // Cada local de la tarea espera a la tarea prerrequisito DEL MISMO local.
+  crearEnLote: (body) => api.post('/dependencias/lote', body).then((r) => r.data),
   borrar: (id) => api.delete(`/dependencias/${id}`).then((r) => r.data)
 }
 
@@ -47,6 +49,8 @@ export const instanciasApi = {
     api.get('/instancias', { params: { departamento, desde, hasta } }).then((r) => r.data),
   marcar: (instanceId, idDepartamento) =>
     api.post(`/instancias/${instanceId}/marcar`, { departamento: idDepartamento }).then((r) => r.data),
+  cadena: (instanceId, idDepartamento) =>
+    api.get(`/instancias/${instanceId}/cadena`, { params: { departamento: idDepartamento } }).then((r) => r.data),
   noAplica: (instanceId, idDepartamento, motivo) =>
     api.post(`/instancias/${instanceId}/no-aplica`, { departamento: idDepartamento, motivo }).then((r) => r.data),
   reprogramar: (instanceId, idDepartamento, fecha, motivo) =>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { aTarea } from '../lib/agrupar.js'
 import { clasificarInstancia } from '../lib/vencimiento.js'
+import EtiquetasDependencia from './EtiquetasDependencia.jsx'
 
 // Vista "Semana (L-V)" de Mi agenda con el mismo armado que el kiosko
 // (kiosko/index.html): a la izquierda las atrasadas, despues lunes a viernes
@@ -132,6 +133,7 @@ export default function SemanaTablero({ eventos, lunes, hoyISO, mapaLocales, dep
             {conAtraso && t.diasVencida > 0 && <span className="tarea-atraso">{fechaCorta(t.fechaISO)} · hace {t.diasVencida} d</span>}
           </span>
           {persona && <span className="tarea-persona">{persona}</span>}
+          <EtiquetasDependencia tarea={t} compacta />
         </span>
       </li>
     )

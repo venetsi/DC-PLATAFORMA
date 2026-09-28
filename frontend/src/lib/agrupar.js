@@ -32,9 +32,12 @@ export function aTarea(ev, mapaLocales, hoyISO = hoyEnArgentina()) {
     // panel Editar del detalle.
     idAsignacion: props.id_asignacion || null,
     diasVencida: estado === 'vencida' ? diasVencida(ev, { hoyISO }) : 0,
-    // Prerrequisitos sin cumplir, resueltos en el backend: evaluarlos acá
-    // exigiría leer calendarios de otros departamentos (ver dependencias.js).
+    // Dependencias, resueltas en el backend: evaluarlas acá exigiría leer
+    // calendarios de otros departamentos (ver backend lib/dependencias.js).
+    // esperaA: lo que falta. listaPor: ya no falta nada. laEspera: lo que frena.
     esperaA: ev.espera_a || null,
+    listaPor: ev.lista_por || null,
+    laEspera: ev.la_espera || null,
     // Historial append-only del evento (marcas, notas, reasignaciones).
     historial: String(ev.description || '').split('\n').map((l) => l.trim()).filter(Boolean)
   }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { agruparPorDiaYLocal } from '../lib/agrupar.js'
 import DetalleTarea from './DetalleTarea.jsx'
+import EtiquetasDependencia from './EtiquetasDependencia.jsx'
 
 const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
@@ -63,11 +64,7 @@ export default function AgendaAgrupada({ eventos, mapaLocales, onMarcar, onNoApl
                         </span>
                         {marcando === t.id && ' (marcando…)'}
                         {pie && <span className="tarea-persona">{pie}</span>}
-                        {t.esperaA?.length > 0 && (
-                          <span className="tarea-espera">
-                            ⏳ espera a {t.esperaA.map((p) => `${p.nombre_tarea} — ${p.departamento}`).join('; ')}
-                          </span>
-                        )}
+                        <EtiquetasDependencia tarea={t} compacta />
                       </span>
                     </li>
                   )

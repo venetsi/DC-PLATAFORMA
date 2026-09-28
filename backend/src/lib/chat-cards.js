@@ -99,10 +99,10 @@ export function urlPublica(url) {
 
 // Boton que abre la plataforma en el navegador (openLink lo resuelve el
 // cliente, sin pasar por el endpoint). Se usa para el "Ver todas" del pie.
-function botonAbrir(urlApp, texto = 'Abrir') {
+function botonAbrir(urlApp, texto = 'Abrir', ruta = '/mis-tareas') {
   return {
     text: texto,
-    onClick: { openLink: { url: `${urlPublica(urlApp)}/mis-tareas` } }
+    onClick: { openLink: { url: `${urlPublica(urlApp)}${ruta}` } }
   }
 }
 
@@ -692,5 +692,118 @@ export function dialogoVincular(departamentos, { actuales } = {}) {
         }
       ]
     }
+  }
+}
+
+// ── "Ya podés hacerla": se completó lo que una tarea esperaba ────────────────
+// (lib/avisos-dependencias.js). Una card para el Space del departamento que
+// esperaba y otra, mas corta, para el mensaje privado del responsable.
+
+// El boton de estas cards lleva el departamento: en un mensaje privado no hay
+// Space vinculado del que sacarlo. El receptor lo re-verifica con puede().
+// `origen` + `filas` le dicen como dejar la card despues del click.
+export const ORIGEN_LIBERADA = 'liberada'
+
+function escaparHtml(texto) {
+  return String(texto ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function nombreCorto(email) {
+  return email ? String(email).split('@')[0] : ''
+}
+
+function fechaCorta(fechaISO) {
+  const [a, m, d] = fechaISO.split('-').map(Number)
+  return new Date(Date.UTC(a, m - 1, d, 12)).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+}
+
+function cuandoVence(fechaISO, hoyISO) {
+  if (fechaISO === hoyISO) return 'vence hoy'
+  if (fechaISO < hoyISO) return `atrasada desde el ${fechaCorta(fechaISO)}`
+  return `vence el ${fechaCorta(fechaISO)}`
+}
+
+function botonMarcarLiberada(fila, total) {
+  return {
+    text: 'Marcar hecha',
+    onClick: accionEnEsteEndpoint(ACCION_MARCAR, [
+      { key: 'instanceId', value: fila.instanceId },
+      { key: 'fecha', value: fila.fecha },
+      { key: 'idDepartamento', value: fila.idDepartamento },
+      { key: 'origen', value: ORIGEN_LIBERADA },
+      { key: 'filas', value: String(total) }
+    ])
+  }
+}
+
+function textoDeLiberada(fila, hoyISO, { conResponsable = true } = {}) {
+  const partes = [`<b>${escaparHtml(fila.nombre_tarea)} — ${escaparHtml(fila.local)}</b>`, cuandoVence(fila.fecha, hoyISO)]
+  if (conResponsable && fila.responsable) partes.push(escaparHtml(nombreCorto(fila.responsable)))
+  return partes.join(' · ')
+}
+
+// "Se completó Cierre de caja (Tesorería), marcada por lruiz" -- sin punto
+// final, para poder usarlo tambien en medio de una oracion (`enMedio`).
+export function textoDelPrerequisito(prerequisito, { enMedio = false } = {}) {
+  const que = `${escaparHtml(prerequisito.nombre_tarea)} (${escaparHtml(prerequisito.departamento)})`
+  const quien = prerequisito.por ? escaparHtml(nombreCorto(prerequisito.por)) : null
+  if (prerequisito.estado === 'NO_APLICA') return `${que} quedó como «no aplica»${quien ? ` (${quien})` : ''}`
+  return `${enMedio ? 'se' : 'Se'} completó ${que}${quien ? `, marcada por ${quien}` : ''}`
+}
+
+// Para el Space del departamento que esperaba. `filas`: [{ instanceId, fecha,
+// idDepartamento, nombre_tarea, local, responsable }].
+export function cardLiberadas({ departamento, filas, prerequisito, hoyISO, urlApp }) {
+  const visibles = filas.slice(0, MAX_TAREAS_POR_CARD)
+  const widgets = visibles.map((fila) => ({
+    decoratedText: { text: textoDeLiberada(fila, hoyISO), wrapText: true, button: botonMarcarLiberada(fila, filas.length) }
+  }))
+  if (filas.length > visibles.length) {
+    widgets.push({ decoratedText: { text: `<i>y ${filas.length - visibles.length} más</i>`, wrapText: true } })
+  }
+  return {
+    cardsV2: [
+      {
+        cardId: `liberadas-${departamento.id}`,
+        card: {
+          header: { title: filas.length === 1 ? 'Ya podés hacerla' : 'Ya podés hacerlas', subtitle: departamento.nombre },
+          sections: [
+            { widgets },
+            {
+              widgets: [
+                { textParagraph: { text: `${textoDelPrerequisito(prerequisito)}.` } },
+                { buttonList: { buttons: [botonAbrir(urlApp, 'Abrir en la plataforma', '/')] } }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
+
+// Para el mensaje privado del responsable: la misma informacion, dicha a el.
+export function cardLiberadasPrivada({ filas, prerequisito, hoyISO, urlApp }) {
+  const visibles = filas.slice(0, MAX_TAREAS_POR_CARD)
+  const origen = textoDelPrerequisito(prerequisito, { enMedio: true })
+  const widgets = visibles.length === 1
+    ? [
+        {
+          textParagraph: {
+            text: `Ya podés hacer <b>${escaparHtml(visibles[0].nombre_tarea)} — ${escaparHtml(visibles[0].local)}</b> (${cuandoVence(visibles[0].fecha, hoyISO)}): ${origen}.`
+          }
+        },
+        { buttonList: { buttons: [botonMarcarLiberada(visibles[0], 1), botonAbrir(urlApp, 'Ver mis tareas')] } }
+      ]
+    : [
+        { textParagraph: { text: `Ya podés hacer estas tareas: ${origen}.` } },
+        ...visibles.map((fila) => ({
+          decoratedText: { text: textoDeLiberada(fila, hoyISO, { conResponsable: false }), wrapText: true, button: botonMarcarLiberada(fila, filas.length) }
+        })),
+        ...(filas.length > visibles.length ? [{ decoratedText: { text: `<i>y ${filas.length - visibles.length} más</i>`, wrapText: true } }] : []),
+        { buttonList: { buttons: [botonAbrir(urlApp, 'Ver mis tareas')] } }
+      ]
+  return {
+    cardsV2: [{ cardId: 'liberadas-privado', card: { sections: [{ widgets }] } }]
   }
 }
