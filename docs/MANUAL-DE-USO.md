@@ -175,16 +175,25 @@ Siendo Miembro la ves en modo lectura. Siendo Manager u Owner:
   cuenta de lunes a viernes: el día hábil 10 es el décimo del mes sin sábados ni
   domingos. Los feriados no se descuentan.
 - Tocá una tarea para ver sus locales. Tildá varios para **cambiar cuándo** o
-  **cambiar responsable** a todos juntos, o para **quitarlos**. Con **+ Agregar
-  locales** sumás un grupo o locales sueltos con la misma agenda.
+  **cambiar responsable** a todos juntos, o para **desactivarla en esos locales**.
+  Cada local tiene además su botón **Desactivar**: la tarea deja de agendarse solo
+  ahí y el resto de los locales sigue igual. Con **+ Agregar locales** sumás un
+  grupo o locales sueltos (también vuelve a activar uno que habías desactivado).
 - **Renombrar** y **Duplicar**. Duplicar copia la tarea con sus locales,
   frecuencia y responsable, desde hoy.
 - **Opciones avanzadas**: agenda de un local puntual, compartir, y dependencias
   (ver abajo).
 
-Siendo Owner, además: **Desactivar** (deja de agendarse desde hoy; el historial
-queda), **Eliminar definitivamente**, y los **avisos de tu departamento** (webhook
-de Chat y cuántos días hábiles de atraso disparan cada aviso).
+Siendo Owner, además:
+
+- **Desactivar tarea**, en la fila de la tarea: la apaga **en todos sus locales**
+  desde hoy (el historial queda). Para sacar un solo local, usá el **Desactivar**
+  de ese local, dentro de la tarea.
+- Tildando **Desactivadas** ves las desactivadas, con **Reactivar** (vuelve con los
+  locales que tenía al desactivarla, sus fechas, responsables y dependencias) y
+  **Eliminar definitivamente**.
+- Los **avisos de tu departamento** (webhook de Chat y cuántos días hábiles de
+  atraso disparan cada aviso).
 
 Las agendas se crean por 6 meses y se renuevan solas mientras la tarea siga activa.
 

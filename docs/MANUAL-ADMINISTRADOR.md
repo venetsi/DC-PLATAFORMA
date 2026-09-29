@@ -208,7 +208,8 @@ editar pide MANAGER; desactivar, eliminar y los avisos del departamento, OWNER
   🟢 Al día, contando los últimos 60 días). Las que necesitan atención van
   primero.
 - **Buscar** filtra por tarea, local o grupo. Quien es OWNER (o Dirección)
-  puede tildar **"Desactivadas"** para ver las desactivadas y eliminarlas.
+  puede tildar **"Desactivadas"** para ver las desactivadas, reactivarlas o
+  eliminarlas.
 
 ### Nueva tarea (en un paso)
 
@@ -247,7 +248,11 @@ tildar la fila entera o "Elegir todos"). Con locales elegidos:
 - **Cambiar cuándo** — nueva regla para todos los elegidos. Rige desde la
   fecha elegida, nunca antes de hoy; lo ya marcado queda como estaba.
 - **Cambiar responsable** — solo cambia la persona; la agenda queda igual.
-- **Quitar** — dejan de agendarse desde hoy; el historial queda.
+- **Desactivar en estos locales** (antes "Quitar") — dejan de agendarse desde
+  hoy; el historial queda y el resto de los locales sigue igual. Cada fila tiene
+  además su propio **Desactivar** para un solo local
+  (`POST /api/agendas/asignaciones/quitar` con un id). Volver a sumarlo con
+  **+ Agregar locales** lo reactiva con una serie nueva.
 
 Y siempre disponibles:
 
@@ -298,8 +303,17 @@ Y siempre disponibles:
   agenda: mismos locales, frecuencia, responsable y departamentos
   compartidos, **desde hoy** (no crea atrasadas hacia atrás). Las
   dependencias no se copian.
-- **Desactivar** (OWNER del grupo o Dirección) — cierra la agenda de todos sus
-  locales desde hoy, sin borrar historial.
+- **Desactivar tarea** (OWNER del grupo o Dirección) — cierra la agenda de
+  **todos** sus locales desde hoy, sin borrar historial. El aviso dice cuántos
+  locales y dónde se desactiva uno solo: el 2026-09-29 se apagaron P&L y Auditar
+  enteros queriendo sacar un local.
+- **Reactivar** (OWNER o Dirección, sobre una desactivada; `PATCH /api/tareas/:id`
+  con `activa: true`) — vuelve con los locales que se cerraron junto con la tarea
+  (los de `updated_at` dentro de los 30 minutos previos a la desactivación; los
+  quitados antes, uno por uno, siguen afuera). Si la serie se cerró hoy o ayer
+  se reabre la misma (mismas fechas, marcas y dependencias); si es más vieja,
+  arranca una serie nueva desde hoy con la misma regla, para no traer de vuelta
+  las fechas del medio como atrasadas.
 - **Eliminar definitivamente** (OWNER del grupo o Dirección, sobre una desactivada;
   hay que escribir `ELIMINAR`) — borra eventos de Calendar, asignaciones,
   dependencias y la tarea. No se puede deshacer. Las series viejas que se

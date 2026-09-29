@@ -1,4 +1,4 @@
-import { construirRecurrence, primeraFecha, mismaRegla } from './recurrencia.js'
+import { construirRecurrence, primeraFecha, mismaRegla, leerRecurrence, untilDe, conUntil, horizontePorDefecto } from './recurrencia.js'
 import { componerTitulo } from './titulo.js'
 import { hoyEnArgentina } from './vencimiento.js'
 
@@ -170,6 +170,49 @@ export async function cerrarAsignacion(fastify, asignacion) {
     }
   }
   return fastify.db.tareaAsignacion.update({ where: { id: asignacion.id }, data: { activa: false } })
+}
+
+// Lo contrario de cerrarAsignacion. `asignacion` viene con INCLUDES_AGENDA.
+//
+// Si la serie se cerro hace poco (hoy o ayer), se reabre LA MISMA: vuelve el
+// UNTIL al horizonte y reaparecen las mismas instancias, con sus marcas y sus
+// dependencias. Si se cerro antes, reabrirla traeria de vuelta como atrasadas
+// todas las fechas del medio: ahi se arranca una serie nueva desde hoy, con la
+// misma regla y el mismo responsable.
+export async function reabrirAsignacion(fastify, asignacion) {
+  const hoy = hoyEnArgentina()
+  const calendarId = asignacion.tarea.departamento.id_calendar_google
+  const maestro = calendarId && asignacion.id_calendar_event
+    ? await fastify.gcal.leerInstancia({ calendarId, instanceId: asignacion.id_calendar_event })
+    : null
+  const until = untilDe(maestro?.recurrence)
+
+  if (maestro && (!until || until >= sumarDias(hoy, -1))) {
+    const hasta = horizontePorDefecto(hoy)
+    if (until) {
+      await fastify.gcal.editarRecurrencia({ calendarId, eventId: maestro.id, recurrence: conUntil(maestro.recurrence, hasta) })
+    }
+    for (const compartida of asignacion.compartidas || []) {
+      const calId = compartida.departamento.id_calendar_google
+      if (!calId || !compartida.id_calendar_event) continue
+      const copia = await fastify.gcal.leerInstancia({ calendarId: calId, instanceId: compartida.id_calendar_event })
+      if (copia && untilDe(copia.recurrence)) {
+        await fastify.gcal.editarRecurrencia({ calendarId: calId, eventId: copia.id, recurrence: conUntil(copia.recurrence, hasta) })
+      }
+    }
+    return fastify.db.tareaAsignacion.update({ where: { id: asignacion.id }, data: { activa: true } })
+  }
+
+  const agenda = maestro ? leerRecurrence(maestro.recurrence, maestro.start?.date) : null
+  const { asignacion: nueva } = await asegurarAsignacion(fastify, {
+    tarea: asignacion.tarea,
+    idLocal: asignacion.id_local_ext,
+    asignadoA: asignacion.asignado_a
+  })
+  if (agenda && agenda.recurrencia_tipo !== 'UNICA') {
+    await definirAgenda(fastify, nueva, { ...agenda, vigencia_desde: hoy, vigencia_hasta: null, asignado_a: asignacion.asignado_a || '' })
+  }
+  return nueva
 }
 
 export { INCLUDES_AGENDA }

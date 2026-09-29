@@ -107,6 +107,23 @@ export function leerRecurrence(recurrence, startDate) {
   return null
 }
 
+// El UNTIL de una recurrence como 'YYYY-MM-DD', o null si no tiene.
+export function untilDe(recurrence) {
+  for (const regla of recurrence || []) {
+    const m = /UNTIL=(\d{4})(\d{2})(\d{2})/.exec(regla)
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`
+  }
+  return null
+}
+
+// La misma recurrence con otro UNTIL (o con uno agregado si no tenia).
+export function conUntil(recurrence, fechaISO) {
+  const nuevo = `UNTIL=${fechaISO.replaceAll('-', '')}T000000Z`
+  return (recurrence || []).map((regla) =>
+    !regla.startsWith('RRULE:') ? regla : /UNTIL=/.test(regla) ? regla.replace(/UNTIL=\d{8}T\d{6}Z/, nuevo) : `${regla};${nuevo}`
+  )
+}
+
 // Misma regla ignorando el UNTIL (que cambia con cada renovacion).
 export function mismaRegla(a, b) {
   const limpiar = (rs) => (rs || []).map((r) => r.replace(/;UNTIL=[^;]*/, '')).sort().join('|')

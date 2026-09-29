@@ -1,5 +1,5 @@
 import { usuarioActual, puede, esAdminGlobal } from '../lib/permisos.js'
-import { definirAgenda, cerrarAsignacion } from '../lib/agenda.js'
+import { definirAgenda, cerrarAsignacion, reabrirAsignacion } from '../lib/agenda.js'
 import { leerRecurrence } from '../lib/recurrencia.js'
 import { hoyEnArgentina } from '../lib/vencimiento.js'
 
@@ -72,10 +72,39 @@ export default async function tareasRoutes(fastify) {
       }
     }
 
-    return fastify.db.tarea.update({
+    // Reactivar: vuelven los locales que se apagaron JUNTO con la tarea (los
+    // que se cerraron en ese mismo momento; `updated_at` de la tarea es el de
+    // la desactivacion). Los que ya se habian quitado antes, uno por uno, siguen
+    // afuera. Existe porque "Desactivar" en la fila de la tarea se confundia con
+    // sacar un local, y no habia forma de volver atras (2026-09-29).
+    let reactivadas = null
+    if (activa === true && existente.activa === false) {
+      const momento = existente.updated_at.getTime()
+      const asignaciones = await fastify.db.tareaAsignacion.findMany({
+        where: {
+          id_tarea: existente.id,
+          activa: false,
+          updated_at: { gte: new Date(momento - 30 * 60 * 1000), lte: new Date(momento + 60 * 1000) }
+        },
+        include: { tarea: { include: { departamento: true } }, local: true, compartidas: { include: { departamento: true } } }
+      })
+      reactivadas = { locales: 0, errores: [] }
+      for (const asignacion of asignaciones) {
+        try {
+          await reabrirAsignacion(fastify, asignacion)
+          reactivadas.locales++
+        } catch (err) {
+          fastify.log.warn({ err: err.message, idAsignacion: asignacion.id }, 'tareas: no se pudo reactivar un local')
+          reactivadas.errores.push(`${asignacion.local?.nombre || 'Toda la empresa'}: ${err.message}`)
+        }
+      }
+    }
+
+    const tarea = await fastify.db.tarea.update({
       where: { id: request.params.id },
       data: { nombre, descripcion, ...(activa !== undefined ? { activa } : {}) }
     })
+    return reactivadas ? { ...tarea, reactivadas } : tarea
   })
 
   // Duplica una tarea: nombre nuevo (Tarea.nombre es unico global), mismo o

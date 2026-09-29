@@ -74,6 +74,7 @@ export default function DetalleAgenda({ tarea, locales, grupos, departamentos, u
               </th>
             )}
             <th>Local</th><th>Cuándo</th><th>Responsable</th><th>Próxima</th><th>Estado</th>
+            {!soloLectura && <th aria-label="Acciones" />}
           </tr>
         </thead>
         <tbody>
@@ -87,9 +88,29 @@ export default function DetalleAgenda({ tarea, locales, grupos, departamentos, u
               <td>{a.asignado_a ? nombrePorEmail(a.asignado_a) : <span className="tenue">Equipo</span>}</td>
               <td>{a.proxima ? fechaHumana(a.proxima) : <span className="tenue">—</span>}</td>
               <td>{a.atrasadas ? <span className="pill-mal">{a.atrasadas} atrasada{a.atrasadas > 1 ? 's' : ''}</span> : a.agenda ? <span className="pill-ok">Al día</span> : null}</td>
+              {/* Desactivar UN local sin tocar el resto de la tarea: antes solo
+                  estaba "Quitar" en lote, y el "Desactivar" de la fila de la tarea
+                  (que la apaga en TODOS sus locales) se usaba por error. */}
+              {!soloLectura && (
+                <td>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-chico"
+                    disabled={guardando}
+                    title={`Desactivar ${tarea.nombre} solo en ${a.local || 'toda la empresa'}`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (!window.confirm(`¿Desactivar "${tarea.nombre}" en ${a.local || 'toda la empresa'}? Deja de agendarse ahí desde hoy; el resto de los locales sigue igual.`)) return
+                      ejecutar(() => agendasApi.quitar([a.id]), () => `"${tarea.nombre}" desactivada en ${a.local || 'toda la empresa'}.`)
+                    }}
+                  >
+                    Desactivar
+                  </button>
+                </td>
+              )}
             </tr>
           ))}
-          {!asignaciones.length && <tr><td colSpan={6} className="tenue">Todavía no se agendó en ningún local.</td></tr>}
+          {!asignaciones.length && <tr><td colSpan={7} className="tenue">Todavía no se agendó en ningún local.</td></tr>}
         </tbody>
       </table>
 
@@ -102,7 +123,7 @@ export default function DetalleAgenda({ tarea, locales, grupos, departamentos, u
             <span className="tenue">{n}:</span>
             <button className={accion === 'cuando' ? 'btn' : 'btn btn-secondary'} onClick={() => abrir('cuando')}>Cambiar cuándo</button>
             <button className={accion === 'responsable' ? 'btn' : 'btn btn-secondary'} onClick={() => abrir('responsable')}>Cambiar responsable</button>
-            <button className={accion === 'quitar' ? 'btn' : 'btn btn-secondary'} onClick={() => abrir('quitar')}>Quitar</button>
+            <button className={accion === 'quitar' ? 'btn' : 'btn btn-secondary'} onClick={() => abrir('quitar')}>Desactivar en estos locales</button>
           </>
         ) : (
           <span className="tenue">Elegí locales para cambiarlos juntos.</span>
@@ -148,11 +169,11 @@ export default function DetalleAgenda({ tarea, locales, grupos, departamentos, u
 
       {accion === 'quitar' && (
         <div className="panel-accion panel-peligro">
-          <p style={{ margin: 0 }}>¿Sacar {n} de <strong>{tarea.nombre}</strong>? Dejan de agendarse desde hoy; lo ya marcado queda en el historial.</p>
+          <p style={{ margin: 0 }}>¿Desactivar <strong>{tarea.nombre}</strong> en {n}? Dejan de agendarse desde hoy; lo ya marcado queda en el historial. {todas ? 'Elegiste todos: la tarea queda sin locales, pero no se desactiva.' : 'El resto de los locales sigue igual.'}</p>
           {error && <p className="error-texto">{error}</p>}
           <div className="acciones">
-            <button className="btn btn-peligro" disabled={guardando} onClick={() => ejecutar(() => agendasApi.quitar(ids), (r) => `${r.quitadas} ${r.quitadas === 1 ? 'local quitado' : 'locales quitados'}.`)}>
-              {guardando ? 'Quitando…' : `Sí, quitar ${n}`}
+            <button className="btn btn-peligro" disabled={guardando} onClick={() => ejecutar(() => agendasApi.quitar(ids), (r) => `Desactivada en ${r.quitadas} ${r.quitadas === 1 ? 'local' : 'locales'}.`)}>
+              {guardando ? 'Desactivando…' : `Sí, desactivar en ${n}`}
             </button>
             <button className="btn btn-secondary" onClick={() => setAccion(null)} disabled={guardando}>Volver</button>
           </div>

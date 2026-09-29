@@ -90,11 +90,32 @@ export default function Agendas() {
       avisar(err.response?.data?.error || 'No se pudo renombrar', 'mal')
     }
   }
+  // Desactivar la TAREA entera. Se confundia con sacar un local (paso real,
+  // 2026-09-29: se apagaron P&L y Auditar completos): el aviso lo dice con
+  // numeros y apunta a donde se desactiva un solo local.
   async function desactivar(t) {
-    if (!confirm(`¿Desactivar "${t.nombre}"? Deja de agendarse en todos sus locales desde hoy (el historial queda).`)) return
+    const n = t.asignaciones.length
+    const locales = `${n} ${n === 1 ? 'local' : 'locales'}`
+    if (!confirm(
+      `¿Desactivar la tarea "${t.nombre}" ENTERA?\n\n` +
+      `Deja de agendarse desde hoy en sus ${locales} (el historial queda, y se puede reactivar).\n\n` +
+      `Para sacar solo algunos locales, cancelá, abrí la tarea (▸) y usá "Desactivar" en la fila de cada local.`
+    )) return
     await tareasApi.editar(t.id, { activa: false })
-    avisar(`"${t.nombre}" desactivada.`)
+    avisar(`"${t.nombre}" desactivada en sus ${locales}.`)
     await cargar()
+  }
+  // Vuelve la tarea con los locales que se apagaron junto con ella.
+  async function reactivar(t) {
+    try {
+      const r = await tareasApi.editar(t.id, { activa: true })
+      const n = r.reactivadas?.locales ?? 0
+      const errores = r.reactivadas?.errores || []
+      avisar(`"${t.nombre}" reactivada en ${n} ${n === 1 ? 'local' : 'locales'}.${errores.length ? ` Con errores: ${errores.join('; ')}` : ''}`, errores.length ? 'mal' : 'ok')
+      await cargar()
+    } catch (err) {
+      avisar(err.response?.data?.error || 'No se pudo reactivar', 'mal')
+    }
   }
   async function eliminar(t) {
     if (prompt(`Esto borra "${t.nombre}" Y sus eventos de Google Calendar de forma DEFINITIVA: se pierde el historial.\n\nEscribí ELIMINAR para confirmar:`) !== 'ELIMINAR') return
@@ -203,8 +224,13 @@ export default function Agendas() {
                               <button className="btn btn-secondary btn-chico" onClick={() => setPanel(panel?.duplicar === t.id ? null : { duplicar: t.id })}>Duplicar</button>
                             </>
                           )}
-                          {puedeAdministrar && t.activa && <button className="btn btn-secondary btn-chico" onClick={() => desactivar(t)}>Desactivar</button>}
-                          {puedeAdministrar && !t.activa && <button className="btn btn-secondary btn-chico" onClick={() => eliminar(t)}>Eliminar definitivamente</button>}
+                          {puedeAdministrar && t.activa && <button className="btn btn-secondary btn-chico" onClick={() => desactivar(t)} title="Apaga la tarea en TODOS sus locales">Desactivar tarea</button>}
+                          {puedeAdministrar && !t.activa && (
+                            <>
+                              <button className="btn btn-secondary btn-chico" onClick={() => reactivar(t)}>Reactivar</button>
+                              <button className="btn btn-secondary btn-chico" onClick={() => eliminar(t)}>Eliminar definitivamente</button>
+                            </>
+                          )}
                         </td>
                       </tr>
                       {panel?.renombrar === t.id && (

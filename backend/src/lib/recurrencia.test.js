@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MESES_DE_HORIZONTE, horizontePorDefecto, construirRecurrence, leerRecurrence, primeraFecha, diaHabilDelMes } from './recurrencia.js'
+import { MESES_DE_HORIZONTE, horizontePorDefecto, construirRecurrence, leerRecurrence, primeraFecha, diaHabilDelMes, untilDe, conUntil } from './recurrencia.js'
 
 test('el horizonte por defecto es de 6 meses', () => {
   assert.equal(MESES_DE_HORIZONTE, 6)
@@ -39,6 +39,14 @@ test('dia habil N: la regla, la primera fecha y la lectura de vuelta', () => {
     recurrencia_config: { dia_habil: 10 }
   })
   assert.throws(() => construirRecurrence('DIA_HABIL', { dia_habil: 21 }, null, '2026-09-28'))
+})
+
+test('untilDe y conUntil: leer y reemplazar el fin de una serie', () => {
+  const cerrada = ['RRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=10;UNTIL=20260929T000000Z']
+  assert.equal(untilDe(cerrada), '2026-09-29')
+  assert.deepEqual(conUntil(cerrada, '2027-03-29'), ['RRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=10;UNTIL=20270329T000000Z'])
+  assert.deepEqual(conUntil(['RRULE:FREQ=DAILY'], '2027-01-01'), ['RRULE:FREQ=DAILY;UNTIL=20270101T000000Z'])
+  assert.equal(untilDe([]), null)
 })
 
 test('una vigencia_hasta explicita gana sobre el horizonte', () => {
