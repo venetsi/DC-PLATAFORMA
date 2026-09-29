@@ -29,13 +29,19 @@ function nombreCorto(email) {
   return String(email || '').split('@')[0]
 }
 
-function agruparPorLocal(tareas) {
-  const grupos = new Map()
-  for (const t of tareas) {
-    if (!grupos.has(t.local)) grupos.set(t.local, [])
-    grupos.get(t.local).push(t)
-  }
-  return [...grupos.entries()].sort(([a], [b]) => a.localeCompare(b))
+// "Tarea › Local", ordenadas por tarea y local (pedido del usuario: antes se
+// agrupaba por local y el local quedaba como titulo aparte). Igual en el kiosko.
+const porTareaYLocal = (a, b) => a.titulo.localeCompare(b.titulo) || a.local.localeCompare(b.local)
+
+function TareaYLocal({ t }) {
+  return <>{t.titulo} <span className="sep-local">›</span> {t.local}</>
+}
+
+// Quien la hizo (si esta hecha) o quien la tiene a cargo (si no).
+function personaDe(t) {
+  return t.estado === 'realizada'
+    ? (t.realizadaPor ? `✓ ${nombreCorto(t.realizadaPor)}` : '')
+    : `→ ${t.asignadoA ? nombreCorto(t.asignadoA) : 'equipo'}`
 }
 
 export default function SemanaTablero({ eventos, lunes, hoyISO, mapaLocales, deptos, mostrarDepto, puedeMover, onAbrir, onMover, puedeCrear, onCrear }) {
@@ -106,9 +112,7 @@ export default function SemanaTablero({ eventos, lunes, hoyISO, mapaLocales, dep
   // se corta cuando cambia el estado de "sobre que dia esta".
   function renderTarea(t, conAtraso) {
     const depto = mostrarDepto ? deptos.get(t.idDepartamento) : null
-    const persona = t.estado === 'realizada'
-      ? (t.realizadaPor ? `✓ ${nombreCorto(t.realizadaPor)}` : '')
-      : (t.asignadoA ? `→ ${nombreCorto(t.asignadoA)}` : '')
+    const persona = personaDe(t)
     return (
       <li
         key={t.clave}
@@ -129,7 +133,7 @@ export default function SemanaTablero({ eventos, lunes, hoyISO, mapaLocales, dep
         <span className="tarea-texto">
           <span>
             {depto && <span className="chip-depto" style={{ color: depto.color, background: `${depto.color}26` }} title={depto.nombre}>{depto.abreviatura}</span>}
-            {t.titulo}
+            <TareaYLocal t={t} />
             {conAtraso && t.diasVencida > 0 && <span className="tarea-atraso">{fechaCorta(t.fechaISO)} · hace {t.diasVencida} d</span>}
           </span>
           {persona && <span className="tarea-persona">{persona}</span>}
@@ -141,12 +145,7 @@ export default function SemanaTablero({ eventos, lunes, hoyISO, mapaLocales, dep
 
   function renderGrupos(lista, vacio, conAtraso = false) {
     if (!lista.length) return <div className="dia-vacio">{vacio}</div>
-    return agruparPorLocal(lista).map(([local, ts]) => (
-      <div key={local} className="local-grupo">
-        <div className="local-nombre">{local}</div>
-        <ul className="tarea-bullets">{ts.map((t) => renderTarea(t, conAtraso))}</ul>
-      </div>
-    ))
+    return <ul className="tarea-bullets">{[...lista].sort(porTareaYLocal).map((t) => renderTarea(t, conAtraso))}</ul>
   }
 
   function renderCrear(fecha) {
@@ -203,14 +202,9 @@ export default function SemanaTablero({ eventos, lunes, hoyISO, mapaLocales, dep
         <div className="st-proxima-grid">
           <div className="st-mini hueco" aria-hidden="true" />
           {diasProxima.map((d) => {
-            const lista = porFecha(d.fecha)
-            // Mas chica a proposito: solo la tarea (con cuantos locales), sin
-            // agrupar por local -- es un vistazo a lo que viene.
-            const porTitulo = new Map()
-            for (const t of lista) {
-              if (!porTitulo.has(t.titulo)) porTitulo.set(t.titulo, [])
-              porTitulo.get(t.titulo).push(t)
-            }
+            // Mas chica a proposito, pero con lo mismo que la semana: tarea ›
+            // local, responsable y si espera o sigue con otra.
+            const lista = [...porFecha(d.fecha)].sort(porTareaYLocal)
             return (
               <div key={d.fecha} className={`st-mini${sobre === d.fecha ? ' destino' : ''}${lista.length ? '' : ' sin-tareas'}`} {...soltarEn(d.fecha)}>
                 <div className="st-mini-cab">
@@ -218,16 +212,23 @@ export default function SemanaTablero({ eventos, lunes, hoyISO, mapaLocales, dep
                   {renderCrear(d.fecha)}
                 </div>
                 <ul>
-                  {[...porTitulo.entries()].map(([titulo, ts]) => (
-                    <li key={titulo} title={ts.map((t) => t.local).join(', ')}>
-                      <button type="button" onClick={() => onAbrir(ts[0])}>
-                        {mostrarDepto && deptos.get(ts[0].idDepartamento) && (
-                          <span className="chip-depto" style={{ color: deptos.get(ts[0].idDepartamento).color, background: `${deptos.get(ts[0].idDepartamento).color}26` }}>{deptos.get(ts[0].idDepartamento).abreviatura}</span>
-                        )}
-                        {titulo}{ts.length > 1 ? ` ×${ts.length}` : ''}
-                      </button>
-                    </li>
-                  ))}
+                  {lista.map((t) => {
+                    const depto = mostrarDepto ? deptos.get(t.idDepartamento) : null
+                    const dep = t.esperaA?.length ? `⏳ ${t.esperaA[0].nombre_tarea}${t.esperaA.length > 1 ? ` y ${t.esperaA.length - 1} más` : ''}`
+                      : t.laEspera?.length ? `🔗 ${t.laEspera[0].nombre_tarea}${t.laEspera.length > 1 ? ` y ${t.laEspera.length - 1} más` : ''}` : ''
+                    return (
+                      <li key={t.clave}>
+                        <button type="button" onClick={() => onAbrir(t)} title={`${t.titulo} › ${t.local}`}>
+                          {depto && <span className="chip-depto" style={{ color: depto.color, background: `${depto.color}26` }}>{depto.abreviatura}</span>}
+                          <TareaYLocal t={t} />
+                          <span className="st-mini-sub">
+                            {personaDe(t)}
+                            {dep && <> · <span className={t.esperaA?.length ? 'dep-espera' : 'dep-frena'}>{dep}</span></>}
+                          </span>
+                        </button>
+                      </li>
+                    )
+                  })}
                   {!lista.length && <li className="st-mini-vacio">Sin tareas</li>}
                 </ul>
               </div>

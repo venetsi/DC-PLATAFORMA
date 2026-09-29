@@ -115,7 +115,10 @@
   #proxima-semana .mini-col.hueco { visibility: hidden; }
   #proxima-semana .mini-dia { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-tenue); margin-bottom: 4px; opacity: 0.85; }
   #proxima-semana .mini-tareas { list-style: none; margin: 0; padding: 0; font-size: 11px; color: var(--texto-tenue); opacity: 0.8; line-height: 1.6; }
-  #proxima-semana .mini-tareas li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #proxima-semana .mini-tareas li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
+  #proxima-semana .mini-sub { display: block; font-size: 10px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; }
+  #proxima-semana .mini-sub .dep { font-weight: 700; }
+  .sep-local { color: var(--texto-tenue); opacity: 0.7; }
   #proxima-semana .mini-vacio { font-size: 11px; color: var(--texto-tenue); opacity: 0.5; font-style: italic; }
 
   .vista { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -450,19 +453,9 @@
     for (var i = 0; i < 5; i++) {
       var fecha = new Date(lunes);
       fecha.setDate(lunes.getDate() + i);
-      cols.push({ nombre: DIAS[i], fecha: fecha, esHoy: fecha.toDateString() === hoyStr, grupos: {} });
+      cols.push({ nombre: DIAS[i], fecha: fecha, esHoy: fecha.toDateString() === hoyStr, items: [] });
     }
     return cols;
-  }
-
-  function agruparPorLocal(eventos) {
-    var grupos = {};
-    (eventos || []).forEach(function (ev) {
-      var local = ev.nombre_local || 'Toda la empresa';
-      grupos[local] = grupos[local] || [];
-      grupos[local].push(ev);
-    });
-    return grupos;
   }
 
   var variosDeptos = false;
@@ -493,20 +486,31 @@
     return d.espera && d.espera.length ? '⏳ ' : d.la_espera && d.la_espera.length ? '🔗 ' : '';
   }
 
-  function bulletsHtml(grupos) {
-    return Object.keys(grupos).sort().map(function (local) {
-      var itemsHtml = grupos[local].map(function (ev) {
-        // Quien la hizo (si esta hecha) o quien la tiene a cargo (si no).
-        var persona = ev.estado === 'realizada'
-          ? (ev.realizada_por ? '✓ ' + ev.realizada_por : '')
-          : (ev.asignado_a ? '→ ' + ev.asignado_a : '');
-        return '<li class="' + esc(ev.estado) + '"><span class="tarea-texto"><span>' + chipDepto(ev.departamento) + esc(ev.titulo) + '</span>'
-          + (persona ? '<span class="tarea-persona">' + esc(persona) + '</span>' : '')
-          + depsHtml(ev)
-          + '</span></li>';
-      }).join('');
-      return '<div class="local-grupo"><div class="local-nombre">' + esc(local) + '</div><ul class="tarea-bullets">' + itemsHtml + '</ul></div>';
+  // "Tarea › Local", ordenadas por tarea y local (pedido del usuario: antes se
+  // agrupaba por local y el nombre del local quedaba como titulo aparte).
+  function tareaYLocal(ev) {
+    return esc(ev.titulo) + ' <span class="sep-local">›</span> ' + esc(ev.nombre_local || 'Toda la empresa');
+  }
+  function porTareaYLocal(a, b) {
+    return String(a.titulo).localeCompare(String(b.titulo)) || String(a.nombre_local).localeCompare(String(b.nombre_local));
+  }
+  // Quien la hizo (si esta hecha) o quien la tiene a cargo (si no).
+  function personaDe(ev) {
+    return ev.estado === 'realizada'
+      ? (ev.realizada_por ? '✓ ' + ev.realizada_por : '')
+      : (ev.asignado_a ? '→ ' + ev.asignado_a : '→ equipo');
+  }
+
+  function bulletsHtml(lista) {
+    if (!lista || !lista.length) return '';
+    var itemsHtml = lista.slice().sort(porTareaYLocal).map(function (ev) {
+      var persona = personaDe(ev);
+      return '<li class="' + esc(ev.estado) + '"><span class="tarea-texto"><span>' + chipDepto(ev.departamento) + tareaYLocal(ev) + '</span>'
+        + (persona ? '<span class="tarea-persona">' + esc(persona) + '</span>' : '')
+        + depsHtml(ev)
+        + '</span></li>';
     }).join('');
+    return '<ul class="tarea-bullets">' + itemsHtml + '</ul>';
   }
 
   function pintarSemana(eventos, atrasadas) {
@@ -517,22 +521,20 @@
     (eventos || []).forEach(function (ev) {
       var col = porFecha[fechaLocal(ev.inicio).toDateString()];
       if (!col) return; // fuera de lunes-viernes (no deberia pasar, el backend ya filtra)
-      var local = ev.nombre_local || 'Toda la empresa';
-      col.grupos[local] = col.grupos[local] || [];
-      col.grupos[local].push(ev);
+      col.items.push(ev);
     });
 
     var htmlAtrasadas = '<div class="dia-col atrasadas">'
       + '<div class="dia-nombre">Atrasadas</div>'
       + '<div class="dia-fecha">' + (atrasadas || []).length + ' sin resolver</div>'
-      + '<div class="dia-contenido">' + (bulletsHtml(agruparPorLocal(atrasadas)) || '<div class="dia-vacio">Sin atrasadas</div>') + '</div>'
+      + '<div class="dia-contenido">' + (bulletsHtml(atrasadas) || '<div class="dia-vacio">Sin atrasadas</div>') + '</div>'
       + '</div>';
 
     var htmlDias = columnas.map(function (col) {
       return '<div class="dia-col' + (col.esHoy ? ' hoy' : '') + '">'
         + '<div class="dia-nombre">' + col.nombre + '</div>'
         + '<div class="dia-fecha">' + esc(col.fecha.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })) + '</div>'
-        + '<div class="dia-contenido">' + (bulletsHtml(col.grupos) || '<div class="dia-vacio">Sin tareas</div>') + '</div>'
+        + '<div class="dia-contenido">' + (bulletsHtml(col.items) || '<div class="dia-vacio">Sin tareas</div>') + '</div>'
         + '</div>';
     }).join('');
 
@@ -564,7 +566,13 @@
     var htmlHueco = '<div class="mini-col hueco"></div>';
     var htmlDias = cols.map(function (col) {
       var itemsHtml = col.items.length
-        ? col.items.map(function (ev) { return '<li>' + chipDepto(ev.departamento) + esc(ev.titulo) + '</li>'; }).join('')
+        ? col.items.slice().sort(porTareaYLocal).map(function (ev) {
+            var d = ev.dependencia;
+            var dep = d && d.espera && d.espera.length ? '<span class="dep espera">⏳ ' + esc(resumenDeps(d.espera)) + '</span>'
+              : d && d.la_espera && d.la_espera.length ? '<span class="dep frena">🔗 ' + esc(resumenDeps(d.la_espera)) + '</span>' : '';
+            return '<li>' + chipDepto(ev.departamento) + tareaYLocal(ev)
+              + '<span class="mini-sub">' + esc(personaDe(ev)) + (dep ? ' · ' + dep : '') + '</span></li>';
+          }).join('')
         : '<li class="mini-vacio">Sin tareas</li>';
       return '<div class="mini-col"><div class="mini-dia">' + col.nombre + '</div><ul class="mini-tareas">' + itemsHtml + '</ul></div>';
     }).join('');

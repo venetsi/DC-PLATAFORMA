@@ -86,10 +86,15 @@ Cronograma se deslizan de costado; Agenda y Semana se ven como una lista por dí
   60 días, con la fecha y hace cuántos días venció. Las atrasadas de un día de
   la semana que estás viendo quedan en su día, en rojo; también aparecen acá las
   de sábado o domingo, que no tienen columna.
-- **Al medio, de lunes a viernes**: cada día con sus tareas agrupadas por local.
-  Hoy está resaltado.
-- **Abajo, Próxima semana**, más chica: solo el nombre de cada tarea y en cuántos
-  locales se hace (por ejemplo, *CMV ×12*). Tocala para ver el detalle.
+- **Al medio, de lunes a viernes**: cada día con sus tareas. Hoy está resaltado.
+- **Abajo, Próxima semana**, más chica, con la misma información. Tocá una tarea
+  para ver el detalle.
+
+Cada tarea se muestra como **Tarea › Local** (por ejemplo, *Auditar › LOS GALGOS*),
+ordenadas por tarea y local. Debajo va el responsable (→ nombre, o «equipo» si no
+tiene uno fijo; ✓ nombre si ya está hecha) y, si depende de otra, su etiqueta:
+⏳ **Espera a…** o 🔗 **Sigue con…** (ver
+[Tareas que dependen de otra](#tareas-que-dependen-de-otra)).
 
 Con las flechas **‹ ›** vas y volvés de semana, y **Hoy** te trae a la actual.
 Sábado y domingo la vista arranca en la semana que viene. Las tareas "no aplica"
@@ -257,8 +262,9 @@ departamento.
 Arriba siempre muestra el semáforo (🔴 hay atrasadas, 🟡 hay pendientes de hoy, 🟢
 todo al día) y los contadores. Debajo, la **vista** que se eligió al conectarla:
 
-- **Semana**: las atrasadas de los últimos 60 días, la semana por local y un
-  adelanto de la siguiente.
+- **Semana**: las atrasadas de los últimos 60 días, la semana y un adelanto de la
+  siguiente. Igual que en Mi agenda: cada tarea como **Tarea › Local**, con su
+  responsable y si espera (⏳) o sigue con otra (🔗).
 - **Tablero**: una lista por departamento, con las tareas abiertas por vencimiento
   (como el Tablero de Mi agenda). Los departamentos sin tareas abiertas se muestran
   al final, como una franja angosta, y el resto se reparte el ancho de la pantalla.
