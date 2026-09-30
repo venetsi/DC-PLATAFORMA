@@ -9,8 +9,9 @@
 // bajo demanda, la formula de la ventana es identica (ver ventana-avisos.js).
 import { hoyEnArgentina } from './vencimiento.js'
 import { clasificarParaAviso, resolverUmbrales } from './escalamiento.js'
-import { cardDepartamento } from './chat-cards.js'
+import { cardDepartamento, cardSemanal } from './chat-cards.js'
 import { DIAS_MINIMOS, desdeHaceNDias, finDeHoyArgentina } from './ventana-avisos.js'
+import { datosSemanaDepartamento } from './resumen-semanal.js'
 
 export async function construirTarjetaDepartamento({ db, gcal }, departamento) {
   const hoyISO = hoyEnArgentina()
@@ -26,6 +27,20 @@ export async function construirTarjetaDepartamento({ db, gcal }, departamento) {
   const baldes = clasificarParaAviso(items, { umbrales, hoyISO })
   const nombreLocal = new Map(locales.map((l) => [l.id, l.nombre]))
   return cardDepartamento(departamento, baldes, nombreLocal, { umbrales, urlApp: process.env.FRONTEND_URL })
+}
+
+// Lo mismo para el resumen semanal de los lunes: un click en "Marcar hecha"
+// deja la tarjeta semanal al dia (sin la que se marco), no la cambia por el
+// recordatorio diario. Si el click es un miercoles, la semana es la misma y
+// lo de lunes y martes que siga abierto ya aparece como atrasado.
+export async function construirTarjetaSemanal(deps, departamento) {
+  const hoyISO = hoyEnArgentina()
+  const [datos, locales] = await Promise.all([
+    datosSemanaDepartamento(deps, departamento, { hoyISO }),
+    deps.db.extLocal.findMany({ select: { id: true, nombre: true } })
+  ])
+  const nombreLocal = new Map(locales.map((l) => [l.id, l.nombre]))
+  return cardSemanal(departamento, datos, nombreLocal, { hoyISO, urlApp: process.env.FRONTEND_URL })
 }
 
 // Agrega una linea arriba de la tarjeta, sin persistirla en ningun lado: la

@@ -334,13 +334,32 @@ esas TVs muestran el QR y hay que volver a conectarlas.
 
 ### El recordatorio de todas las mañanas
 
-De lunes a viernes a las 8, cada departamento con su Space vinculado recibe un
+De martes a viernes a las 8, cada departamento con su Space vinculado recibe un
 recordatorio con lo atrasado y lo que vence hoy, con un botón **Marcar hecha** por
 tarea. La tarjeta se actualiza sola al marcar.
 
 El atraso se cuenta en **días hábiles**. Pasado el umbral del departamento (por
 defecto 2 días hábiles) la tarea aparece como atrasada; pasado el de Dirección (por
 defecto 5), además entra en un mensaje consolidado a Dirección.
+
+### El resumen de los lunes
+
+Los lunes a las 8, en lugar del recordatorio diario, cada Space recibe **Tu semana**:
+
+- **🚨 Atrasadas**: lo que quedó sin hacer, de lo más viejo a lo más nuevo, con
+  el botón **Marcar hecha**.
+- **La semana, día por día**: qué vence cada día, agrupado por tarea
+  (`P&L › LA FUERZA, ROMA · gmalachane`), con las mismas marcas de la agenda:
+  ⏳ espera a otra tarea, 🔗 otra tarea sigue con esta. Estas no tienen botón: se
+  marcan cuando llega el día.
+
+Al marcar una atrasada, la tarjeta se actualiza en su lugar. Un departamento sin
+tareas en la semana ni atrasadas no recibe nada.
+
+Dirección recibe además un **resumen por departamento**: cuántas tareas tiene cada
+uno esa semana y cuántas atrasadas, el % de cumplimiento de la semana pasada (el
+general y el de cada departamento) y quiénes tienen más atrasadas. Las tareas sin
+responsable fijo se cuentan como «Equipo — departamento».
 
 ### «Ya podés hacerla»
 

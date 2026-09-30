@@ -3,6 +3,7 @@
 // mensaje re-renderizado sea el mismo widget y no una version parecida.
 import { lineaDeTarea } from './mensajes-chat.js'
 import { formatearMonto } from './pagos.js'
+import { agruparDelDia, localDe, marcaDependencia, rangoTexto, sumarDiasISO as sumarDias, tituloDia } from './resumen-semanal.js'
 
 // Una card no puede llevar un boton por cada tarea de un backlog largo: Chat
 // corta el mensaje. Se muestran las mas viejas -- que son las que importan --
@@ -805,5 +806,168 @@ export function cardLiberadasPrivada({ filas, prerequisito, hoyISO, urlApp }) {
       ]
   return {
     cardsV2: [{ cardId: 'liberadas-privado', card: { sections: [{ widgets }] } }]
+  }
+}
+
+// ── Resumen semanal de los lunes (ver lib/resumen-semanal.js) ────────────────
+//
+// Al Space de cada departamento: las atrasadas, con boton, y la semana dia por
+// dia, sin botones (pedido del usuario: "solo las atrasadas"). Las tareas de
+// la semana se agrupan por tarea: 31 P&L del mismo dia son UNA linea con los
+// locales, no 31 filas.
+//
+// El boton lleva el departamento, igual que las liberadas: un Space puede
+// estar vinculado a varios, y el receptor tiene que reconstruir ESTA tarjeta.
+export const ORIGEN_SEMANAL = 'semanal'
+
+const MAX_LINEAS_POR_DIA = 15
+
+// "<b>P&L</b> › LA FUERZA, LF B2B, ROMA · gmalachane · ⏳ espera a Auditar".
+export function lineasDelDia(eventos, nombreLocal, dependencias) {
+  return agruparDelDia(eventos, nombreLocal, dependencias).map(({ titulo, persona, marca, locales }) => {
+    const partes = [`<b>${escaparHtml(titulo)}</b> › ${escaparHtml(locales.join(', '))}`]
+    if (persona) partes.push(escaparHtml(nombreCorto(persona)))
+    if (marca) partes.push(escaparHtml(marca))
+    return partes.join(' · ')
+  })
+}
+
+function botonMarcarSemanal(evento, departamento) {
+  return {
+    text: 'Marcar hecha',
+    onClick: accionEnEsteEndpoint(ACCION_MARCAR, [
+      { key: 'instanceId', value: evento.id },
+      { key: 'fecha', value: evento.start?.date || '' },
+      { key: 'idDepartamento', value: departamento.id },
+      { key: 'origen', value: ORIGEN_SEMANAL }
+    ])
+  }
+}
+
+function textoAtrasada({ evento, dias }, nombreLocal, dependencias) {
+  const props = evento.extendedProperties?.private || {}
+  const titulo = props.nombre_tarea || evento.summary || 'Tarea'
+  const fecha = evento.start?.date
+  const partes = [`<b>${escaparHtml(titulo)} › ${escaparHtml(localDe(props, nombreLocal))}</b>`]
+  if (fecha) partes.push(`del ${fechaCorta(fecha)}`)
+  if (dias > 0) partes.push(`<font color="#c62828">hace ${dias === 1 ? '1 día hábil' : `${dias} días hábiles`}</font>`)
+  if (props.asignado_a) partes.push(escaparHtml(nombreCorto(props.asignado_a)))
+  const marca = marcaDependencia(evento, dependencias)
+  if (marca) partes.push(escaparHtml(marca))
+  return partes.join(' · ')
+}
+
+function plural(n, uno, varios) {
+  return `${n} ${n === 1 ? uno : varios}`
+}
+
+// `datos` es lo que devuelve datosSemanaDepartamento.
+export function cardSemanal(departamento, datos, nombreLocal, { hoyISO, urlApp } = {}) {
+  const { semana, vencidas, porDia, total, dependencias } = datos
+  const secciones = []
+
+  if (vencidas.length) {
+    const visibles = vencidas.slice(0, MAX_TAREAS_POR_CARD)
+    const widgets = visibles.map((v) => ({
+      decoratedText: { text: textoAtrasada(v, nombreLocal, dependencias), wrapText: true, button: botonMarcarSemanal(v.evento, departamento) }
+    }))
+    if (vencidas.length > visibles.length) {
+      widgets.push({
+        decoratedText: { text: `<i>y ${vencidas.length - visibles.length} más</i>`, wrapText: true, button: botonAbrir(urlApp, 'Ver todas') }
+      })
+    }
+    secciones.push({ header: `🚨 Atrasadas (${vencidas.length})`, collapsible: false, widgets })
+  }
+
+  for (const { fecha, eventos } of porDia) {
+    const lineas = lineasDelDia(eventos, nombreLocal, dependencias)
+    const visibles = lineas.slice(0, MAX_LINEAS_POR_DIA)
+    if (lineas.length > visibles.length) visibles.push(`<i>y ${lineas.length - visibles.length} más</i>`)
+    secciones.push({
+      header: `${tituloDia(fecha, hoyISO)} · ${plural(eventos.length, 'tarea', 'tareas')}`,
+      collapsible: false,
+      widgets: [{ textParagraph: { text: visibles.join('<br>') } }]
+    })
+  }
+
+  if (!secciones.length) {
+    secciones.push({ widgets: [{ textParagraph: { text: 'No hay tareas esta semana ni atrasadas. 👌' } }] })
+  }
+  secciones.push({ widgets: [{ buttonList: { buttons: [botonAbrir(urlApp, 'Abrir en la plataforma', '/')] } }] })
+
+  const resumen = [plural(total, 'tarea esta semana', 'tareas esta semana')]
+  if (vencidas.length) resumen.push(plural(vencidas.length, 'atrasada', 'atrasadas'))
+  return {
+    cardsV2: [
+      {
+        cardId: `semanal-${departamento.id}`,
+        card: {
+          header: {
+            title: `Tu semana: ${rangoTexto(semana.desde, sumarDias(semana.desde, 4))}`,
+            subtitle: `${departamento.nombre} · ${resumen.join(' · ')}`
+          },
+          sections: secciones
+        }
+      }
+    ]
+  }
+}
+
+function porcentaje({ hechas, total }) {
+  return total ? Math.round((hechas / total) * 100) : null
+}
+
+// Para Direccion, sin botones: es un tablero, no una lista para trabajar.
+//   filas:   [{ departamento, total, atrasadas, pasada: { hechas, total } }]
+//   sinNada: nombres de los departamentos sin tareas ni atrasadas
+//   ranking: [{ quien, atrasadas, masVieja }] (ver rankingPorResponsable)
+export function cardResumenDireccion({ semana, filas, sinNada = [], ranking = [], pasadaTotal, urlApp }) {
+  const pct = porcentaje(pasadaTotal || { hechas: 0, total: 0 })
+  const subtitulo = [`${rangoTexto(semana.desde, sumarDias(semana.desde, 4))}`]
+  if (pct !== null) subtitulo.push(`semana pasada: ${pct}% cumplido (${pasadaTotal.hechas} de ${pasadaTotal.total})`)
+
+  const widgetsDeptos = filas.map(({ departamento, total, atrasadas, pasada }) => {
+    const partes = [`<b>${escaparHtml(departamento.nombre)}</b>`, plural(total, 'tarea esta semana', 'tareas esta semana')]
+    partes.push(atrasadas ? `<font color="#c62828">${plural(atrasadas, 'atrasada', 'atrasadas')}</font>` : '0 atrasadas')
+    const p = porcentaje(pasada)
+    if (p !== null) partes.push(`semana pasada: ${p}%`)
+    return { decoratedText: { text: partes.join(' · '), wrapText: true } }
+  })
+  if (!widgetsDeptos.length) widgetsDeptos.push({ textParagraph: { text: 'Ningún departamento tiene tareas esta semana.' } })
+  if (sinNada.length) {
+    widgetsDeptos.push({ textParagraph: { text: `<i>Sin tareas esta semana ni atrasadas: ${escaparHtml(sinNada.join(', '))}</i>` } })
+  }
+
+  const secciones = [{ header: 'Por departamento', collapsible: false, widgets: widgetsDeptos }]
+
+  if (ranking.length) {
+    secciones.push({
+      header: 'Atrasadas por responsable',
+      collapsible: false,
+      widgets: [
+        {
+          textParagraph: {
+            text: ranking
+              .map((r) => `<b>${escaparHtml(r.quien.includes('@') ? nombreCorto(r.quien) : r.quien)}</b> — ${plural(r.atrasadas, 'atrasada', 'atrasadas')}` +
+                (r.masVieja > 0 ? ` · la más vieja: ${plural(r.masVieja, 'día hábil', 'días hábiles')}` : ''))
+              .join('<br>')
+          }
+        }
+      ]
+    })
+  }
+
+  secciones.push({ widgets: [{ buttonList: { buttons: [botonAbrir(urlApp, 'Ver Reportes', '/reportes')] } }] })
+
+  return {
+    cardsV2: [
+      {
+        cardId: 'semanal-direccion',
+        card: {
+          header: { title: 'Resumen semanal por departamento', subtitle: subtitulo.join(' · ') },
+          sections: secciones
+        }
+      }
+    ]
   }
 }

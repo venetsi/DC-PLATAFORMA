@@ -16,15 +16,23 @@
 // El job no escribe NADA en el evento, a proposito -- se repite todos los dias
 // mientras la tarea siga sin hacerse, que es lo que lo vuelve un reporte de
 // aging en vez de una alerta unica.
+//
+// Los LUNES el recordatorio diario se reemplaza por el resumen semanal (ver
+// lib/resumen-semanal.js): a cada departamento, sus atrasadas y la semana dia
+// por dia; a Direccion, los totales por departamento, el cumplimiento de la
+// semana pasada y el ranking de atrasadas por responsable. El escalamiento a
+// Direccion sale igual que cualquier otro dia. AVISO_MODO=semanal|diario
+// fuerza un modo (para probar sin esperar al lunes).
 import { prisma, listarInstancias } from './lib.js'
 import { hoyEnArgentina } from '../lib/vencimiento.js'
 import { clasificarParaAviso, resolverUmbrales } from '../lib/escalamiento.js'
 import { crearTransporteChat, crearTransporteConsola, enviarEnSerie } from '../lib/notificaciones.js'
-import { mensajeDepartamento, mensajeDireccion } from '../lib/mensajes-chat.js'
-import { cardDepartamento } from '../lib/chat-cards.js'
+import { mensajeDepartamento, mensajeDireccion, mensajeResumenDireccion, mensajeSemanal } from '../lib/mensajes-chat.js'
+import { cardDepartamento, cardResumenDireccion, cardSemanal } from '../lib/chat-cards.js'
 import { DIAS_MINIMOS, desdeHaceNDias, finDeHoyArgentina } from '../lib/ventana-avisos.js'
 import { SLUG_DIRECCION } from '../lib/direccion.js'
 import { cargarFeriados } from '../lib/feriados.js'
+import { cumplimientoDelTramo, datosSemanaDepartamento, modoDelAviso, rankingPorResponsable, unirSinDuplicados } from '../lib/resumen-semanal.js'
 
 // La ventana se deriva de los umbrales en vez de estar hardcodeada: si alguien
 // configura "escalar a los 20 dias", una ventana fija de 14 nunca llegaria a
@@ -55,21 +63,57 @@ async function correr() {
 
   const direccion = departamentos.find((d) => d.slug === SLUG_DIRECCION) || null
   const umbralDireccion = resolverUmbrales(direccion).direccion
+  const modo = modoDelAviso(hoyISO)
 
   const mensajes = []
   const paraDireccion = []
   const configuracionAjustada = []
   let vencidasTotales = 0
+  // Solo en modo semanal: lo que necesita el resumen a Direccion.
+  const semanal = { filas: [], sinNada: [], vencidasPorDepto: [], items: [], semana: null }
 
   for (const depto of departamentos) {
     const umbrales = resolverUmbrales(depto)
     if (umbrales.ajustado) configuracionAjustada.push(depto.slug)
 
-    // Sin filtro server-side por estado=PENDIENTE: era la definicion divergente
-    // que dejaba fuera del query a los eventos SIN la property `estado`, que
-    // el kiosko en cambio si contaba como vencidos.
-    const items = await listarInstancias({ calendarId: depto.id_calendar_google, timeMin, timeMax })
-    const baldes = clasificarParaAviso(items, { umbrales, hoyISO, referencia: ahora })
+    let baldes
+    if (modo === 'semanal') {
+      // Una sola lectura del calendario (60 dias atras hasta el domingo) para
+      // la tarjeta semanal, el cumplimiento de la semana pasada y el
+      // escalamiento, que sale igual que cualquier otro dia.
+      const datos = await datosSemanaDepartamento({ db: prisma, gcal: { listarInstancias }, log: console }, depto, { hoyISO, referencia: ahora })
+      baldes = clasificarParaAviso(datos.items, { umbrales, hoyISO, referencia: ahora })
+      semanal.semana = datos.semana
+      semanal.items.push(datos.items)
+      semanal.vencidasPorDepto.push({ departamento: depto, vencidas: datos.vencidas })
+      if (!datos.total && !datos.vencidas.length && !datos.pasada.total) semanal.sinNada.push(depto.nombre)
+      else semanal.filas.push({ departamento: depto, total: datos.total, atrasadas: datos.vencidas.length, pasada: datos.pasada })
+
+      if (datos.total || datos.vencidas.length) {
+        mensajes.push({
+          etiqueta: `${depto.slug} (semanal)`,
+          destino: depto,
+          texto: mensajeSemanal(depto, datos, nombreLocal, { hoyISO }),
+          card: cardSemanal(depto, datos, nombreLocal, { hoyISO, urlApp: process.env.FRONTEND_URL })
+        })
+      }
+    } else {
+      // Sin filtro server-side por estado=PENDIENTE: era la definicion divergente
+      // que dejaba fuera del query a los eventos SIN la property `estado`, que
+      // el kiosko en cambio si contaba como vencidos.
+      const items = await listarInstancias({ calendarId: depto.id_calendar_google, timeMin, timeMax })
+      baldes = clasificarParaAviso(items, { umbrales, hoyISO, referencia: ahora })
+      if (baldes.vencidas.length || baldes.pendientes_hoy.length) {
+        // Se arman las DOS representaciones: la card va al Space vinculado (con
+        // botones para marcar sin salir de Chat) y el texto al webhook viejo.
+        mensajes.push({
+          etiqueta: depto.slug,
+          destino: depto,
+          texto: mensajeDepartamento(depto, baldes, nombreLocal, { umbrales }),
+          card: cardDepartamento(depto, baldes, nombreLocal, { umbrales, urlApp: process.env.FRONTEND_URL })
+        })
+      }
+    }
     vencidasTotales += baldes.vencidas.length
 
     if (baldes.escala_direccion.length) {
@@ -77,19 +121,29 @@ async function correr() {
       // por departamento no hay un solo numero que describa el consolidado.
       paraDireccion.push({ departamento: depto, items: baldes.escala_direccion, umbral: umbrales.direccion })
     }
-    if (!baldes.vencidas.length && !baldes.pendientes_hoy.length) continue
-
-    // Se arman las DOS representaciones: la card va al Space vinculado (con
-    // botones para marcar sin salir de Chat) y el texto al webhook viejo.
-    mensajes.push({
-      etiqueta: depto.slug,
-      destino: depto,
-      texto: mensajeDepartamento(depto, baldes, nombreLocal, { umbrales }),
-      card: cardDepartamento(depto, baldes, nombreLocal, { umbrales, urlApp: process.env.FRONTEND_URL })
-    })
   }
 
   const avisosDepartamento = mensajes.length
+
+  // El resumen a Direccion va ANTES que el escalamiento: es lo primero que
+  // conviene leer el lunes; el escalamiento es el detalle de lo mas viejo.
+  let resumenDireccion = null
+  if (modo === 'semanal' && semanal.semana) {
+    // El cumplimiento global sin contar dos veces las tareas compartidas.
+    const pasadaTotal = cumplimientoDelTramo(unirSinDuplicados(semanal.items), { ...semanal.semana.pasada, referencia: ahora })
+    const ranking = rankingPorResponsable(semanal.vencidasPorDepto)
+    const datosDireccion = { semana: semanal.semana, filas: semanal.filas, sinNada: semanal.sinNada, ranking, pasadaTotal, urlApp: process.env.FRONTEND_URL }
+    resumenDireccion = { cumplimiento_semana_pasada: pasadaTotal, responsables_con_atrasadas: ranking.length }
+    if (direccion) {
+      mensajes.push({
+        etiqueta: `${direccion.slug} (resumen semanal)`,
+        destino: direccion,
+        texto: mensajeResumenDireccion(datosDireccion),
+        card: cardResumenDireccion(datosDireccion)
+      })
+    }
+  }
+
   if (paraDireccion.length && direccion) {
     // El encabezado cita el umbral solo si TODOS los departamentos escalados
     // usan el mismo; con overrides mezclados seria un numero falso, y la
@@ -117,6 +171,8 @@ async function correr() {
   // los envios fallaron.
   return {
     ...(simulacion ? { simulacion: true } : {}),
+    modo,
+    ...(resumenDireccion ? { resumen_semanal: resumenDireccion } : {}),
     departamentos_evaluados: departamentos.length,
     departamentos_con_space: departamentos.filter((d) => d.chat_space_name).length,
     departamentos_con_webhook: departamentos.filter((d) => d.chat_webhook_url).length,

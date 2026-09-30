@@ -571,9 +571,20 @@ quedan sin recordatorio diario.
 
 | Job | Qué hace | Cuándo (Cloud Scheduler, hora argentina) |
 |---|---|---|
-| `dc-plataforma-avisos` (`avisosChat.js`) | Recordatorio por departamento + escalamiento a Dirección | 8:00, lunes a viernes |
+| `dc-plataforma-avisos` (`avisosChat.js`) | Recordatorio por departamento + escalamiento a Dirección. Los lunes, en lugar del recordatorio, el resumen semanal (ver abajo) | 8:00, lunes a viernes |
 | `dc-plataforma-reconciliar` (`reconciliar.js`) | Renueva series por vencer, cierra las de locales dados de baja | Cada 6 horas |
 | `dc-plataforma-snapshot` (`snapshotCumplimiento.js`) | Totales del día (`cumplimiento_diario`) + tablero por instancia de los últimos 60 días (`cumplimiento_instancias`) | 1:00, todos los días |
+
+**Resumen semanal de los lunes** (`lib/resumen-semanal.js`). Lo decide el mismo
+job, sin otro Scheduler: si el día (hora argentina) es lunes, a cada departamento
+con tareas en la semana o atrasadas le manda la tarjeta **Tu semana** (atrasadas
+con botón y la semana día por día, agrupada por tarea); a Dirección, el resumen
+por departamento (tareas de la semana, atrasadas, % de la semana pasada y ranking
+de atrasadas por responsable). Las tareas compartidas no se cuentan dos veces en
+el % general ni en el ranking. El escalamiento a Dirección sale igual que
+cualquier otro día, después del resumen. Si el lunes es feriado, el resumen sale
+igual ese día. Probarlo sin esperar al lunes: `AVISO_MODO=semanal` (con
+`AVISO_DRY_RUN=1` para no postear).
 
 Los tres usan la misma imagen (`dc-plataforma-avisos:latest`). Al cambiar su
 código hay que reconstruirla (`gcloud builds submit --config
@@ -593,6 +604,7 @@ npm run job:snapshot -- --instancias-desde=2026-08-08   # completar el tablero h
 | Variable | Efecto | Default |
 |---|---|---|
 | `AVISO_DRY_RUN=1` | Arma los mensajes sin postear nada | envía |
+| `AVISO_MODO` | `semanal` o `diario` fuerza el modo del job de avisos | semanal los lunes, diario el resto |
 | `AVISO_SLUG_DIRECCION` | Slug tratado como Dirección | `direccion` |
 | `AVISO_DIAS_DEPARTAMENTO` / `AVISO_DIAS_DIRECCION` | Umbrales globales (la columna del departamento gana) | `2` / `5` |
 | `MEMBRESIA_FUENTE` | `groups` = departamentos desde Google Groups | `groups` en producción |
