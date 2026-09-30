@@ -14,6 +14,7 @@ export function aTarea(ev, mapaLocales, hoyISO = hoyEnArgentina()) {
   return {
     id: ev.id,
     fechaISO,
+    idLocal,
     local: idLocal ? mapaLocales.get(idLocal) || 'Local sin nombre' : 'Toda la empresa',
     // El summary lleva el local/grupo (ver backend lib/titulo.js) para que
     // se entienda en Google Calendar; acá se usa el nombre limpio porque
@@ -41,6 +42,96 @@ export function aTarea(ev, mapaLocales, hoyISO = hoyEnArgentina()) {
     // Historial append-only del evento (marcas, notas, reasignaciones).
     historial: String(ev.description || '').split('\n').map((l) => l.trim()).filter(Boolean)
   }
+}
+
+// ── Agrupado por grupo de locales (pedido del usuario, 2026-09-30) ──────────
+// La misma tarea el mismo dia en varios locales del mismo grupo se muestra
+// UNA vez: "P&L › GRUPO TITA ×3", sin importar el responsable. Un local solo
+// de su grupo, o sin grupo, queda como estaba. Igual que el resumen semanal de
+// Chat (backend lib/resumen-semanal.js) y la TV.
+
+// Del peor al mejor: el grupo toma el estado del primero que tenga.
+const PRIORIDAD = ['vencida', 'pendiente', 'realizada', 'no_aplica']
+
+function nombreCorto(email) {
+  return String(email || '').split('@')[0]
+}
+
+// Las dependencias de todas las del grupo, sin repetir y sin el local (cada
+// local espera a SU Auditar: en la linea del grupo alcanza con "Auditar").
+function unirNodos(listas) {
+  const vistos = new Map()
+  for (const nodo of listas.flat()) {
+    const clave = `${nodo.nombre_tarea}|${nodo.departamento || ''}`
+    if (!vistos.has(clave)) vistos.set(clave, { ...nodo, local: null })
+  }
+  return vistos.size ? [...vistos.values()] : null
+}
+
+// `tareas`: salidas de aTarea (con lo que cada vista les agregue).
+// `grupoDeLocal`: Map id_local_ext -> grupo. Devuelve la misma lista con las
+// tareas de un mismo (tarea, dia, grupo) reemplazadas por un grupo, en el
+// lugar de la primera.
+export function agruparPorGrupo(tareas, grupoDeLocal) {
+  if (!grupoDeLocal?.size) return tareas
+  const porClave = new Map()
+  for (const t of tareas) {
+    const grupo = t.idLocal ? grupoDeLocal.get(t.idLocal) : null
+    if (!grupo) continue
+    const clave = `${t.titulo}|${t.fechaISO}|${grupo}`
+    if (!porClave.has(clave)) porClave.set(clave, [])
+    porClave.get(clave).push(t)
+  }
+  const grupos = new Map()
+  for (const [clave, lista] of porClave) {
+    if (new Set(lista.map((t) => t.idLocal)).size < 2) continue
+    grupos.set(clave, crearGrupo(clave, grupoDeLocal.get(lista[0].idLocal), lista))
+  }
+  if (!grupos.size) return tareas
+  const salida = []
+  const puestos = new Set()
+  for (const t of tareas) {
+    const clave = t.idLocal && grupoDeLocal.get(t.idLocal) ? `${t.titulo}|${t.fechaISO}|${grupoDeLocal.get(t.idLocal)}` : null
+    const grupo = clave && grupos.get(clave)
+    if (!grupo) salida.push(t)
+    else if (!puestos.has(clave)) { puestos.add(clave); salida.push(grupo) }
+  }
+  return salida
+}
+
+function crearGrupo(clave, grupo, lista) {
+  const tareas = [...lista].sort((a, b) => a.local.localeCompare(b.local))
+  const abiertas = tareas.filter((t) => t.estado === 'pendiente' || t.estado === 'vencida')
+  const noEsperan = tareas.every((t) => !t.esperaA?.length)
+  return {
+    esGrupo: true,
+    clave: `grupo::${clave}`,
+    titulo: tareas[0].titulo,
+    fechaISO: tareas[0].fechaISO,
+    grupo,
+    local: grupo,
+    tareas,
+    estado: PRIORIDAD.find((p) => tareas.some((t) => t.estado === p)) || tareas[0].estado,
+    diasVencida: Math.max(0, ...tareas.map((t) => t.diasVencida || 0)),
+    hechas: tareas.filter((t) => t.estado === 'realizada').length,
+    abiertas,
+    idDepartamento: tareas[0].idDepartamento,
+    departamento: tareas[0].departamento,
+    personas: [...new Set(tareas.map((t) => t.asignadoA).filter(Boolean).map(nombreCorto))].sort(),
+    esperaA: unirNodos(tareas.map((t) => t.esperaA || [])),
+    // "Lista" solo si ninguna espera y todas las abiertas estan listas.
+    listaPor: noEsperan && abiertas.length && abiertas.every((t) => t.listaPor?.length) ? unirNodos(abiertas.map((t) => t.listaPor)) : null,
+    laEspera: unirNodos(tareas.map((t) => t.laEspera || [])),
+    movible: tareas.some((t) => t.movible)
+  }
+}
+
+// Segunda linea de un grupo: responsables y cuantas van hechas.
+export function pieDeGrupo(g) {
+  const partes = []
+  if (g.hechas) partes.push(`${g.hechas} de ${g.tareas.length} hechas`)
+  partes.push(`→ ${g.personas.length ? g.personas.join(', ') : 'equipo'}`)
+  return partes.join(' · ')
 }
 
 export function agruparPorDiaYLocal(eventos, mapaLocales) {

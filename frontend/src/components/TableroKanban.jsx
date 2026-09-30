@@ -1,4 +1,4 @@
-import { aTarea } from '../lib/agrupar.js'
+import { aTarea, agruparPorGrupo } from '../lib/agrupar.js'
 import { clasificarInstancia } from '../lib/vencimiento.js'
 import EtiquetasDependencia from './EtiquetasDependencia.jsx'
 
@@ -24,7 +24,10 @@ function vencimiento(t, hoyISO) {
   return { clase: 'futura', texto: fechaCorta(t.fechaISO) }
 }
 
-export default function TableroKanban({ eventos, idsVisibles, deptos, mapaLocales, hoyISO, puedeMarcar, onAbrir, onMarcar, marcando }) {
+// La misma tarea el mismo dia en varios locales del mismo grupo es UNA
+// tarjeta ("GRUPO TITA ×3"): tocarla abre el grupo (`onAbrirGrupo`) y su
+// casilla marca todas (`onMarcarGrupo`).
+export default function TableroKanban({ eventos, idsVisibles, deptos, mapaLocales, grupoDeLocal, hoyISO, puedeMarcar, onAbrir, onAbrirGrupo, onMarcar, onMarcarGrupo, marcando }) {
   const porDepto = new Map(idsVisibles.map((id) => [id, []]))
   for (const ev of eventos) {
     const { estado } = clasificarInstancia(ev)
@@ -38,7 +41,8 @@ export default function TableroKanban({ eventos, idsVisibles, deptos, mapaLocale
     .map(([id, tareas]) => ({
       id,
       info: deptos.get(id) || { nombre: '…', color: '#8fb3bd', abreviatura: '' },
-      tareas: tareas.sort((a, b) => a.fechaISO.localeCompare(b.fechaISO) || a.titulo.localeCompare(b.titulo) || a.local.localeCompare(b.local))
+      tareas: agruparPorGrupo(tareas, grupoDeLocal)
+        .sort((a, b) => a.fechaISO.localeCompare(b.fechaISO) || a.titulo.localeCompare(b.titulo) || a.local.localeCompare(b.local))
     }))
     // Las colapsadas (sin tareas abiertas) van al final; dentro de cada grupo, por nombre.
     .sort((a, b) => (!a.tareas.length - !b.tareas.length) || a.info.nombre.localeCompare(b.info.nombre))
@@ -58,35 +62,41 @@ export default function TableroKanban({ eventos, idsVisibles, deptos, mapaLocale
           <header className="kanban-cab">
             <span className="kanban-color" style={{ background: l.info.color }} aria-hidden="true" />
             <strong>{l.info.nombre}</strong>
-            <span className="kanban-cuenta">{l.tareas.length}</span>
+            {/* Tareas, no tarjetas: un grupo cuenta por cada local. */}
+            <span className="kanban-cuenta">{l.tareas.reduce((n, t) => n + (t.esGrupo ? t.tareas.length : 1), 0)}</span>
           </header>
           <ul className="kanban-tarjetas">
             {l.tareas.map((t) => {
               const v = vencimiento(t, hoyISO)
               const puede = puedeMarcar(t.idDepartamento)
-              const persona = t.asignadoA ? nombreCorto(t.asignadoA) : 'equipo'
+              const persona = t.esGrupo
+                ? (t.personas.length ? t.personas.join(', ') : 'equipo')
+                : t.asignadoA ? nombreCorto(t.asignadoA) : 'equipo'
+              const abrir = () => (t.esGrupo ? onAbrirGrupo(t) : onAbrir(t))
               return (
                 <li
                   key={t.clave}
                   className="kanban-tarjeta"
                   role="button"
                   tabIndex={0}
-                  onClick={() => onAbrir(t)}
-                  onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onAbrir(t))}
-                  title="Ver el detalle"
+                  onClick={abrir}
+                  onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), abrir())}
+                  title={t.esGrupo ? `${t.tareas.map((x) => x.local).join(', ')}. Tocá para ver los locales` : 'Ver el detalle'}
                 >
                   <div className="kanban-titulo">{t.titulo}</div>
-                  <div className="kanban-meta">{t.local} · {persona}</div>
+                  <div className="kanban-meta">
+                    {t.local}{t.esGrupo && <span className="grupo-cuenta">×{t.tareas.length}</span>} · {persona}
+                  </div>
                   <EtiquetasDependencia tarea={t} />
                   <div className="kanban-pie">
                     {puede && (
                       <button
                         type="button"
                         className="kanban-check"
-                        disabled={marcando === t.id}
-                        aria-label={`Marcar hecha: ${t.titulo} — ${t.local}`}
-                        title="Marcar hecha"
-                        onClick={(e) => { e.stopPropagation(); onMarcar(t) }}
+                        disabled={t.esGrupo ? t.tareas.some((x) => marcando === x.id) : marcando === t.id}
+                        aria-label={t.esGrupo ? `Marcar hechas las ${t.tareas.length} de ${t.titulo} — ${t.local}` : `Marcar hecha: ${t.titulo} — ${t.local}`}
+                        title={t.esGrupo ? 'Marcar hecho todo el grupo' : 'Marcar hecha'}
+                        onClick={(e) => { e.stopPropagation(); if (t.esGrupo) onMarcarGrupo(t); else onMarcar(t) }}
                         onKeyDown={(e) => e.stopPropagation()}
                       />
                     )}

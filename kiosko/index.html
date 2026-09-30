@@ -119,6 +119,8 @@
   #proxima-semana .mini-sub { display: block; font-size: 10px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; }
   #proxima-semana .mini-sub .dep { font-weight: 700; }
   .sep-local { color: var(--texto-tenue); opacity: 0.7; }
+  /* "P&L › GRUPO TITA ×3": la misma tarea en varios locales del grupo ese dia. */
+  .grupo-cuenta { display: inline-block; margin-left: 0.35em; padding: 0 0.4em; border-radius: 999px; font-size: 0.8em; font-weight: 700; color: var(--texto-tenue); background: rgba(143, 179, 189, 0.16); }
   #proxima-semana .mini-vacio { font-size: 11px; color: var(--texto-tenue); opacity: 0.5; font-style: italic; }
 
   .vista { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -489,13 +491,69 @@
   // "Tarea › Local", ordenadas por tarea y local (pedido del usuario: antes se
   // agrupaba por local y el nombre del local quedaba como titulo aparte).
   function tareaYLocal(ev) {
-    return esc(ev.titulo) + ' <span class="sep-local">›</span> ' + esc(ev.nombre_local || 'Toda la empresa');
+    return esc(ev.titulo) + ' <span class="sep-local">›</span> ' + esc(ev.nombre_local || 'Toda la empresa')
+      + (ev.esGrupo ? '<span class="grupo-cuenta">×' + ev.n + '</span>' : '');
   }
   function porTareaYLocal(a, b) {
     return String(a.titulo).localeCompare(String(b.titulo)) || String(a.nombre_local).localeCompare(String(b.nombre_local));
   }
+
+  // La misma tarea el mismo dia en varios locales del mismo grupo va en una
+  // sola linea: "P&L › GRUPO TITA ×3" (igual que Mi agenda y el resumen de
+  // Chat). Un local solo de su grupo, o sin grupo, queda como estaba.
+  var PEOR_ESTADO = ['vencida', 'pendiente', 'realizada'];
+  function claveDeGrupo(ev) {
+    return ev.grupo ? ev.titulo + '|' + String(ev.fecha || ev.inicio || '').slice(0, 10) + '|' + ev.grupo : null;
+  }
+  function unicos(lista) {
+    return lista.filter(function (x, i) { return x && lista.indexOf(x) === i; });
+  }
+  function crearGrupo(miembros) {
+    var estados = miembros.map(function (m) { return m.estado; });
+    var deps = {};
+    miembros.forEach(function (m) {
+      var d = m.dependencia || {};
+      ['espera', 'lista', 'la_espera'].forEach(function (k) { if (d[k]) deps[k] = unicos((deps[k] || []).concat(d[k])); });
+    });
+    // "Lista" solo si ninguna espera.
+    if (deps.espera) delete deps.lista;
+    return {
+      esGrupo: true,
+      titulo: miembros[0].titulo,
+      nombre_local: miembros[0].grupo,
+      estado: PEOR_ESTADO.filter(function (e) { return estados.indexOf(e) >= 0; })[0] || miembros[0].estado,
+      departamento: miembros[0].departamento,
+      fecha: miembros[0].fecha,
+      inicio: miembros[0].inicio,
+      n: miembros.length,
+      hechas: estados.filter(function (e) { return e === 'realizada'; }).length,
+      personas: unicos(miembros.map(function (m) { return m.asignado_a; })).sort(),
+      dependencia: Object.keys(deps).length ? deps : null
+    };
+  }
+  function agruparPorGrupo(lista) {
+    var porClave = {};
+    lista.forEach(function (ev) {
+      var k = claveDeGrupo(ev);
+      if (k) (porClave[k] = porClave[k] || []).push(ev);
+    });
+    var puestos = {};
+    var salida = [];
+    lista.forEach(function (ev) {
+      var k = claveDeGrupo(ev);
+      var miembros = k && porClave[k];
+      if (!miembros || unicos(miembros.map(function (m) { return m.id_local; })).length < 2) { salida.push(ev); return; }
+      if (puestos[k]) return;
+      puestos[k] = true;
+      salida.push(crearGrupo(miembros));
+    });
+    return salida.sort(porTareaYLocal);
+  }
   // Quien la hizo (si esta hecha) o quien la tiene a cargo (si no).
   function personaDe(ev) {
+    if (ev.esGrupo) {
+      return (ev.hechas ? ev.hechas + ' de ' + ev.n + ' hechas · ' : '') + '→ ' + (ev.personas.length ? ev.personas.join(', ') : 'equipo');
+    }
     return ev.estado === 'realizada'
       ? (ev.realizada_por ? '✓ ' + ev.realizada_por : '')
       : (ev.asignado_a ? '→ ' + ev.asignado_a : '→ equipo');
@@ -503,7 +561,7 @@
 
   function bulletsHtml(lista) {
     if (!lista || !lista.length) return '';
-    var itemsHtml = lista.slice().sort(porTareaYLocal).map(function (ev) {
+    var itemsHtml = agruparPorGrupo(lista.slice()).map(function (ev) {
       var persona = personaDe(ev);
       return '<li class="' + esc(ev.estado) + '"><span class="tarea-texto"><span>' + chipDepto(ev.departamento) + tareaYLocal(ev) + '</span>'
         + (persona ? '<span class="tarea-persona">' + esc(persona) + '</span>' : '')
@@ -566,7 +624,7 @@
     var htmlHueco = '<div class="mini-col hueco"></div>';
     var htmlDias = cols.map(function (col) {
       var itemsHtml = col.items.length
-        ? col.items.slice().sort(porTareaYLocal).map(function (ev) {
+        ? agruparPorGrupo(col.items.slice()).map(function (ev) {
             var d = ev.dependencia;
             var dep = d && d.espera && d.espera.length ? '<span class="dep espera">⏳ ' + esc(resumenDeps(d.espera)) + '</span>'
               : d && d.la_espera && d.la_espera.length ? '<span class="dep frena">🔗 ' + esc(resumenDeps(d.la_espera)) + '</span>' : '';
@@ -633,14 +691,17 @@
           + '<span class="color" style="background:' + colorSeguro(d.color) + '"></span>'
           + '<span class="vertical">' + esc(d.nombre) + '</span><span class="cuenta">0</span></div>';
       }
-      var html = tarjetas.map(function (ev) {
-        var clase = ev.estado === 'vencida' ? 'vencida' : ev.fecha === hoy ? 'hoy' : 'futura';
-        var texto = clase === 'vencida' ? fechaCorta(ev.fecha) + ' · hace ' + diasEntre(ev.fecha, hoy) + ' d' : clase === 'hoy' ? 'Hoy' : fechaCorta(ev.fecha);
-        return '<div class="tv-tarjeta"><div class="t">' + esc(ev.titulo) + '</div>'
-          + '<div class="m">' + esc(ev.nombre_local) + ' · ' + esc(ev.asignado_a || 'equipo') + '</div>'
-          + depsHtml(ev)
-          + '<span class="vence ' + clase + '">' + esc(texto) + '</span></div>';
-      }).join('');
+      var html = agruparPorGrupo(tarjetas.slice())
+        .sort(function (a, b) { return String(a.fecha).localeCompare(String(b.fecha)) || porTareaYLocal(a, b); })
+        .map(function (ev) {
+          var clase = ev.estado === 'vencida' ? 'vencida' : ev.fecha === hoy ? 'hoy' : 'futura';
+          var texto = clase === 'vencida' ? fechaCorta(ev.fecha) + ' · hace ' + diasEntre(ev.fecha, hoy) + ' d' : clase === 'hoy' ? 'Hoy' : fechaCorta(ev.fecha);
+          var quien = ev.esGrupo ? (ev.personas.length ? ev.personas.join(', ') : 'equipo') : (ev.asignado_a || 'equipo');
+          return '<div class="tv-tarjeta"><div class="t">' + esc(ev.titulo) + '</div>'
+            + '<div class="m">' + esc(ev.nombre_local) + (ev.esGrupo ? '<span class="grupo-cuenta">×' + ev.n + '</span>' : '') + ' · ' + esc(quien) + '</div>'
+            + depsHtml(ev)
+            + '<span class="vence ' + clase + '">' + esc(texto) + '</span></div>';
+        }).join('');
       return '<div class="tv-lista"><div class="tv-lista-cab"><span class="color" style="background:' + colorSeguro(d.color) + '"></span>'
         + esc(d.nombre) + '<span class="cuenta">' + tarjetas.length + '</span></div>'
         + '<div class="tv-tarjetas">' + html + '</div></div>';

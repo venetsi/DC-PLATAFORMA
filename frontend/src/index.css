@@ -596,6 +596,13 @@ th, td {
 .st-mini-sub .dep-frena { color: var(--teal); }
 /* "Tarea › Local" (vista Semana). */
 .sep-local { color: var(--texto-tenue); opacity: 0.7; }
+/* "P&L › GRUPO TITA ×3": la misma tarea en varios locales del grupo ese dia. */
+.grupo-cuenta { display: inline-block; margin-left: 0.35rem; padding: 0 0.35rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; color: var(--texto-tenue); background: rgba(143, 179, 189, 0.16); text-decoration: none; }
+/* Lista de un grupo: tocar un local abierto lo marca; "Detalle" abre su ficha. */
+.grupo-acciones { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.75rem 0 0.5rem; }
+.grupo-lista li { justify-content: space-between; gap: 0.6rem; padding: 0.3rem 0; font-size: 0.9rem; }
+.grupo-lista li .tarea-texto { flex: 1 1 auto; }
+.grupo-lista .grupo-detalle { flex: 0 0 auto; }
 .st-mini-vacio { color: var(--texto-tenue); opacity: 0.55; font-style: italic; }
 
 /* Mas angosto que un escritorio amplio: las atrasadas pasan arriba, a lo

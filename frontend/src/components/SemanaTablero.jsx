@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { aTarea } from '../lib/agrupar.js'
+import { aTarea, agruparPorGrupo, pieDeGrupo } from '../lib/agrupar.js'
 import { clasificarInstancia } from '../lib/vencimiento.js'
 import EtiquetasDependencia from './EtiquetasDependencia.jsx'
 
@@ -33,20 +33,33 @@ function nombreCorto(email) {
 // agrupaba por local y el local quedaba como titulo aparte). Igual en el kiosko.
 const porTareaYLocal = (a, b) => a.titulo.localeCompare(b.titulo) || a.local.localeCompare(b.local)
 
+// Un grupo ("P&L › GRUPO TITA") lleva al lado cuantos locales junta.
 function TareaYLocal({ t }) {
-  return <>{t.titulo} <span className="sep-local">›</span> {t.local}</>
+  return <>{t.titulo} <span className="sep-local">›</span> {t.local}{t.esGrupo && <span className="grupo-cuenta">×{t.tareas.length}</span>}</>
 }
 
 // Quien la hizo (si esta hecha) o quien la tiene a cargo (si no).
 function personaDe(t) {
+  if (t.esGrupo) return pieDeGrupo(t)
   return t.estado === 'realizada'
     ? (t.realizadaPor ? `✓ ${nombreCorto(t.realizadaPor)}` : '')
     : `→ ${t.asignadoA ? nombreCorto(t.asignadoA) : 'equipo'}`
 }
 
-export default function SemanaTablero({ eventos, lunes, hoyISO, mapaLocales, deptos, mostrarDepto, puedeMover, onAbrir, onMover, puedeCrear, onCrear }) {
+// `grupoDeLocal` (Map id_local -> grupo): la misma tarea el mismo dia en varios
+// locales del mismo grupo va en una sola linea. Tocarla abre el grupo
+// (`onAbrirGrupo`); arrastrarla mueve todas las abiertas (`onMoverGrupo`).
+export default function SemanaTablero({ eventos, lunes, hoyISO, mapaLocales, grupoDeLocal, deptos, mostrarDepto, puedeMover, onAbrir, onAbrirGrupo, onMover, onMoverGrupo, puedeCrear, onCrear }) {
   const [arrastrando, setArrastrando] = useState(null)
   const [sobre, setSobre] = useState(null)
+  // Los grupos que se pintaron en este render, para encontrar el que se suelta.
+  const gruposPintados = new Map()
+  function agrupada(lista) {
+    const items = agruparPorGrupo([...lista].sort(porTareaYLocal), grupoDeLocal).sort(porTareaYLocal)
+    for (const item of items) if (item.esGrupo) gruposPintados.set(item.clave, item)
+    return items
+  }
+  const abrir = (item) => (item.esGrupo ? onAbrirGrupo(item) : onAbrir(item))
 
   const diasEsta = DIAS.map((nombre, i) => ({ nombre, fecha: sumarDias(lunes, i) }))
   const diasProxima = DIAS.map((nombre, i) => ({ nombre, fecha: sumarDias(lunes, 7 + i) }))
@@ -99,10 +112,12 @@ export default function SemanaTablero({ eventos, lunes, hoyISO, mapaLocales, dep
       },
       onDrop: (e) => {
         e.preventDefault()
-        const t = tareas.find((x) => x.clave === arrastrando)
+        const t = tareas.find((x) => x.clave === arrastrando) || gruposPintados.get(arrastrando)
         setArrastrando(null)
         setSobre(null)
-        if (t && t.fechaISO !== fecha) onMover(t, fecha)
+        if (!t || t.fechaISO === fecha) return
+        if (t.esGrupo) onMoverGrupo(t, fecha)
+        else onMover(t, fecha)
       }
     }
   }
@@ -124,11 +139,13 @@ export default function SemanaTablero({ eventos, lunes, hoyISO, mapaLocales, dep
           setArrastrando(t.clave)
         }}
         onDragEnd={() => { setArrastrando(null); setSobre(null) }}
-        onClick={() => onAbrir(t)}
-        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onAbrir(t)}
+        onClick={() => abrir(t)}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && abrir(t)}
         role="button"
         tabIndex={0}
-        title={t.movible ? 'Tocá para ver el detalle o arrastrala a otro día' : 'Ver detalle'}
+        title={t.esGrupo
+          ? `${t.tareas.map((x) => x.local).join(', ')}. ${t.movible ? 'Tocá para ver los locales o arrastrá el grupo a otro día' : 'Tocá para ver los locales'}`
+          : t.movible ? 'Tocá para ver el detalle o arrastrala a otro día' : 'Ver detalle'}
       >
         <span className="tarea-texto">
           <span>
@@ -145,7 +162,7 @@ export default function SemanaTablero({ eventos, lunes, hoyISO, mapaLocales, dep
 
   function renderGrupos(lista, vacio, conAtraso = false) {
     if (!lista.length) return <div className="dia-vacio">{vacio}</div>
-    return <ul className="tarea-bullets">{[...lista].sort(porTareaYLocal).map((t) => renderTarea(t, conAtraso))}</ul>
+    return <ul className="tarea-bullets">{agrupada(lista).map((t) => renderTarea(t, conAtraso))}</ul>
   }
 
   function renderCrear(fecha) {
@@ -204,7 +221,7 @@ export default function SemanaTablero({ eventos, lunes, hoyISO, mapaLocales, dep
           {diasProxima.map((d) => {
             // Mas chica a proposito, pero con lo mismo que la semana: tarea ›
             // local, responsable y si espera o sigue con otra.
-            const lista = [...porFecha(d.fecha)].sort(porTareaYLocal)
+            const lista = agrupada(porFecha(d.fecha))
             return (
               <div key={d.fecha} className={`st-mini${sobre === d.fecha ? ' destino' : ''}${lista.length ? '' : ' sin-tareas'}`} {...soltarEn(d.fecha)}>
                 <div className="st-mini-cab">
@@ -218,7 +235,7 @@ export default function SemanaTablero({ eventos, lunes, hoyISO, mapaLocales, dep
                       : t.laEspera?.length ? `🔗 ${t.laEspera[0].nombre_tarea}${t.laEspera.length > 1 ? ` y ${t.laEspera.length - 1} más` : ''}` : ''
                     return (
                       <li key={t.clave}>
-                        <button type="button" onClick={() => onAbrir(t)} title={`${t.titulo} › ${t.local}`}>
+                        <button type="button" onClick={() => abrir(t)} title={t.esGrupo ? `${t.titulo} › ${t.tareas.map((x) => x.local).join(', ')}` : `${t.titulo} › ${t.local}`}>
                           {depto && <span className="chip-depto" style={{ color: depto.color, background: `${depto.color}26` }}>{depto.abreviatura}</span>}
                           <TareaYLocal t={t} />
                           <span className="st-mini-sub">

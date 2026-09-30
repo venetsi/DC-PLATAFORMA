@@ -12,7 +12,7 @@ import SemanaTablero from '../components/SemanaTablero.jsx'
 import TableroKanban from '../components/TableroKanban.jsx'
 import Cronograma from '../components/Cronograma.jsx'
 import EtiquetasDependencia from '../components/EtiquetasDependencia.jsx'
-import { aTarea } from '../lib/agrupar.js'
+import { aTarea, agruparPorGrupo } from '../lib/agrupar.js'
 import SinAsignacion from './SinAsignacion.jsx'
 import { AvisoPrerrequisitos } from './MisTareas.jsx'
 import { clasificarInstancia, hoyEnArgentina } from '../lib/vencimiento.js'
@@ -143,7 +143,9 @@ export default function Calendario() {
   const lunesActual = semanaActualLunesAViernes().desde
   const [semanaLunes, setSemanaLunes] = useState(lunesActual)
   const [cronoDesde, setCronoDesde] = useState(lunesActual)
-  // Grupo de tareas iguales del mismo dia en el Cronograma ("CMV ×12").
+  // Grupo abierto: tareas iguales del mismo dia, del Cronograma ("CMV ×12") o
+  // de un grupo de locales ("P&L › GRUPO TITA"). Se guardan las claves y las
+  // tareas se leen de `visibles`, asi la lista se actualiza al marcar.
   const [grupo, setGrupo] = useState(null)
   const [marcando, setMarcando] = useState(null)
   const [aviso, setAviso] = useState(null)
@@ -172,6 +174,9 @@ export default function Calendario() {
 
   const mapaLocales = useMemo(() => new Map(locales.map((l) => [l.id, l.nombre])), [locales])
   const grupos = useMemo(() => [...new Set(locales.map((l) => l.grupo).filter(Boolean))].sort(), [locales])
+  // Local -> su grupo: la misma tarea el mismo dia en varios locales del mismo
+  // grupo se muestra una vez ("P&L › GRUPO TITA ×3"), en todas las vistas.
+  const grupoDeLocal = useMemo(() => new Map(locales.filter((l) => l.grupo).map((l) => [l.id, l.grupo])), [locales])
   // Color por departamento, estable: sale de TODOS los activos.
   const deptos = useMemo(() => infoDepartamentos(todosDeptos.length ? todosDeptos : propios), [todosDeptos, propios])
   const claveSeleccion = idsVisibles.join(',')
@@ -263,37 +268,61 @@ export default function Calendario() {
   // de deshacer (la instancia conserva su id aunque cambie de dia). La tarea
   // pasa al dia nuevo en pantalla en el acto (junto con sus copias en otros
   // departamentos, que el backend mueve igual) y despues se confirma recargando.
-  async function moverTarea({ idDepto, instanceId, titulo, nuevaFecha, fechaVieja, deshaciendo = false }) {
-    const movido = eventos.find((e) => e.__depto === idDepto && e.id === instanceId)
-    const idAsignacion = movido?.extendedProperties?.private?.id_asignacion
+  // `items`: [{ idDepto, instanceId }], todos del mismo dia (`fechaVieja`):
+  // una tarea, o las de un grupo de locales, que se mueven juntas.
+  async function moverVarias({ items, titulo, nuevaFecha, fechaVieja, deshaciendo = false }) {
+    const claves = new Set(items.map((i) => `${i.idDepto}${SEP}${i.instanceId}`))
+    const asignaciones = new Set(items
+      .map((i) => eventos.find((e) => e.__depto === i.idDepto && e.id === i.instanceId)?.extendedProperties?.private?.id_asignacion)
+      .filter(Boolean))
     setEventos((prev) => prev.map((e) => {
-      const mismaTarea = e.__depto === idDepto && e.id === instanceId
-      const copia = idAsignacion && e.extendedProperties?.private?.id_asignacion === idAsignacion && fechaDe(e) === fechaVieja
+      const mismaTarea = claves.has(`${e.__depto}${SEP}${e.id}`)
+      const copia = asignaciones.has(e.extendedProperties?.private?.id_asignacion) && fechaDe(e) === fechaVieja
       return mismaTarea || copia ? { ...e, start: { date: nuevaFecha }, end: { date: sumarDiasISO(nuevaFecha, 1) } } : e
     }))
     try {
-      await instanciasApi.reprogramar(instanceId, idDepto, nuevaFecha)
+      // De a una: son pocas, y asi un error dice cuantas llegaron a moverse.
+      for (const i of items) await instanciasApi.reprogramar(i.instanceId, i.idDepto, nuevaFecha)
       if (deshaciendo) avisar(`"${titulo}" volvió al ${fechaHumana(nuevaFecha)}.`)
       else {
         avisar(`"${titulo}" pasó al ${fechaHumana(nuevaFecha)}.`, {
           deshacer: () => {
             setMensaje(null)
-            return moverTarea({ idDepto, instanceId, titulo, nuevaFecha: fechaVieja, fechaVieja: nuevaFecha, deshaciendo: true }).catch(() => {})
+            return moverVarias({ items, titulo, nuevaFecha: fechaVieja, fechaVieja: nuevaFecha, deshaciendo: true }).catch(() => {})
           }
         })
       }
     } catch (err) {
-      avisar(err.response?.data?.error || 'No se pudo mover la tarea.', { tono: 'mal' })
+      avisar(err.response?.data?.error || (items.length > 1 ? 'No se pudo mover todo el grupo.' : 'No se pudo mover la tarea.'), { tono: 'mal' })
       throw err
     } finally {
       recargar()
     }
   }
 
+  function moverTarea({ idDepto, instanceId, titulo, nuevaFecha, fechaVieja }) {
+    return moverVarias({ items: [{ idDepto, instanceId }], titulo, nuevaFecha, fechaVieja })
+  }
+
+  // Arrastrar un grupo mueve todas las del grupo que siguen abiertas.
+  function moverGrupo(g, nuevaFecha) {
+    const items = g.tareas
+      .filter((t) => (t.estado === 'pendiente' || t.estado === 'vencida') && puede('editar', t.idDepartamento))
+      .map((t) => ({ idDepto: t.idDepartamento, instanceId: t.id }))
+    if (!items.length) return Promise.resolve()
+    return moverVarias({ items, titulo: `${g.titulo} › ${g.grupo}`, nuevaFecha, fechaVieja: g.fechaISO })
+  }
+
   async function alSoltar(info) {
-    const [idDepto, instanceId] = info.event.id.split(SEP)
+    const nuevaFecha = info.event.startStr.slice(0, 10)
+    const fechaVieja = info.oldEvent.startStr.slice(0, 10)
     try {
-      await moverTarea({ idDepto, instanceId, titulo: info.event.title, nuevaFecha: info.event.startStr.slice(0, 10), fechaVieja: info.oldEvent.startStr.slice(0, 10) })
+      const g = gruposDelMes.get(info.event.id)
+      if (g) await moverGrupo(g, nuevaFecha)
+      else {
+        const [idDepto, instanceId] = info.event.id.split(SEP)
+        await moverTarea({ idDepto, instanceId, titulo: info.event.title, nuevaFecha, fechaVieja })
+      }
     } catch {
       info.revert()
     }
@@ -326,15 +355,39 @@ export default function Calendario() {
     return [...porClave.values()]
   }, [eventos, duenioPorAsignacion])
 
+  // Cada evento visible como tarea (con su clave), para las listas de grupo y el mes.
+  const tareasPorClave = useMemo(() => new Map(visibles.map((ev) => {
+    const clave = `${ev.__depto}${SEP}${ev.id}`
+    return [clave, { ...aTarea(ev, mapaLocales), clave, idDepartamento: ev.__depto, departamento: deptos.get(ev.__depto)?.nombre, ev }]
+  })), [visibles, mapaLocales, deptos])
+
+  // Mes: la misma tarea el mismo dia en varios locales de un grupo es UN evento
+  // ("P&L — GRUPO TITA ×3"); tocarlo abre el grupo y arrastrarlo lo mueve entero.
+  const gruposDelMes = new Map()
+  const itemsDelMes = useMemo(() => agruparPorGrupo([...tareasPorClave.values()], grupoDeLocal), [tareasPorClave, grupoDeLocal])
+  for (const item of itemsDelMes) if (item.esGrupo) gruposDelMes.set(item.clave, item)
+
   // Memoizado: FullCalendar recalcula su rango visible cuando `events` cambia
   // de referencia, y eso puede re-disparar datesSet.
   const fcEventos = useMemo(
     () =>
-      visibles.map((ev) => {
+      itemsDelMes.map((item) => {
+        if (item.esGrupo) {
+          return {
+            id: item.clave,
+            title: `${item.titulo} — ${item.grupo} ×${item.tareas.length}`,
+            start: item.fechaISO,
+            allDay: true,
+            startEditable: item.tareas.some((t) => (t.estado === 'pendiente' || t.estado === 'vencida') && puede('editar', t.idDepartamento)),
+            durationEditable: false,
+            extendedProps: { estado: item.estado, depto: deptos.get(item.idDepartamento), espera: !!item.esperaA?.length, frena: !!item.laEspera?.length }
+          }
+        }
+        const ev = item.ev
         const { estado } = clasificarInstancia(ev)
         const abiertaAun = estado === 'pendiente' || estado === 'vencida'
         return {
-          id: `${ev.__depto}${SEP}${ev.id}`,
+          id: item.clave,
           title: ev.extendedProperties?.private?.nombre_tarea
             ? ev.summary?.replace(/^[✓⊘] /, '') || ev.extendedProperties.private.nombre_tarea
             : ev.summary,
@@ -347,7 +400,7 @@ export default function Calendario() {
           extendedProps: { estado, depto: deptos.get(ev.__depto), espera: !!ev.espera_a?.length, frena: !!ev.la_espera?.length }
         }
       }),
-    [visibles, deptos]
+    [itemsDelMes, deptos]
   )
 
   function contenidoEvento(arg) {
@@ -364,8 +417,60 @@ export default function Calendario() {
   }
 
   function abrirDetalle(idEvento) {
+    const g = gruposDelMes.get(idEvento)
+    if (g) return abrirGrupo(g)
     const ev = visibles.find((e) => `${e.__depto}${SEP}${e.id}` === idEvento)
     if (ev) setAbierta({ ...aTarea(ev, mapaLocales), idDepartamento: ev.__depto, departamento: deptos.get(ev.__depto)?.nombre })
+  }
+
+  // Un grupo de locales ("P&L › GRUPO TITA") o una barra del Cronograma
+  // ("CMV ×12"). Las vistas arman sus tareas distinto: la clave se rearma.
+  function abrirGrupo(g) {
+    setGrupo({
+      titulo: g.titulo,
+      grupo: g.grupo || null,
+      fecha: g.fechaISO || g.fecha,
+      claves: g.tareas.map((t) => t.clave || `${t.idDepartamento}${SEP}${t.id}`)
+    })
+  }
+  const tareasDelGrupo = grupo ? grupo.claves.map((c) => tareasPorClave.get(c)).filter(Boolean).sort((a, b) => a.local.localeCompare(b.local)) : []
+  const tituloDelGrupo = grupo ? (grupo.grupo ? `${grupo.titulo} › ${grupo.grupo}` : grupo.titulo) : ''
+
+  const abiertaYMarcable = (t) => (t.estado === 'pendiente' || t.estado === 'vencida') && puede('marcar', t.idDepartamento)
+
+  // Marcar una o varias (las de un grupo) de una vez. Marcar no se puede
+  // deshacer: se confirma, diciendo si alguna todavia espera a otra tarea.
+  async function marcarVarias(lista, titulo) {
+    const abiertas = lista.filter(abiertaYMarcable)
+    if (!abiertas.length) return
+    const una = abiertas.length === 1
+    const esperan = abiertas.filter((t) => t.esperaA?.length)
+    const pregunta = (una
+      ? `¿Marcar "${titulo} — ${abiertas[0].local}" como hecha?`
+      : `¿Marcar como hechas las ${abiertas.length} de "${titulo}" (${abiertas.map((t) => t.local).join(', ')})?`) +
+      (esperan.length ? ` ${una ? 'Todavía espera' : `${esperan.length} todavía esperan`} a ${todasLasEtiquetas(esperan[0].esperaA, esperan[0].local)}; se ${una ? 'marca' : 'marcan'} igual.` : '') +
+      ' No se puede deshacer.'
+    if (!window.confirm(pregunta)) return
+    const avisos = []
+    let fallidas = 0
+    try {
+      // De a una: cada marca propaga a las copias de otros departamentos.
+      for (const t of abiertas) {
+        setMarcando(t.id)
+        try {
+          const r = await instanciasApi.marcar(t.id, t.idDepartamento)
+          if (r?.avisos?.length) avisos.push(...r.avisos)
+        } catch {
+          fallidas++
+        }
+      }
+    } finally {
+      setMarcando(null)
+    }
+    setAviso(avisos.length ? avisos : null)
+    if (fallidas) avisar(`No se ${fallidas === 1 ? 'pudo marcar 1' : `pudieron marcar ${fallidas}`} de ${abiertas.length}. Probá de nuevo.`, { tono: 'mal' })
+    else if (!una) avisar(`Marcadas las ${abiertas.length} de "${titulo}".`)
+    await recargar()
   }
 
   // La casilla del Tablero: marcar no se puede deshacer, asi que se confirma.
@@ -382,11 +487,11 @@ export default function Calendario() {
   // Con el dedo, el arrastre de Semana no anda en la mayoria de los celulares,
   // y en Mes (FullCalendar) pide mantener apretado.
   const textoAyuda = {
-    tablero: 'Tocá una tarjeta para ver el detalle; la casilla la marca hecha. Están las atrasadas de los últimos 60 días y lo pendiente de los próximos 30, por vencimiento.',
+    tablero: 'Tocá una tarjeta para ver el detalle; la casilla la marca hecha (en un grupo ×N, todo el grupo). Están las atrasadas de los últimos 60 días y lo pendiente de los próximos 30, por vencimiento.',
     cronograma: 'Una fila por departamento y un día por columna. Tocá una tarea para ver el detalle; ×N quiere decir que se hace en N locales.',
     semana: puedeCrear && (tactil
-      ? 'Tocá una tarea para ver el detalle o cambiarle la fecha, o usá + para crear una tarea ese día.'
-      : 'Arrastrá una tarea a otro día para moverla (también desde Atrasadas), o usá + para crear una tarea ese día.'),
+      ? 'Tocá una tarea para ver el detalle o cambiarle la fecha, o usá + para crear una tarea ese día. Un grupo ×N se abre para ver sus locales.'
+      : 'Arrastrá una tarea a otro día para moverla (también desde Atrasadas; un grupo ×N se mueve entero), o usá + para crear una tarea ese día.'),
     mes: puedeCrear && (tactil
       ? 'Mantené apretada una tarea para arrastrarla a otro día, o tocá un día para crear una tarea ahí.'
       : 'Arrastrá una tarea pendiente a otro día para moverla, o tocá un día para crear una tarea ahí.')
@@ -467,6 +572,8 @@ export default function Calendario() {
         <AgendaAgrupada
           eventos={visibles.map((ev) => ({ ...ev, extendedProperties: { ...ev.extendedProperties, private: { ...ev.extendedProperties?.private, id_departamento: ev.__depto } } }))}
           mapaLocales={mapaLocales}
+          grupoDeLocal={grupoDeLocal}
+          onAbrirGrupo={abrirGrupo}
           onMarcar={marcar}
           onNoAplica={noAplica}
           onReprogramar={reprogramar}
@@ -490,11 +597,14 @@ export default function Calendario() {
             lunes={semanaLunes}
             hoyISO={hoyEnArgentina()}
             mapaLocales={mapaLocales}
+            grupoDeLocal={grupoDeLocal}
             deptos={deptos}
             mostrarDepto={varios}
             puedeMover={(ev) => puede('editar', ev.__depto)}
             onAbrir={setAbierta}
+            onAbrirGrupo={abrirGrupo}
             onMover={(t, fecha) => moverTarea({ idDepto: t.idDepartamento, instanceId: t.id, titulo: `${t.titulo} — ${t.local}`, nuevaFecha: fecha, fechaVieja: t.fechaISO }).catch(() => {})}
+            onMoverGrupo={(g, fecha) => moverGrupo(g, fecha).catch(() => {})}
             puedeCrear={puedeCrear}
             onCrear={abrirNueva}
           />
@@ -507,10 +617,13 @@ export default function Calendario() {
           idsVisibles={idsVisibles}
           deptos={deptos}
           mapaLocales={mapaLocales}
+          grupoDeLocal={grupoDeLocal}
           hoyISO={hoyEnArgentina()}
           puedeMarcar={(id) => puede('marcar', id)}
           onAbrir={setAbierta}
+          onAbrirGrupo={abrirGrupo}
           onMarcar={marcarDesdeTablero}
+          onMarcarGrupo={(g) => marcarVarias(g.tareas, `${g.titulo} › ${g.grupo}`)}
           marcando={marcando}
         />
       )}
@@ -532,38 +645,76 @@ export default function Calendario() {
             mapaLocales={mapaLocales}
             hoyISO={hoyEnArgentina()}
             onAbrir={setAbierta}
-            onAbrirGrupo={setGrupo}
+            onAbrirGrupo={abrirGrupo}
           />
         </>
       )}
 
-      {grupo && (
-        <div className="detalle-fondo" onClick={() => setGrupo(null)}>
-          <div className="card detalle-tarea" role="dialog" aria-label={grupo.titulo} onClick={(e) => e.stopPropagation()}>
-            <div className="detalle-encabezado">
-              <div>
-                <h3 style={{ margin: 0 }}>{grupo.titulo}</h3>
-                <p className="detalle-sub">{fechaHumana(grupo.fecha)} · {grupo.tareas.length} locales</p>
+      {grupo && tareasDelGrupo.length > 0 && (() => {
+        // Pedido del usuario: tocar un local lo da por hecho; el boton de
+        // arriba da por hecho todo el grupo. Las ya cerradas abren su detalle.
+        const marcables = tareasDelGrupo.filter(abiertaYMarcable)
+        const hechas = tareasDelGrupo.filter((t) => t.estado === 'realizada').length
+        const verDetalle = (t) => { setGrupo(null); setAbierta(t) }
+        const tocar = (t) => (abiertaYMarcable(t) ? marcarVarias([t], grupo.titulo) : verDetalle(t))
+        return (
+          <div className="detalle-fondo" onClick={() => setGrupo(null)}>
+            <div className="card detalle-tarea" role="dialog" aria-label={tituloDelGrupo} onClick={(e) => e.stopPropagation()}>
+              <div className="detalle-encabezado">
+                <div>
+                  <h3 style={{ margin: 0 }}>{tituloDelGrupo}</h3>
+                  <p className="detalle-sub">
+                    {fechaHumana(grupo.fecha)} · {tareasDelGrupo.length} locales{hechas ? ` · ${hechas} hechas` : ''}
+                  </p>
+                </div>
+                <button className="btn btn-secondary" onClick={() => setGrupo(null)} aria-label="Cerrar">✕</button>
               </div>
-              <button className="btn btn-secondary" onClick={() => setGrupo(null)} aria-label="Cerrar">✕</button>
+              {marcables.length > 0 && (
+                <div className="grupo-acciones">
+                  <button className="btn" disabled={!!marcando} onClick={() => marcarVarias(tareasDelGrupo, tituloDelGrupo)}>
+                    {marcables.length === tareasDelGrupo.length ? 'Marcar todo el grupo' : `Marcar las ${marcables.length} que faltan`}
+                  </button>
+                </div>
+              )}
+              <p className="tenue" style={{ margin: '0 0 0.4rem', fontSize: '0.8rem' }}>
+                {marcables.length ? 'Tocá un local para marcarlo hecho.' : 'Tocá un local para ver su detalle.'}
+              </p>
+              <ul className="tarea-bullets grupo-lista">
+                {tareasDelGrupo.map((t) => {
+                  const persona = t.estado === 'realizada'
+                    ? (t.realizadaPor ? `✓ ${t.realizadaPor.split('@')[0]}` : '✓ hecha')
+                    : t.estado === 'no_aplica' ? 'no aplica' : `→ ${t.asignadoA ? t.asignadoA.split('@')[0] : 'equipo'}`
+                  return (
+                    <li
+                      key={t.clave}
+                      className={`${t.estado} clickable`}
+                      role="button"
+                      tabIndex={0}
+                      title={abiertaYMarcable(t) ? 'Marcar hecha' : 'Ver detalle'}
+                      onClick={() => tocar(t)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tocar(t) } }}
+                    >
+                      <span className="tarea-texto">
+                        <span>{t.local}{marcando === t.id && ' (marcando…)'}</span>
+                        <span className="tarea-persona">{persona}</span>
+                        <EtiquetasDependencia tarea={t} compacta />
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-chico grupo-detalle"
+                        onClick={(e) => { e.stopPropagation(); verDetalle(t) }}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
+                        Detalle
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
             </div>
-            <ul className="tarea-bullets">
-              {grupo.tareas.map((t) => (
-                <li
-                  key={t.clave}
-                  className={`${t.estado} clickable`}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => { setGrupo(null); setAbierta(t) }}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setGrupo(null); setAbierta(t) } }}
-                >
-                  <span className="tarea-texto"><span>{t.local}</span><EtiquetasDependencia tarea={t} compacta /></span>
-                </li>
-              ))}
-            </ul>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {vista === 'mes' && (
         <div className="card calendario-fc">

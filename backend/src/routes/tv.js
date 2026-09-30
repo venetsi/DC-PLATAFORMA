@@ -147,8 +147,11 @@ async function armarResumen(fastify, departamentos, vista = 'semana') {
     if (l.status === 'rejected') fastify.log.warn({ departamento: conCalendario[i].slug, err: l.reason?.message }, 'tv: no se pudo leer el calendario')
   }
 
-  const locales = await fastify.db.extLocal.findMany({ select: { id: true, nombre: true } })
+  const locales = await fastify.db.extLocal.findMany({ select: { id: true, nombre: true, grupo: true } })
   const nombreLocal = new Map(locales.map((l) => [l.id, l.nombre]))
+  // Con el grupo, la TV junta la misma tarea del mismo dia en varios locales
+  // del grupo: "P&L › GRUPO TITA ×3" (igual que Mi agenda).
+  const grupoLocal = new Map(locales.filter((l) => l.grupo).map((l) => [l.id, l.grupo]))
   const dependencias = await dependenciasDe(
     fastify,
     conCalendario,
@@ -201,6 +204,7 @@ async function armarResumen(fastify, departamentos, vista = 'semana') {
         titulo: props.nombre_tarea || evento.summary,
         id_local: idLocal,
         nombre_local: localDelItem,
+        grupo: (idLocal && grupoLocal.get(idLocal)) || null,
         estado,
         departamento,
         asignado_a: nombreCorto(props.asignado_a),

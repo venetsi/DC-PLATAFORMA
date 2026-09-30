@@ -66,7 +66,8 @@ Cinco vistas, con los botones de arriba (la plataforma recuerda la última que u
   franja angosta con el nombre en vertical, para que el espacio quede para los que
   tienen tareas.
 - **Calendario**: el mes completo.
-- **Agenda**: la semana en curso, un día por columna, agrupado por local.
+- **Agenda**: la semana en curso, un día por columna, agrupado por local (o por
+  grupo, ver [Tareas agrupadas por grupo de locales](#tareas-agrupadas-por-grupo-de-locales)).
 - **Cronograma**: una línea de tiempo de dos semanas, con una fila por
   departamento y un día por columna. Las tareas iguales del mismo día se juntan:
   *CMV ×12* quiere decir que se hace en 12 locales; tocala para ver cuáles. Con
@@ -77,6 +78,23 @@ Cinco vistas, con los botones de arriba (la plataforma recuerda la última que u
 En el celular no aparece **Calendario**, porque no entra. El Tablero y el
 Cronograma se deslizan de costado; Agenda y Semana se ven como una lista por día
 (un día sin tareas ocupa una sola línea).
+
+### Tareas agrupadas por grupo de locales
+
+En **Tablero**, **Calendario**, **Agenda** y **Semana**, la misma tarea del mismo día
+en varios locales de un mismo grupo se muestra **una sola vez**, con el nombre del
+grupo y cuántos locales junta: *P&L › GRUPO TITA ×3* en lugar de una línea para
+TITA, otra para TITA-CH y otra para DARKI. No importa el responsable: debajo van
+todos, y cuántas ya están hechas (*1 de 3 hechas*). El color es el del peor estado
+del grupo: si una está atrasada, el grupo se ve atrasado. Un local solo de su grupo
+se sigue mostrando por su nombre.
+
+- **Tocá el grupo** para ver sus locales. Ahí, **tocá un local** para marcarlo
+  hecho, o **Marcar todo el grupo** para marcarlos todos juntos. Siempre pide
+  confirmación, porque no se puede deshacer. **Detalle** abre la ficha de ese local.
+- En el **Tablero**, la **casilla** de un grupo marca hecho todo el grupo.
+- En **Semana** y **Calendario**, **arrastrar** un grupo a otro día mueve todos sus
+  locales pendientes, con **Deshacer**.
 
 ### La vista Semana (L-V)
 
@@ -91,6 +109,8 @@ Cronograma se deslizan de costado; Agenda y Semana se ven como una lista por dí
   para ver el detalle.
 
 Cada tarea se muestra como **Tarea › Local** (por ejemplo, *Auditar › LOS GALGOS*),
+o **Tarea › Grupo ×N** si ese día la misma tarea está en varios locales del grupo
+(ver [Tareas agrupadas por grupo de locales](#tareas-agrupadas-por-grupo-de-locales)),
 ordenadas por tarea y local. Debajo va el responsable (→ nombre, o «equipo» si no
 tiene uno fijo; ✓ nombre si ya está hecha) y, si depende de otra, su etiqueta:
 ⏳ **Espera a…** o 🔗 **Sigue con…** (ver
@@ -272,10 +292,11 @@ Arriba siempre muestra el semáforo (🔴 hay atrasadas, 🟡 hay pendientes de 
 todo al día) y los contadores. Debajo, la **vista** que se eligió al conectarla:
 
 - **Semana**: las atrasadas de los últimos 60 días, la semana y un adelanto de la
-  siguiente. Igual que en Mi agenda: cada tarea como **Tarea › Local**, con su
+  siguiente. Igual que en Mi agenda: cada tarea como **Tarea › Local** (o
+  **Tarea › Grupo ×N** si ese día está en varios locales del grupo), con su
   responsable y si espera (⏳) o sigue con otra (🔗).
 - **Tablero**: una lista por departamento, con las tareas abiertas por vencimiento
-  (como el Tablero de Mi agenda). Los departamentos sin tareas abiertas se muestran
+  (como el Tablero de Mi agenda, también agrupadas por grupo de locales). Los departamentos sin tareas abiertas se muestran
   al final, como una franja angosta, y el resto se reparte el ancho de la pantalla.
 - **Calendario**: el mes completo, con las tareas de cada día.
 
