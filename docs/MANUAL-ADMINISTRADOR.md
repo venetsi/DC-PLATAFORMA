@@ -578,7 +578,8 @@ quedan sin recordatorio diario.
 **Resumen semanal de los lunes** (`lib/resumen-semanal.js`). Lo decide el mismo
 job, sin otro Scheduler: si el día (hora argentina) es lunes, a cada departamento
 con tareas en la semana o atrasadas le manda la tarjeta **Tu semana** (atrasadas
-con botón y la semana día por día, agrupada por tarea); a Dirección, el resumen
+con botón y la semana día por día, una línea por tarea y grupo de locales, según
+`ext_locales.grupo`); a Dirección, el resumen
 por departamento (tareas de la semana, atrasadas, % de la semana pasada y ranking
 de atrasadas por responsable). Las tareas compartidas no se cuentan dos veces en
 el % general ni en el ranking. El escalamiento a Dirección sale igual que

@@ -822,12 +822,12 @@ export const ORIGEN_SEMANAL = 'semanal'
 
 const MAX_LINEAS_POR_DIA = 15
 
-// "<b>P&L</b> › LA FUERZA, LF B2B, ROMA · gmalachane · ⏳ espera a Auditar".
-export function lineasDelDia(eventos, nombreLocal, dependencias) {
-  return agruparDelDia(eventos, nombreLocal, dependencias).map(({ titulo, persona, marca, locales }) => {
-    const partes = [`<b>${escaparHtml(titulo)}</b> › ${escaparHtml(locales.join(', '))}`]
-    if (persona) partes.push(escaparHtml(nombreCorto(persona)))
-    if (marca) partes.push(escaparHtml(marca))
+// "<b>P&L</b> › GRUPO TITA · gquinteros · ⏳ espera a Auditar".
+export function lineasDelDia(eventos, nombreLocal, dependencias, grupoLocal) {
+  return agruparDelDia(eventos, nombreLocal, dependencias, grupoLocal).map(({ titulo, donde, personas, marcas }) => {
+    const partes = [`<b>${escaparHtml(titulo)}</b> › ${escaparHtml(donde)}`]
+    if (personas.length) partes.push(escaparHtml(personas.map(nombreCorto).join(', ')))
+    for (const marca of marcas) partes.push(escaparHtml(marca))
     return partes.join(' · ')
   })
 }
@@ -862,7 +862,7 @@ function plural(n, uno, varios) {
 }
 
 // `datos` es lo que devuelve datosSemanaDepartamento.
-export function cardSemanal(departamento, datos, nombreLocal, { hoyISO, urlApp } = {}) {
+export function cardSemanal(departamento, datos, nombreLocal, { hoyISO, urlApp, grupoLocal } = {}) {
   const { semana, vencidas, porDia, total, dependencias } = datos
   const secciones = []
 
@@ -880,7 +880,7 @@ export function cardSemanal(departamento, datos, nombreLocal, { hoyISO, urlApp }
   }
 
   for (const { fecha, eventos } of porDia) {
-    const lineas = lineasDelDia(eventos, nombreLocal, dependencias)
+    const lineas = lineasDelDia(eventos, nombreLocal, dependencias, grupoLocal)
     const visibles = lineas.slice(0, MAX_LINEAS_POR_DIA)
     if (lineas.length > visibles.length) visibles.push(`<i>y ${lineas.length - visibles.length} más</i>`)
     secciones.push({

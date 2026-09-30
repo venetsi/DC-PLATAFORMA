@@ -55,6 +55,7 @@ async function correr() {
     prisma.extLocal.findMany()
   ])
   const nombreLocal = new Map(locales.map((l) => [l.id, l.nombre]))
+  const grupoLocal = new Map(locales.filter((l) => l.grupo).map((l) => [l.id, l.grupo]))
 
   const ahora = new Date()
   const hoyISO = hoyEnArgentina(ahora)
@@ -93,8 +94,8 @@ async function correr() {
         mensajes.push({
           etiqueta: `${depto.slug} (semanal)`,
           destino: depto,
-          texto: mensajeSemanal(depto, datos, nombreLocal, { hoyISO }),
-          card: cardSemanal(depto, datos, nombreLocal, { hoyISO, urlApp: process.env.FRONTEND_URL })
+          texto: mensajeSemanal(depto, datos, nombreLocal, { hoyISO, grupoLocal }),
+          card: cardSemanal(depto, datos, nombreLocal, { hoyISO, grupoLocal, urlApp: process.env.FRONTEND_URL })
         })
       }
     } else {

@@ -70,22 +70,38 @@ export function marcaDependencia(evento, dependencias) {
   return ''
 }
 
-// Las tareas de un dia agrupadas por (tarea, responsable, marca): 31 P&L del
-// mismo dia son UNA linea con los locales, no 31. Ordenadas por tarea.
-export function agruparDelDia(eventos, nombreLocal, dependencias) {
-  const grupos = new Map()
+// Las tareas de un dia, una linea por (tarea, grupo de locales), sin importar
+// el responsable (pedido del usuario): "P&L" de TITA-CH y DARKI el mismo dia
+// es "P&L › GRUPO TITA". Un local solo de su grupo, o sin grupo, se nombra por
+// el local. Los responsables y las marcas de la linea son los de todos sus
+// locales, sin repetir. `grupoLocal`: Map<id_local_ext, grupo>.
+export function agruparDelDia(eventos, nombreLocal, dependencias, grupoLocal = new Map()) {
+  const lineas = new Map()
   for (const evento of eventos) {
     const props = evento.extendedProperties?.private || {}
     const titulo = props.nombre_tarea || evento.summary || 'Tarea'
+    const local = localDe(props, nombreLocal)
+    const grupo = (props.id_local_ext && grupoLocal.get(props.id_local_ext)) || null
+    const clave = `${titulo}|${grupo ? `g:${grupo}` : `l:${local}`}`
+    if (!lineas.has(clave)) lineas.set(clave, { titulo, grupo, locales: new Set(), personas: new Set(), marcas: new Set() })
+    const linea = lineas.get(clave)
+    linea.locales.add(local)
     const persona = (props.asignado_a || '').trim().toLowerCase()
+    if (persona) linea.personas.add(persona)
     const marca = marcaDependencia(evento, dependencias)
-    const clave = `${titulo}|${persona}|${marca}`
-    if (!grupos.has(clave)) grupos.set(clave, { titulo, persona, marca, locales: new Set() })
-    grupos.get(clave).locales.add(localDe(props, nombreLocal))
+    if (marca) linea.marcas.add(marca)
   }
-  return [...grupos.values()]
-    .map((g) => ({ ...g, locales: [...g.locales].sort((a, b) => a.localeCompare(b)) }))
-    .sort((a, b) => a.titulo.localeCompare(b.titulo) || a.persona.localeCompare(b.persona) || a.marca.localeCompare(b.marca))
+  const ordenar = (s) => [...s].sort((a, b) => a.localeCompare(b))
+  return [...lineas.values()]
+    .map(({ titulo, grupo, locales, personas, marcas }) => ({
+      titulo,
+      // Con un solo local, el nombre del local dice mas que el del grupo.
+      donde: grupo && locales.size > 1 ? grupo : ordenar(locales).join(', '),
+      locales: ordenar(locales),
+      personas: ordenar(personas),
+      marcas: ordenar(marcas)
+    }))
+    .sort((a, b) => a.titulo.localeCompare(b.titulo) || a.donde.localeCompare(b.donde))
 }
 
 // De lunes a domingo de la semana de `hoyISO`, y la anterior.

@@ -348,10 +348,12 @@ Los lunes a las 8, en lugar del recordatorio diario, cada Space recibe **Tu sema
 
 - **🚨 Atrasadas**: lo que quedó sin hacer, de lo más viejo a lo más nuevo, con
   el botón **Marcar hecha**.
-- **La semana, día por día**: qué vence cada día, agrupado por tarea
-  (`P&L › LA FUERZA, ROMA · gmalachane`), con las mismas marcas de la agenda:
-  ⏳ espera a otra tarea, 🔗 otra tarea sigue con esta. Estas no tienen botón: se
-  marcan cuando llega el día.
+- **La semana, día por día**: qué vence cada día, en una línea por tarea y grupo.
+  Si el mismo día hay P&L de TITA-CH y de DARKI, sale una sola línea,
+  `P&L › GRUPO TITA`, con sus responsables. Un local solo de su grupo se nombra
+  por el local. Llevan las mismas marcas de la agenda: ⏳ espera a otra tarea,
+  🔗 otra tarea sigue con esta. Estas no tienen botón: se marcan cuando llega el
+  día.
 
 Al marcar una atrasada, la tarjeta se actualiza en su lugar. Un departamento sin
 tareas en la semana ni atrasadas no recibe nada.

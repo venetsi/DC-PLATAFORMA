@@ -37,10 +37,11 @@ export async function construirTarjetaSemanal(deps, departamento) {
   const hoyISO = hoyEnArgentina()
   const [datos, locales] = await Promise.all([
     datosSemanaDepartamento(deps, departamento, { hoyISO }),
-    deps.db.extLocal.findMany({ select: { id: true, nombre: true } })
+    deps.db.extLocal.findMany({ select: { id: true, nombre: true, grupo: true } })
   ])
   const nombreLocal = new Map(locales.map((l) => [l.id, l.nombre]))
-  return cardSemanal(departamento, datos, nombreLocal, { hoyISO, urlApp: process.env.FRONTEND_URL })
+  const grupoLocal = new Map(locales.filter((l) => l.grupo).map((l) => [l.id, l.grupo]))
+  return cardSemanal(departamento, datos, nombreLocal, { hoyISO, grupoLocal, urlApp: process.env.FRONTEND_URL })
 }
 
 // Agrega una linea arriba de la tarjeta, sin persistirla en ningun lado: la

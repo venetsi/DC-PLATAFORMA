@@ -100,20 +100,35 @@ test('rankingPorResponsable: sin duplicar compartidas, y las sin responsable van
   ])
 })
 
-test('agruparDelDia: una linea por tarea con sus locales, separada por responsable y por dependencia', () => {
-  const dependencias = new Map([['pl|2026-10-06', { espera: [{ nombre_tarea: 'Auditar' }] }], ['pl2|2026-10-06', { espera: [{ nombre_tarea: 'Auditar' }] }]])
+const nombresTita = new Map([['tita', 'TITA'], ['titach', 'TITA-CH'], ['darki', 'DARKI'], ['galgos', 'LOS GALGOS'], ['878', '878COOP'], ['sucursal', 'SUCURSAL']])
+const grupoLocal = new Map([['tita', 'GRUPO TITA'], ['titach', 'GRUPO TITA'], ['darki', 'GRUPO TITA'], ['galgos', 'LOS GALGOS'], ['878', 'GRUPO 878']])
+
+test('agruparDelDia: una linea por tarea y grupo, sin importar el responsable', () => {
+  const dependencias = new Map([['pl1|2026-10-07', { espera: [{ nombre_tarea: 'Auditar' }] }]])
   const eventos = [
-    { ...ev('pl_1', '2026-10-06', { nombre_tarea: 'P&L', id_local_ext: 'roma', asignado_a: 'gmalachane@dcsmart.app' }) },
-    { ...ev('pl2_1', '2026-10-06', { nombre_tarea: 'P&L', id_local_ext: 'lf', asignado_a: 'gmalachane@dcsmart.app' }) },
-    { ...ev('pl3_1', '2026-10-06', { nombre_tarea: 'P&L', id_local_ext: 'tiamo', asignado_a: 'gmalachane@dcsmart.app' }) },
-    { ...ev('pl4_1', '2026-10-06', { nombre_tarea: 'P&L', id_local_ext: 'tiamo', asignado_a: 'dmora@dcsmart.app' }) }
+    ev('pl1_1', '2026-10-07', { nombre_tarea: 'P&L', id_local_ext: 'titach', asignado_a: 'gquinteros@dcsmart.app' }),
+    ev('pl2_1', '2026-10-07', { nombre_tarea: 'P&L', id_local_ext: 'darki', asignado_a: 'gmalachane@dcsmart.app' }),
+    ev('pl3_1', '2026-10-07', { nombre_tarea: 'P&L', id_local_ext: '878', asignado_a: 'gquinteros@dcsmart.app' }),
+    ev('pl4_1', '2026-10-07', { nombre_tarea: 'P&L', id_local_ext: 'sucursal' }),
+    ev('au1_1', '2026-10-07', { nombre_tarea: 'Auditar', id_local_ext: 'tita' })
   ]
-  const grupos = agruparDelDia(eventos, nombreLocal, dependencias)
-  assert.deepEqual(grupos.map((g) => [g.persona, g.marca, g.locales]), [
-    ['dmora@dcsmart.app', '', ['TIAMO']],
-    ['gmalachane@dcsmart.app', '', ['TIAMO']],
-    ['gmalachane@dcsmart.app', '⏳ espera a Auditar', ['LA FUERZA', 'ROMA']]
+  assert.deepEqual(agruparDelDia(eventos, nombresTita, dependencias, grupoLocal), [
+    // Un solo local del grupo: se nombra por el local.
+    { titulo: 'Auditar', donde: 'TITA', locales: ['TITA'], personas: [], marcas: [] },
+    { titulo: 'P&L', donde: '878COOP', locales: ['878COOP'], personas: ['gquinteros@dcsmart.app'], marcas: [] },
+    // Dos locales del mismo grupo: una linea, con los dos responsables y la marca que tenga alguno.
+    { titulo: 'P&L', donde: 'GRUPO TITA', locales: ['DARKI', 'TITA-CH'], personas: ['gmalachane@dcsmart.app', 'gquinteros@dcsmart.app'], marcas: ['⏳ espera a Auditar'] },
+    // Sin grupo: por el local.
+    { titulo: 'P&L', donde: 'SUCURSAL', locales: ['SUCURSAL'], personas: [], marcas: [] }
   ])
+})
+
+test('agruparDelDia: sin mapa de grupos, cada local va en su linea', () => {
+  const eventos = [
+    ev('pl1_1', '2026-10-07', { nombre_tarea: 'P&L', id_local_ext: 'titach' }),
+    ev('pl2_1', '2026-10-07', { nombre_tarea: 'P&L', id_local_ext: 'darki' })
+  ]
+  assert.deepEqual(agruparDelDia(eventos, nombresTita, new Map()).map((l) => l.donde), ['DARKI', 'TITA-CH'])
 })
 
 test('cardSemanal: atrasadas con boton que reconstruye la semanal, y la semana dia por dia sin botones', () => {
@@ -129,7 +144,8 @@ test('cardSemanal: atrasadas con boton que reconstruye la semanal, y la semana d
     total: 3,
     dependencias: new Map([['pl|2026-10-05', { espera: [{ nombre_tarea: 'Auditar' }] }], ['pl2|2026-10-05', { espera: [{ nombre_tarea: 'Auditar' }] }]])
   }
-  const { cardsV2: [{ cardId, card }] } = cardSemanal(departamento, datos, nombreLocal, { hoyISO: HOY, urlApp: 'https://dc-plataforma.dcsmart.app' })
+  const grupos = new Map([['lf', 'GRUPO LA FUERZA'], ['roma', 'GRUPO LA FUERZA']])
+  const { cardsV2: [{ cardId, card }] } = cardSemanal(departamento, datos, nombreLocal, { hoyISO: HOY, grupoLocal: grupos, urlApp: 'https://dc-plataforma.dcsmart.app' })
   assert.equal(cardId, 'semanal-rep')
   assert.equal(card.header.title, 'Tu semana: 5 al 9 de octubre')
   assert.equal(card.header.subtitle, 'Reportes · 3 tareas esta semana · 1 atrasada')
@@ -141,7 +157,7 @@ test('cardSemanal: atrasadas con boton que reconstruye la semanal, y la semana d
   assert.deepEqual(parametros(button), { accion: 'marcar', instanceId: 'ar_1', fecha: '2026-10-01', idDepartamento: 'rep', origen: ORIGEN_SEMANAL })
 
   assert.equal(lunes.header, 'Lunes 5 (hoy) · 2 tareas')
-  assert.equal(lunes.widgets[0].textParagraph.text, '<b>P&amp;L</b> › LA FUERZA, ROMA · gmalachane · ⏳ espera a Auditar')
+  assert.equal(lunes.widgets[0].textParagraph.text, '<b>P&amp;L</b> › GRUPO LA FUERZA · gmalachane · ⏳ espera a Auditar')
   assert.equal(miercoles.header, 'Miércoles 7 · 1 tarea')
   assert.equal(miercoles.widgets[0].textParagraph.text, '<b>CMV</b> › Toda la empresa')
   assert.equal(pie.widgets[0].buttonList.buttons[0].onClick.openLink.url, 'https://dc-plataforma.dcsmart.app/')

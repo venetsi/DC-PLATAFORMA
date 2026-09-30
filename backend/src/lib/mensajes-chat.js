@@ -96,7 +96,7 @@ function rangoLaV(semana) {
   return rangoTexto(semana.desde, sumarDiasISO(semana.desde, 4))
 }
 
-export function mensajeSemanal(departamento, datos, nombreLocal, { hoyISO } = {}) {
+export function mensajeSemanal(departamento, datos, nombreLocal, { hoyISO, grupoLocal } = {}) {
   const { semana, vencidas, porDia, dependencias } = datos
   const bloques = [`📅 *Tu semana — ${departamento.nombre}* (${rangoLaV(semana)})`]
   if (vencidas.length) {
@@ -107,8 +107,8 @@ export function mensajeSemanal(departamento, datos, nombreLocal, { hoyISO } = {}
     bloques.push(`\n🚨 *Atrasadas (${vencidas.length}):*\n${lineas.join('\n')}`)
   }
   for (const { fecha, eventos } of porDia) {
-    const lineas = agruparDelDia(eventos, nombreLocal, dependencias).map(({ titulo, persona, marca, locales }) =>
-      [`• ${titulo} › ${locales.join(', ')}`, persona.split('@')[0], marca].filter(Boolean).join(' · ')
+    const lineas = agruparDelDia(eventos, nombreLocal, dependencias, grupoLocal).map(({ titulo, donde, personas, marcas }) =>
+      [`• ${titulo} › ${donde}`, personas.map((p) => p.split('@')[0]).join(', '), ...marcas].filter(Boolean).join(' · ')
     )
     bloques.push(`\n*${tituloDia(fecha, hoyISO)}* — ${plural(eventos.length, 'tarea', 'tareas')}\n${lineas.join('\n')}`)
   }
