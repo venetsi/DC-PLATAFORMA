@@ -27,12 +27,13 @@ import { prisma, listarInstancias } from './lib.js'
 import { hoyEnArgentina } from '../lib/vencimiento.js'
 import { clasificarParaAviso, resolverUmbrales } from '../lib/escalamiento.js'
 import { crearTransporteChat, crearTransporteConsola, enviarEnSerie } from '../lib/notificaciones.js'
-import { mensajeDepartamento, mensajeDireccion, mensajeResumenDireccion, mensajeSemanal } from '../lib/mensajes-chat.js'
-import { cardDepartamento, cardResumenDireccion, cardSemanal } from '../lib/chat-cards.js'
+import { mensajeDepartamento, mensajeDireccion, mensajeResumenDireccion, mensajeSemanal, mensajeSemanalCombinado } from '../lib/mensajes-chat.js'
+import { cardDepartamento, cardResumenDireccion, cardSemanal, cardSemanalCombinada } from '../lib/chat-cards.js'
+import { infoDepartamentos } from '../lib/colores-depto.js'
 import { DIAS_MINIMOS, desdeHaceNDias, finDeHoyArgentina } from '../lib/ventana-avisos.js'
 import { SLUG_DIRECCION } from '../lib/direccion.js'
 import { cargarFeriados } from '../lib/feriados.js'
-import { cumplimientoDelTramo, datosSemanaDepartamento, modoDelAviso, rankingPorResponsable, unirSinDuplicados } from '../lib/resumen-semanal.js'
+import { cumplimientoDelTramo, datosSemanaDepartamento, espaciosCombinados, modoDelAviso, rankingPorResponsable, unirSinDuplicados } from '../lib/resumen-semanal.js'
 
 // La ventana se deriva de los umbrales en vez de estar hardcodeada: si alguien
 // configura "escalar a los 20 dias", una ventana fija de 14 nunca llegaria a
@@ -72,6 +73,16 @@ async function correr() {
   let vencidasTotales = 0
   // Solo en modo semanal: lo que necesita el resumen a Direccion.
   const semanal = { filas: [], sinNada: [], vencidasPorDepto: [], items: [], semana: null }
+  // Spaces combinados SIN dueño (gente de varios equipos, cada departamento
+  // con su propio Space): reciben UNA tarjeta semanal con todos juntos. Un
+  // Space propio con otros tildados (para usar comandos) sigue recibiendo solo
+  // la de su departamento -- decision del usuario. El recordatorio diario va
+  // siempre solo al Space propio de cada uno.
+  const combinados = modo === 'semanal'
+    ? espaciosCombinados(departamentos, await prisma.departamentoCompartidoEnSpace.findMany({ select: { chat_space_name: true, id_departamento: true } }))
+      .filter((c) => !c.dueño)
+    : []
+  const datosPorDepto = new Map()
 
   for (const depto of departamentos) {
     const umbrales = resolverUmbrales(depto)
@@ -90,6 +101,7 @@ async function correr() {
       if (!datos.total && !datos.vencidas.length && !datos.pasada.total) semanal.sinNada.push(depto.nombre)
       else semanal.filas.push({ departamento: depto, total: datos.total, atrasadas: datos.vencidas.length, pasada: datos.pasada })
 
+      datosPorDepto.set(depto.id, datos)
       if (datos.total || datos.vencidas.length) {
         mensajes.push({
           etiqueta: `${depto.slug} (semanal)`,
@@ -121,6 +133,21 @@ async function correr() {
       // Se guarda el umbral CON EL QUE escaló cada departamento: con overrides
       // por departamento no hay un solo numero que describa el consolidado.
       paraDireccion.push({ departamento: depto, items: baldes.escala_direccion, umbral: umbrales.direccion })
+    }
+  }
+
+  if (combinados.length) {
+    const info = infoDepartamentos(await prisma.departamento.findMany({ where: { activo: true }, select: { id: true, nombre: true } }))
+    for (const { space, departamentos: delSpace } of combinados) {
+      const partes = delSpace.map((d) => ({ departamento: d, datos: datosPorDepto.get(d.id) })).filter((p) => p.datos)
+      if (!partes.some((p) => p.datos.total || p.datos.vencidas.length)) continue
+      mensajes.push({
+        etiqueta: `${partes.map((p) => p.departamento.slug).join('+')} (semanal, Space combinado)`,
+        // El transporte postea al Space de `chat_space_name`; puede no tener dueño.
+        destino: { nombre: partes.map((p) => p.departamento.nombre).join(' + '), chat_space_name: space },
+        texto: mensajeSemanalCombinado(partes, nombreLocal, { hoyISO, grupoLocal }),
+        card: cardSemanalCombinada(partes, nombreLocal, { hoyISO, grupoLocal, info, space, urlApp: process.env.FRONTEND_URL })
+      })
     }
   }
 

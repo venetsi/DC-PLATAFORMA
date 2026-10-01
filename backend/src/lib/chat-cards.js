@@ -913,6 +913,99 @@ export function cardSemanal(departamento, datos, nombreLocal, { hoyISO, urlApp, 
   }
 }
 
+// ── Resumen de los lunes para un Space combinado ─────────────────────────────
+// Un Space de gente de varios equipos (ver vincularDepartamentos) recibe UNA
+// tarjeta con todos sus departamentos, cada linea con la etiqueta de color del
+// suyo (decision del usuario). `partes`: [{ departamento, datos }] en el orden
+// del Space (el dueño primero); `info`: Map id -> { abreviatura, color }.
+// Una tarea compartida entre dos de esos departamentos esta en los dos
+// calendarios: va una sola vez, con la etiqueta del primero.
+function chipDepto(departamento, info) {
+  const i = info?.get(departamento.id)
+  const abreviatura = escaparHtml(i?.abreviatura || departamento.nombre.slice(0, 3).toUpperCase())
+  return i?.color ? `<font color="${i.color}"><b>${abreviatura}</b></font>` : `<b>${abreviatura}</b>`
+}
+
+export function cardSemanalCombinada(partes, nombreLocal, { hoyISO, urlApp, grupoLocal, info, space } = {}) {
+  const vistas = new Set()
+  const unaVez = (evento) => {
+    const props = evento.extendedProperties?.private || {}
+    const clave = `${props.id_asignacion || evento.id}|${evento.start?.date || ''}`
+    if (vistas.has(clave)) return false
+    vistas.add(clave)
+    return true
+  }
+
+  const vencidas = []
+  const porFecha = new Map() // fecha -> [{ parte, eventos }]
+  for (const parte of partes) {
+    for (const v of parte.datos.vencidas) if (unaVez(v.evento)) vencidas.push({ ...v, parte })
+    for (const { fecha, eventos } of parte.datos.porDia) {
+      const propios = eventos.filter(unaVez)
+      if (!propios.length) continue
+      if (!porFecha.has(fecha)) porFecha.set(fecha, [])
+      porFecha.get(fecha).push({ parte, eventos: propios })
+    }
+  }
+  vencidas.sort((a, b) => b.dias - a.dias)
+
+  const secciones = []
+  if (vencidas.length) {
+    const visibles = vencidas.slice(0, MAX_TAREAS_POR_CARD)
+    const widgets = visibles.map((v) => ({
+      decoratedText: {
+        text: `${chipDepto(v.parte.departamento, info)} ${textoAtrasada(v, nombreLocal, v.parte.datos.dependencias)}`,
+        wrapText: true,
+        button: botonMarcarSemanal(v.evento, v.parte.departamento)
+      }
+    }))
+    if (vencidas.length > visibles.length) {
+      widgets.push({ decoratedText: { text: `<i>y ${vencidas.length - visibles.length} más</i>`, wrapText: true, button: botonAbrir(urlApp, 'Ver todas') } })
+    }
+    secciones.push({ header: `🚨 Atrasadas (${vencidas.length})`, collapsible: false, widgets })
+  }
+
+  let total = 0
+  for (const fecha of [...porFecha.keys()].sort()) {
+    const grupos = porFecha.get(fecha)
+    const cantidad = grupos.reduce((n, g) => n + g.eventos.length, 0)
+    total += cantidad
+    const lineas = grupos.flatMap(({ parte, eventos }) =>
+      lineasDelDia(eventos, nombreLocal, parte.datos.dependencias, grupoLocal).map((l) => `${chipDepto(parte.departamento, info)} ${l}`)
+    )
+    const visibles = lineas.slice(0, MAX_LINEAS_POR_DIA)
+    if (lineas.length > visibles.length) visibles.push(`<i>y ${lineas.length - visibles.length} más</i>`)
+    secciones.push({
+      header: `${tituloDia(fecha, hoyISO)} · ${plural(cantidad, 'tarea', 'tareas')}`,
+      collapsible: false,
+      widgets: [{ textParagraph: { text: visibles.join('<br>') } }]
+    })
+  }
+
+  if (!secciones.length) {
+    secciones.push({ widgets: [{ textParagraph: { text: 'No hay tareas esta semana ni atrasadas. 👌' } }] })
+  }
+  secciones.push({ widgets: [{ buttonList: { buttons: [botonAbrir(urlApp, 'Abrir en la plataforma', '/')] } }] })
+
+  const semana = partes[0]?.datos.semana
+  const resumen = [plural(total, 'tarea esta semana', 'tareas esta semana')]
+  if (vencidas.length) resumen.push(plural(vencidas.length, 'atrasada', 'atrasadas'))
+  return {
+    cardsV2: [
+      {
+        cardId: `semanal-space-${String(space || '').split('/').pop() || 'combinado'}`,
+        card: {
+          header: {
+            title: semana ? `Tu semana: ${rangoTexto(semana.desde, sumarDias(semana.desde, 4))}` : 'Tu semana',
+            subtitle: `${partes.map((p) => p.departamento.nombre).join(' + ')} · ${resumen.join(' · ')}`
+          },
+          sections: secciones
+        }
+      }
+    ]
+  }
+}
+
 function porcentaje({ hechas, total }) {
   return total ? Math.round((hechas / total) * 100) : null
 }

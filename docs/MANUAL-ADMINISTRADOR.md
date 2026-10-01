@@ -588,7 +588,10 @@ con botón y la semana día por día, una línea por tarea y grupo de locales, s
 `ext_locales.grupo`); a Dirección, el resumen
 por departamento (tareas de la semana, atrasadas, % de la semana pasada y ranking
 de atrasadas por responsable). Las tareas compartidas no se cuentan dos veces en
-el % general ni en el ranking. El escalamiento a Dirección sale igual que
+el % general ni en el ranking. Un Space **combinado** (sin dueño: solo
+departamentos compartidos que ya tienen su propio Space, ver `/vincular`)
+recibe una sola tarjeta con todos ellos (`cardSemanalCombinada`); un Space propio
+con otros tildados recibe solo la de su departamento. El escalamiento a Dirección sale igual que
 cualquier otro día, después del resumen. Si el lunes es feriado, el resumen sale
 igual ese día. Probarlo sin esperar al lunes: `AVISO_MODO=semanal` (con
 `AVISO_DRY_RUN=1` para no postear).

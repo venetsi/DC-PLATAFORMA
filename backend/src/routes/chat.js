@@ -60,7 +60,7 @@ import { ganchosDeDependencias } from '../lib/avisos-dependencias.js'
 import { esAdminGlobal, conPermisos, puede } from '../lib/permisos.js'
 import { asegurarMembresiasFrescas, usuarioPorEmail, motivoSinAcceso } from '../lib/membresias.js'
 import { emailCanonico } from '../lib/alias-email.js'
-import { construirTarjetaDepartamento, construirTarjetaSemanal, conNotaSuperior } from '../lib/chat-recordatorio.js'
+import { construirTarjetaDepartamento, construirTarjetaSemanal, construirTarjetaSemanalCombinada, conNotaSuperior } from '../lib/chat-recordatorio.js'
 import {
   ejecutarComando,
   resolverComando,
@@ -580,11 +580,19 @@ async function marcar(fastify, space, { extUser, email, usuario, params }) {
     // -- asi que dejarlo invita a un segundo click sobre algo ya resuelto.
     // Si la reconstruccion fallara (Calendar caido, etc.), un mensaje de
     // texto simple es preferible a que el click entero termine en error.
-    // Desde el resumen de los lunes se reconstruye la tarjeta semanal.
+    // Desde el resumen de los lunes se reconstruye la tarjeta semanal: la
+    // combinada si es un Space combinado (sin dueño, ver jobs/avisosChat.js).
     try {
-      const tarjeta = params.origen === ORIGEN_SEMANAL
-        ? await construirTarjetaSemanal(fastify, departamento)
-        : await construirTarjetaDepartamento(fastify, departamento)
+      let tarjeta
+      if (params.origen === ORIGEN_SEMANAL) {
+        const delSpace = space ? await departamentosDelSpace(fastify.db, space) : []
+        const combinado = delSpace.length > 0 && !delSpace.some((d) => d.chat_space_name === space)
+        tarjeta = combinado
+          ? await construirTarjetaSemanalCombinada(fastify, space, delSpace)
+          : await construirTarjetaSemanal(fastify, departamento)
+      } else {
+        tarjeta = await construirTarjetaDepartamento(fastify, departamento)
+      }
       return mensajeActualizado(conNotaSuperior(tarjeta, nota))
     } catch (err) {
       fastify.log.error({ err: err.message, instanceId }, 'chat: no se pudo reconstruir la tarjeta')

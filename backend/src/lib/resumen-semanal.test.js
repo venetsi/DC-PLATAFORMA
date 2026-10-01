@@ -4,6 +4,7 @@ import {
   agruparDelDia,
   clasificarSemana,
   cumplimientoDelTramo,
+  espaciosCombinados,
   modoDelAviso,
   rangoTexto,
   rankingPorResponsable,
@@ -11,7 +12,7 @@ import {
   sumarDiasISO,
   unirSinDuplicados
 } from './resumen-semanal.js'
-import { cardResumenDireccion, cardSemanal, ORIGEN_SEMANAL } from './chat-cards.js'
+import { cardResumenDireccion, cardSemanal, cardSemanalCombinada, ORIGEN_SEMANAL } from './chat-cards.js'
 
 // Lunes 5 de octubre de 2026, 8:00 en Argentina (11:00 UTC).
 const HOY = '2026-10-05'
@@ -185,4 +186,41 @@ test('cardResumenDireccion: totales, % de la semana pasada y ranking', () => {
   assert.equal(deptos.widgets[1].decoratedText.text, '<b>Tesorería</b> · 5 tareas esta semana · 0 atrasadas')
   assert.equal(deptos.widgets[2].textParagraph.text, '<i>Sin tareas esta semana ni atrasadas: Costos, RRHH</i>')
   assert.equal(ranking.widgets[0].textParagraph.text, '<b>gmalachane</b> — 3 atrasadas · la más vieja: 4 días hábiles<br><b>Equipo — Reportes</b> — 1 atrasada · la más vieja: 1 día hábil')
+})
+
+test('espaciosCombinados: Spaces con compartidos, el dueño primero, y sin dueño si no tiene', () => {
+  const aud = { id: 'aud', nombre: 'Auditoría', slug: 'auditoria', chat_space_name: 'spaces/AUD' }
+  const rep = { id: 'rep', nombre: 'Reportes', slug: 'reportes', chat_space_name: 'spaces/INF' }
+  const cos = { id: 'cos', nombre: 'Costos', slug: 'costos', chat_space_name: 'spaces/COSADM' }
+  const adm = { id: 'adm', nombre: 'Administración', slug: 'administracion', chat_space_name: null }
+  const r = espaciosCombinados([aud, rep, cos, adm], [
+    { chat_space_name: 'spaces/MIX', id_departamento: 'rep' },
+    { chat_space_name: 'spaces/MIX', id_departamento: 'aud' },
+    { chat_space_name: 'spaces/COSADM', id_departamento: 'adm' },
+    { chat_space_name: 'spaces/X', id_departamento: 'inactivo' }
+  ])
+  assert.deepEqual(r.map((c) => [c.space, c.dueño?.id || null, c.departamentos.map((d) => d.id)]), [
+    ['spaces/MIX', null, ['aud', 'rep']],
+    ['spaces/COSADM', 'cos', ['cos', 'adm']]
+  ])
+})
+
+test('cardSemanalCombinada: una tarjeta, etiqueta por departamento, y una tarea compartida va una vez', () => {
+  const aud = { id: 'aud', nombre: 'Auditoría' }
+  const rep = { id: 'rep', nombre: 'Reportes' }
+  const semana = semanaDe(HOY)
+  const plCompartida = (depto) => ev('pl_1', '2026-10-06', { nombre_tarea: 'P&L', id_local_ext: 'roma', id_departamento: depto })
+  const partes = [
+    { departamento: aud, datos: { semana, vencidas: [{ evento: ev('au_1', '2026-10-02', { nombre_tarea: 'Auditar', id_local_ext: 'lf' }), dias: 1 }], porDia: [{ fecha: '2026-10-06', eventos: [plCompartida('aud')] }], total: 1, dependencias: new Map() } },
+    { departamento: rep, datos: { semana, vencidas: [], porDia: [{ fecha: '2026-10-06', eventos: [plCompartida('rep'), ev('cmv_1', '2026-10-06', { nombre_tarea: 'CMV' })] }], total: 2, dependencias: new Map() } }
+  ]
+  const info = new Map([['aud', { abreviatura: 'AUD', color: '#d7a14a' }], ['rep', { abreviatura: 'REP', color: '#4fb39b' }]])
+  const { cardsV2: [{ cardId, card }] } = cardSemanalCombinada(partes, nombreLocal, { hoyISO: HOY, info, space: 'spaces/MIX' })
+  assert.equal(cardId, 'semanal-space-MIX')
+  assert.equal(card.header.subtitle, 'Auditoría + Reportes · 2 tareas esta semana · 1 atrasada')
+  const [atrasadas, martes] = card.sections
+  assert.match(atrasadas.widgets[0].decoratedText.text, /^<font color="#d7a14a"><b>AUD<\/b><\/font> <b>Auditar › LA FUERZA<\/b>/)
+  assert.equal(parametros(atrasadas.widgets[0].decoratedText.button).idDepartamento, 'aud')
+  assert.equal(martes.header, 'Martes 6 · 2 tareas')
+  assert.equal(martes.widgets[0].textParagraph.text, '<font color="#d7a14a"><b>AUD</b></font> <b>P&amp;L</b> › ROMA<br><font color="#4fb39b"><b>REP</b></font> <b>CMV</b> › Toda la empresa')
 })

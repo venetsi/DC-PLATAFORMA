@@ -116,6 +116,11 @@ export function mensajeSemanal(departamento, datos, nombreLocal, { hoyISO, grupo
   return bloques.join('\n')
 }
 
+// Space combinado: el de cada departamento, uno abajo del otro.
+export function mensajeSemanalCombinado(partes, nombreLocal, opciones = {}) {
+  return partes.map(({ departamento, datos }) => mensajeSemanal(departamento, datos, nombreLocal, opciones)).join('\n\n')
+}
+
 export function mensajeResumenDireccion({ semana, filas, sinNada = [], ranking = [], pasadaTotal }) {
   const pct = (p) => (p?.total ? Math.round((p.hechas / p.total) * 100) : null)
   const global = pct(pasadaTotal)

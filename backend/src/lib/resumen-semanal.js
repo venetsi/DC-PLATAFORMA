@@ -162,6 +162,27 @@ export function unirSinDuplicados(listas) {
   return [...porClave.values()]
 }
 
+// Los Spaces combinados: los que tienen departamentos compartidos (ver
+// vincularDepartamentos), con o sin dueño. `departamentos`: los que se evaluan
+// (activos con calendario); `compartidos`: filas de DepartamentoCompartidoEnSpace.
+// Devuelve [{ space, dueño, departamentos }], el dueño primero y el resto por
+// nombre. Esos Spaces reciben UNA tarjeta semanal con todos juntos, y el dueño
+// no recibe ademas la suya ahi.
+export function espaciosCombinados(departamentos, compartidos) {
+  const porId = new Map(departamentos.map((d) => [d.id, d]))
+  const porSpace = new Map()
+  for (const { chat_space_name: space, id_departamento: id } of compartidos) {
+    if (!space || !porId.has(id)) continue
+    if (!porSpace.has(space)) porSpace.set(space, new Set())
+    porSpace.get(space).add(id)
+  }
+  return [...porSpace.entries()].map(([space, ids]) => {
+    const dueño = departamentos.find((d) => d.chat_space_name === space) || null
+    const resto = [...ids].filter((id) => id !== dueño?.id).map((id) => porId.get(id)).sort((a, b) => a.nombre.localeCompare(b.nombre))
+    return { space, dueño, departamentos: dueño ? [dueño, ...resto] : resto }
+  })
+}
+
 // Ranking de atrasadas por responsable, entre todos los departamentos. Una
 // tarea compartida aparece en el calendario de cada departamento: se cuenta
 // una sola vez. Sin responsable fijo, se cuenta como "Equipo — <departamento>".

@@ -377,7 +377,9 @@ Los lunes a las 8, en lugar del recordatorio diario, cada Space recibe **Tu sema
   día.
 
 Al marcar una atrasada, la tarjeta se actualiza en su lugar. Un departamento sin
-tareas en la semana ni atrasadas no recibe nada.
+tareas en la semana ni atrasadas no recibe nada. Un **Space combinado** (ver
+[Spaces de Chat](#spaces-de-chat)) recibe una sola tarjeta con todos sus
+departamentos.
 
 Dirección recibe además un **resumen por departamento**: cuántas tareas tiene cada
 uno esa semana y cuántas atrasadas, el % de cumplimiento de la semana pasada (el
@@ -453,8 +455,16 @@ y te avisa. Si alguien ya la había marcado, te dice quién.
 - **Vincular un Space**: crear el Space, agregar el grupo `depto-<área>@dcsmart.app`
   y la app **DC-PLATAFORMA**, y escribir `/vincular` para elegir el departamento.
 - **Un Space para varios departamentos**: en `/vincular` se tildan varios. Los
-  comandos muestran todo junto, y cada línea dice de qué departamento es. El
-  recordatorio diario va al primero tildado.
+  comandos muestran todo junto, y cada línea dice de qué departamento es. Un
+  departamento puede estar en varios Spaces.
+  - Si alguno de los tildados no tiene Space propio, este pasa a ser el suyo:
+    recibe su recordatorio diario y su resumen de los lunes. Con el resto se
+    usan los comandos y botones.
+  - Si todos ya tienen su propio Space (por ejemplo, un Space de gente de
+    Auditoría y de Informes), queda como **Space combinado**: el **resumen de
+    los lunes** llega con todos juntos, cada línea con la etiqueta de su
+    departamento, y el recordatorio diario sigue yendo al Space propio de
+    cada uno.
 - **El Space de Dirección** ve y opera todos los departamentos. Equivale a
   administración: conviene cuidar a quién se agrega.
 

@@ -9,7 +9,8 @@
 // bajo demanda, la formula de la ventana es identica (ver ventana-avisos.js).
 import { hoyEnArgentina } from './vencimiento.js'
 import { clasificarParaAviso, resolverUmbrales } from './escalamiento.js'
-import { cardDepartamento, cardSemanal } from './chat-cards.js'
+import { cardDepartamento, cardSemanal, cardSemanalCombinada } from './chat-cards.js'
+import { infoDepartamentos } from './colores-depto.js'
 import { DIAS_MINIMOS, desdeHaceNDias, finDeHoyArgentina } from './ventana-avisos.js'
 import { datosSemanaDepartamento } from './resumen-semanal.js'
 
@@ -42,6 +43,22 @@ export async function construirTarjetaSemanal(deps, departamento) {
   const nombreLocal = new Map(locales.map((l) => [l.id, l.nombre]))
   const grupoLocal = new Map(locales.filter((l) => l.grupo).map((l) => [l.id, l.grupo]))
   return cardSemanal(departamento, datos, nombreLocal, { hoyISO, grupoLocal, urlApp: process.env.FRONTEND_URL })
+}
+
+// Lo mismo para un Space combinado: la tarjeta con todos sus departamentos
+// (`departamentos`, en el orden de departamentosDelSpace: el dueño primero).
+export async function construirTarjetaSemanalCombinada(deps, space, departamentos) {
+  const hoyISO = hoyEnArgentina()
+  const conCalendario = departamentos.filter((d) => d.id_calendar_google)
+  const [datos, locales, activos] = await Promise.all([
+    Promise.all(conCalendario.map((d) => datosSemanaDepartamento(deps, d, { hoyISO }))),
+    deps.db.extLocal.findMany({ select: { id: true, nombre: true, grupo: true } }),
+    deps.db.departamento.findMany({ where: { activo: true }, select: { id: true, nombre: true } })
+  ])
+  const nombreLocal = new Map(locales.map((l) => [l.id, l.nombre]))
+  const grupoLocal = new Map(locales.filter((l) => l.grupo).map((l) => [l.id, l.grupo]))
+  const partes = conCalendario.map((departamento, i) => ({ departamento, datos: datos[i] }))
+  return cardSemanalCombinada(partes, nombreLocal, { hoyISO, grupoLocal, info: infoDepartamentos(activos), space, urlApp: process.env.FRONTEND_URL })
 }
 
 // Agrega una linea arriba de la tarjeta, sin persistirla en ningun lado: la
