@@ -1,6 +1,7 @@
 import fp from 'fastify-plugin'
 import { google } from 'googleapis'
 import { crearAuthClient } from '../lib/gcal-auth.js'
+import { cerrarSerie, restaurarSerie } from '../lib/cerrar-serie.js'
 
 // Backoff exponencial simple para 403/429 de cuota (recomendación de Google:
 // min((2^n)+random_ms, max)). No reintenta otros códigos de error.
@@ -90,14 +91,19 @@ async function gcalPlugin(fastify) {
     },
 
     // Cierra una serie sin borrar historial (usado al desactivar un local).
+    // Si todavia no empezo, la borra entera: con UNTIL quedaria viva su primera
+    // ocurrencia (ver lib/cerrar-serie.js). Devuelve 'borrada', 'cerrada' o 'nada'.
     async cerrarRecurrencia({ calendarId, eventId, untilDate }) {
       const calendar = await getCalendarClient()
-      const untilRule = `UNTIL=${untilDate.replace(/-/g, '')}T000000Z`
-      const { data: current } = await withBackoff(() => calendar.events.get({ calendarId, eventId }))
-      const recurrence = (current.recurrence || []).map((rule) =>
-        /UNTIL=/.test(rule) ? rule.replace(/UNTIL=\d{8}T\d{6}Z/, untilRule) : `${rule};${untilRule}`
-      )
-      return this.editarRecurrencia({ calendarId, eventId, recurrence })
+      const resultado = await cerrarSerie(calendar, { calendarId, eventId, untilDate, reintentar: withBackoff })
+      if (resultado === 'borrada') fastify.log.info({ eventId, untilDate }, 'gcal: serie sin empezar, borrada al cerrarla')
+      return resultado
+    },
+
+    // Devuelve una serie que cerrarRecurrencia borro (status 'confirmed').
+    async restaurarSerie({ calendarId, eventId }) {
+      const calendar = await getCalendarClient()
+      return restaurarSerie(calendar, { calendarId, eventId, reintentar: withBackoff })
     },
 
     // Borrado real, no reversible (a diferencia de cerrarRecurrencia) --

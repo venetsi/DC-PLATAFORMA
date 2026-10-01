@@ -253,6 +253,12 @@ tildar la fila entera o "Elegir todos"). Con locales elegidos:
   además su propio **Desactivar** para un solo local
   (`POST /api/agendas/asignaciones/quitar` con un id). Volver a sumarlo con
   **+ Agregar locales** lo reactiva con una serie nueva.
+  Si en ese local la tarea **todavía no había empezado** (su primera fecha es
+  posterior a hoy) y no tiene nada marcado, la serie se borra entera en
+  Calendar: con el cierre normal (UNTIL), Google deja viva la primera
+  ocurrencia y quedaba una tarea fantasma (`lib/cerrar-serie.js`). **Reactivar**
+  la devuelve tal cual si esa primera fecha todavía no pasó; si ya pasó, arma una
+  serie nueva desde hoy.
 
 Y siempre disponibles:
 

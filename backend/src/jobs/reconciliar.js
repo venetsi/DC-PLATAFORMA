@@ -12,6 +12,7 @@
 import { prisma, getCalendar } from './lib.js'
 import { horizontePorDefecto, MESES_DE_HORIZONTE } from '../lib/recurrencia.js'
 import { hoyEnArgentina } from '../lib/vencimiento.js'
+import { cerrarSerie } from '../lib/cerrar-serie.js'
 
 // Cuando al UNTIL le quedan menos de estos dias, se renueva. Con el job
 // corriendo cada 6h hay muchisimo margen: no hace falta apurar el limite.
@@ -46,14 +47,10 @@ function diasEntre(desdeISO, hastaISO) {
   return Math.round((aMs(hastaISO) - aMs(desdeISO)) / (24 * 60 * 60 * 1000))
 }
 
-async function cerrarRecurrencia(calendar, { calendarId, eventId, untilDate }) {
-  const { data: current } = await calendar.events.get({ calendarId, eventId })
-  if (!current.recurrence?.length) return // evento sin recurrencia, nada que cerrar
-  await calendar.events.patch({
-    calendarId,
-    eventId,
-    requestBody: { recurrence: reemplazarUntil(current.recurrence, untilDate) }
-  })
+// Mismo cierre que la plataforma: UNTIL, o la serie entera si todavia no
+// empezo (con UNTIL quedaria viva su primera ocurrencia, ver lib/cerrar-serie.js).
+function cerrarRecurrencia(calendar, { calendarId, eventId, untilDate }) {
+  return cerrarSerie(calendar, { calendarId, eventId, untilDate })
 }
 
 // Devuelve true si renovo. Idempotente: si al UNTIL todavia le sobra tiempo,

@@ -187,7 +187,21 @@ export async function reabrirAsignacion(fastify, asignacion) {
     : null
   const until = untilDe(maestro?.recurrence)
 
-  if (maestro && (!until || until >= sumarDias(hoy, -1))) {
+  // Si al cerrarla todavia no habia empezado, se borro entera (ver
+  // lib/cerrar-serie.js). Si su primera fecha no paso, vuelve tal cual (con
+  // sus copias); si ya paso, traerla generaria atrasadas: va por una nueva.
+  if (maestro?.status === 'cancelled') {
+    if (String(maestro.start?.date || '') >= hoy) {
+      await fastify.gcal.restaurarSerie({ calendarId, eventId: maestro.id })
+      for (const compartida of asignacion.compartidas || []) {
+        const calId = compartida.departamento.id_calendar_google
+        if (!calId || !compartida.id_calendar_event) continue
+        const copia = await fastify.gcal.leerInstancia({ calendarId: calId, instanceId: compartida.id_calendar_event })
+        if (copia?.status === 'cancelled') await fastify.gcal.restaurarSerie({ calendarId: calId, eventId: copia.id })
+      }
+      return fastify.db.tareaAsignacion.update({ where: { id: asignacion.id }, data: { activa: true } })
+    }
+  } else if (maestro && (!until || until >= sumarDias(hoy, -1))) {
     const hasta = horizontePorDefecto(hoy)
     if (until) {
       await fastify.gcal.editarRecurrencia({ calendarId, eventId: maestro.id, recurrence: conUntil(maestro.recurrence, hasta) })
