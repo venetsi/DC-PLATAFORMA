@@ -5,8 +5,10 @@ import { PrismaClient } from '@prisma/client'
 import { google } from 'googleapis'
 import 'dotenv/config'
 import { crearAuthClient } from '../lib/gcal-auth.js'
+import { opcionesPrisma } from '../lib/db-url.js'
 
-export const prisma = new PrismaClient()
+// Pool acotado: la base es compartida con dcsmart (ver lib/db-url.js).
+export const prisma = new PrismaClient(opcionesPrisma())
 
 let calendarPromise
 export function getCalendar() {

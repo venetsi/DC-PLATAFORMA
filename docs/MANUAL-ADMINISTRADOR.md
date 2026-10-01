@@ -606,6 +606,7 @@ npm run job:snapshot -- --instancias-desde=2026-08-08   # completar el tablero h
 |---|---|---|
 | `AVISO_DRY_RUN=1` | Arma los mensajes sin postear nada | envía |
 | `AVISO_MODO` | `semanal` o `diario` fuerza el modo del job de avisos | semanal los lunes, diario el resto |
+| `DB_CONNECTION_LIMIT` | Conexiones a Postgres por proceso (cada instancia del servicio, cada job, el backend local). La instancia de Cloud SQL es compartida con dcsmart y admite 50 en total. Si `DATABASE_URL` trae `connection_limit`, manda la URL | `2` |
 | `AVISO_SLUG_DIRECCION` | Slug tratado como Dirección | `direccion` |
 | `AVISO_DIAS_DEPARTAMENTO` / `AVISO_DIAS_DIRECCION` | Umbrales globales (la columna del departamento gana) | `2` / `5` |
 | `MEMBRESIA_FUENTE` | `groups` = departamentos desde Google Groups | `groups` en producción |
