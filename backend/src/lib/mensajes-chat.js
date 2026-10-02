@@ -2,6 +2,7 @@
 // interactiva (Fase C) pueda reusar el mismo texto dentro de sus cards en vez
 // de reescribirlo.
 import { agruparDelDia, marcaDependencia, rangoTexto, sumarDiasISO, tituloDia } from './resumen-semanal.js'
+import { prefijoDe } from './prioridad.js'
 
 function nombreDeLocal(props, nombreLocal) {
   if (!props.id_local_ext) return 'Toda la empresa'
@@ -30,7 +31,7 @@ export function lineaDeTarea({ evento, dias, departamento }, nombreLocal, { conA
   const titulo = props.nombre_tarea || evento.summary
   const responsable = props.asignado_a ? ` — ${props.asignado_a}` : ''
   const depto = conDepartamento && departamento ? ` [${departamento.nombre}]` : ''
-  return `• ${titulo} (${nombreDeLocal(props, nombreLocal)})${depto}${responsable}${conAntiguedad ? antiguedad(dias) : ''}`
+  return `• ${prefijoDe(props)}${titulo} (${nombreDeLocal(props, nombreLocal)})${depto}${responsable}${conAntiguedad ? antiguedad(dias) : ''}`
 }
 
 // Recordatorio diario de un departamento. Se sigue mandando todos los dias
@@ -117,11 +118,12 @@ export function mensajeSemanal(departamento, datos, nombreLocal, { hoyISO, grupo
 }
 
 // Space combinado: el de cada departamento, uno abajo del otro.
-export function mensajeSemanalCombinado(partes, nombreLocal, opciones = {}) {
-  return partes.map(({ departamento, datos }) => mensajeSemanal(departamento, datos, nombreLocal, opciones)).join('\n\n')
+export function mensajeSemanalCombinado(partes, nombreLocal, { sinLeer = [], ...opciones } = {}) {
+  const cuerpo = partes.map(({ departamento, datos }) => mensajeSemanal(departamento, datos, nombreLocal, opciones)).join('\n\n')
+  return sinLeer.length ? `${cuerpo}\n\n⚠️ *No pude leer la agenda de:* ${sinLeer.join(', ')}. Faltan acá.` : cuerpo
 }
 
-export function mensajeResumenDireccion({ semana, filas, sinNada = [], ranking = [], pasadaTotal }) {
+export function mensajeResumenDireccion({ semana, filas, sinNada = [], sinLeer = [], sinCanal = [], ranking = [], pasadaTotal }) {
   const pct = (p) => (p?.total ? Math.round((p.hechas / p.total) * 100) : null)
   const global = pct(pasadaTotal)
   const bloques = [
@@ -139,6 +141,8 @@ export function mensajeResumenDireccion({ semana, filas, sinNada = [], ranking =
         .join('\n')
   )
   if (sinNada.length) bloques.push(`_Sin tareas esta semana ni atrasadas: ${sinNada.join(', ')}_`)
+  if (sinLeer.length) bloques.push(`⚠️ *No pude leer la agenda de:* ${sinLeer.join(', ')}. Faltan en este resumen.`)
+  if (sinCanal.length) bloques.push(`📭 *Con tareas pero sin Space donde recibir avisos:* ${sinCanal.join(', ')}. Se vinculan con /vincular.`)
   if (ranking.length) {
     bloques.push(
       '\n*Atrasadas por responsable:*\n' +

@@ -4,7 +4,9 @@ import { getChat } from './chat-auth.js'
 
 // Un 403/404 al postear casi siempre significa que sacaron la app del Space
 // (o que el Space se borro). Reintentar eso es tirar cuota al vacio, asi que
-// se distingue del resto de los errores para poder limpiar la vinculacion.
+// se distingue del resto de los errores para informarlo con un mensaje claro.
+// NO se desvincula aca: la baja de verdad la da el evento REMOVED_FROM_SPACE
+// (routes/chat.js#manejarRemovido); un 403 puntual no alcanza.
 export class SpaceInaccesible extends Error {
   constructor(mensaje, codigo) {
     super(mensaje)
@@ -69,7 +71,9 @@ let directorySinPermiso = false
 // `users/<id>` de una persona para escribirle en privado. Primero el que quedo
 // guardado cuando uso la app; si no hay, el Directory (que devuelve el mismo
 // id). null = hoy no se le puede escribir.
-export async function idDeChatPorEmail({ db, email, log = console }) {
+// `soloLectura`: no escribe el id en la base (la simulacion AVISO_DRY_RUN no
+// tiene que dejar rastro).
+export async function idDeChatPorEmail({ db, email, log = console, soloLectura = false }) {
   const limpio = String(email || '').toLowerCase().trim()
   if (!limpio) return null
   const guardado = await db.extUser.findFirst({
@@ -85,9 +89,11 @@ export async function idDeChatPorEmail({ db, email, log = console }) {
     const { data } = await directory.users.get({ userKey: limpio, fields: 'id' })
     if (!data?.id) return null
     const chatUserName = `users/${data.id}`
-    await db.extUser
-      .updateMany({ where: { email: { equals: limpio, mode: 'insensitive' } }, data: { chat_user_name: chatUserName } })
-      .catch(() => {})
+    if (!soloLectura) {
+      await db.extUser
+        .updateMany({ where: { email: { equals: limpio, mode: 'insensitive' } }, data: { chat_user_name: chatUserName } })
+        .catch(() => {})
+    }
     return chatUserName
   } catch (err) {
     const codigo = err.code || err.response?.status

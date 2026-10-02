@@ -212,7 +212,11 @@ export default async function instanciasRoutes(fastify) {
     const idAsignacion = instancia.extendedProperties?.private?.id_asignacion
     const fechaISO = instancia.start?.date || String(instancia.start?.dateTime || '').slice(0, 10)
     if (!idAsignacion || !fechaISO) return { antes: [], despues: [] }
-    return cadenaDeInstancia(fastify, { idAsignacion, fechaISO })
+    const cadena = await cadenaDeInstancia(fastify, { idAsignacion, fechaISO })
+    // Una cadena armada con una agenda sin leer salia vacia y con 200: parecia
+    // "no tiene dependencias". Ahora es un error y el detalle lo dice.
+    if (cadena.incompleta) return reply.code(503).send({ error: 'No se pudo leer toda la cadena' })
+    return cadena
   })
 
   // "No aplica": cierra la instancia sin contarla como hecha (local cerrado,

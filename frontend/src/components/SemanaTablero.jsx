@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { aTarea, agruparPorGrupo, pieDeGrupo } from '../lib/agrupar.js'
 import { clasificarInstancia } from '../lib/vencimiento.js'
 import EtiquetasDependencia from './EtiquetasDependencia.jsx'
+import Urgencia from './Urgencia.jsx'
 
 // Vista "Semana (L-V)" de Mi agenda con el mismo armado que el kiosko
 // (kiosko/index.html): a la izquierda las atrasadas, despues lunes a viernes
@@ -35,7 +36,7 @@ const porTareaYLocal = (a, b) => a.titulo.localeCompare(b.titulo) || a.local.loc
 
 // Un grupo ("P&L › GRUPO TITA") lleva al lado cuantos locales junta.
 function TareaYLocal({ t }) {
-  return <>{t.titulo} <span className="sep-local">›</span> {t.local}{t.esGrupo && <span className="grupo-cuenta">×{t.tareas.length}</span>}</>
+  return <><Urgencia prioridad={t.prioridad} />{t.titulo} <span className="sep-local">›</span> {t.local}{t.esGrupo && <span className="grupo-cuenta">×{t.tareas.length}</span>}</>
 }
 
 // Quien la hizo (si esta hecha) o quien la tiene a cargo (si no).

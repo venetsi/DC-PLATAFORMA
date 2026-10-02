@@ -1,6 +1,7 @@
 import { aTarea, agruparPorGrupo } from '../lib/agrupar.js'
 import { clasificarInstancia } from '../lib/vencimiento.js'
 import EtiquetasDependencia from './EtiquetasDependencia.jsx'
+import Urgencia from './Urgencia.jsx'
 
 // Vista "Tablero" de Mi agenda, al estilo Trello: una lista por departamento y
 // una tarjeta por tarea abierta (atrasadas + pendientes de los proximos 30
@@ -83,7 +84,7 @@ export default function TableroKanban({ eventos, idsVisibles, deptos, mapaLocale
                   onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), abrir())}
                   title={t.esGrupo ? `${t.tareas.map((x) => x.local).join(', ')}. Tocá para ver los locales` : 'Ver el detalle'}
                 >
-                  <div className="kanban-titulo">{t.titulo}</div>
+                  <div className="kanban-titulo"><Urgencia prioridad={t.prioridad} />{t.titulo}</div>
                   <div className="kanban-meta">
                     {t.local}{t.esGrupo && <span className="grupo-cuenta">×{t.tareas.length}</span>} · {persona}
                   </div>

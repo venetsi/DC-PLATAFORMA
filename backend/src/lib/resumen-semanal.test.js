@@ -115,13 +115,23 @@ test('agruparDelDia: una linea por tarea y grupo, sin importar el responsable', 
   ]
   assert.deepEqual(agruparDelDia(eventos, nombresTita, dependencias, grupoLocal), [
     // Un solo local del grupo: se nombra por el local.
-    { titulo: 'Auditar', donde: 'TITA', locales: ['TITA'], personas: [], marcas: [] },
-    { titulo: 'P&L', donde: '878COOP', locales: ['878COOP'], personas: ['gquinteros@dcsmart.app'], marcas: [] },
+    { titulo: 'Auditar', prioridad: null, donde: 'TITA', locales: ['TITA'], personas: [], marcas: [] },
+    { titulo: 'P&L', prioridad: null, donde: '878COOP', locales: ['878COOP'], personas: ['gquinteros@dcsmart.app'], marcas: [] },
     // Dos locales del mismo grupo: una linea, con los dos responsables y la marca que tenga alguno.
-    { titulo: 'P&L', donde: 'GRUPO TITA', locales: ['DARKI', 'TITA-CH'], personas: ['gmalachane@dcsmart.app', 'gquinteros@dcsmart.app'], marcas: ['⏳ espera a Auditar'] },
+    { titulo: 'P&L', prioridad: null, donde: 'GRUPO TITA', locales: ['DARKI', 'TITA-CH'], personas: ['gmalachane@dcsmart.app', 'gquinteros@dcsmart.app'], marcas: ['⏳ espera a Auditar'] },
     // Sin grupo: por el local.
-    { titulo: 'P&L', donde: 'SUCURSAL', locales: ['SUCURSAL'], personas: [], marcas: [] }
+    { titulo: 'P&L', prioridad: null, donde: 'SUCURSAL', locales: ['SUCURSAL'], personas: [], marcas: [] }
   ])
+})
+
+test('agruparDelDia: las urgentes (rojo) van primero y no se mezclan con las normales', () => {
+  const eventos = [
+    ev('a1_1', '2026-10-07', { nombre_tarea: 'Auditar', id_local_ext: 'tita', prioridad: 'NORMAL' }),
+    ev('p1_1', '2026-10-07', { nombre_tarea: 'P&L', id_local_ext: 'titach', prioridad: 'ALTA' }),
+    ev('p2_1', '2026-10-07', { nombre_tarea: 'P&L', id_local_ext: 'darki', prioridad: 'NORMAL' })
+  ]
+  const lineas = agruparDelDia(eventos, nombresTita, new Map())
+  assert.deepEqual(lineas.map((l) => [l.titulo, l.prioridad]), [['P&L', 'ALTA'], ['Auditar', 'NORMAL'], ['P&L', 'NORMAL']])
 })
 
 test('agruparDelDia: sin mapa de grupos, cada local va en su linea', () => {
@@ -223,4 +233,22 @@ test('cardSemanalCombinada: una tarjeta, etiqueta por departamento, y una tarea 
   assert.equal(parametros(atrasadas.widgets[0].decoratedText.button).idDepartamento, 'aud')
   assert.equal(martes.header, 'Martes 6 · 2 tareas')
   assert.equal(martes.widgets[0].textParagraph.text, '<font color="#d7a14a"><b>AUD</b></font> <b>P&amp;L</b> › ROMA<br><font color="#4fb39b"><b>REP</b></font> <b>CMV</b> › Toda la empresa')
+})
+
+test('un departamento que no se pudo leer se dice aparte (no es "sin tareas"), en la tarjeta de Direccion y en el texto', async () => {
+  const { mensajeResumenDireccion, mensajeSemanalCombinado } = await import('./mensajes-chat.js')
+  const base = { semana: semanaDe(HOY), filas: [], sinNada: ['Costos'], ranking: [], pasadaTotal: { hechas: 0, total: 0 } }
+  const { cardsV2: [{ card }] } = cardResumenDireccion({ ...base, sinLeer: ['Reportes', 'Tesorería'] })
+  const textos = card.sections[0].widgets.map((w) => w.textParagraph?.text || '')
+  assert.ok(textos.includes('⚠️ <b>No pude leer la agenda de:</b> Reportes, Tesorería. Faltan en este resumen.'))
+  assert.ok(textos.includes('<i>Sin tareas esta semana ni atrasadas: Costos</i>')) // lo leido sin tareas sigue aparte
+  assert.match(mensajeResumenDireccion({ ...base, sinLeer: ['Reportes'] }), /⚠️ \*No pude leer la agenda de:\* Reportes\. Faltan en este resumen\./)
+  // Sin nada que advertir, no aparece la linea.
+  assert.doesNotMatch(mensajeResumenDireccion(base), /No pude leer/)
+
+  const aud = { id: 'aud', nombre: 'Auditoría' }
+  const partes = [{ departamento: aud, datos: { semana: semanaDe(HOY), vencidas: [], porDia: [], total: 0, dependencias: new Map() } }]
+  const combinada = cardSemanalCombinada(partes, nombreLocal, { hoyISO: HOY, space: 'spaces/MIX', sinLeer: ['Costos'] }).cardsV2[0].card
+  assert.ok(combinada.sections.some((s) => s.widgets.some((w) => w.textParagraph?.text.includes('No pude leer la agenda de:</b> Costos'))))
+  assert.match(mensajeSemanalCombinado(partes, nombreLocal, { hoyISO: HOY, sinLeer: ['Costos'] }), /⚠️ \*No pude leer la agenda de:\* Costos\. Faltan acá\./)
 })

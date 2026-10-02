@@ -229,7 +229,11 @@ async function manejarRemovido(fastify, payload) {
     where: { chat_space_name: space },
     data: { chat_space_name: null }
   })
-  if (count) fastify.log.info({ space }, 'chat: space desvinculado al sacar la app')
+  // Los departamentos compartidos de ese Space (un Space combinado no tiene
+  // duenio, solo compartidos): si quedaran, apuntarian a un Space muerto y
+  // reapareceria si algun dia se vincula otro con el mismo nombre.
+  const { count: compartidos } = await fastify.db.departamentoCompartidoEnSpace.deleteMany({ where: { chat_space_name: space } })
+  if (count || compartidos) fastify.log.info({ space, compartidos }, 'chat: space desvinculado al sacar la app')
   return {}
 }
 

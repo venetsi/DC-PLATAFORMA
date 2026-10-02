@@ -39,22 +39,32 @@ function filaDe(liberada) {
 // convertirlo en un error para quien marco.
 export async function avisarLiberadas(deps, { idAsignacion, fechaISO, estado = 'REALIZADA', emailUsuario = null }) {
   const { db, log = console } = deps
-  const resultado = { liberadas: 0, spaces: 0, privados: 0, sin_privado: 0, fallidos: 0 }
+  const resultado = { liberadas: 0, spaces: 0, privados: 0, sin_privado: 0, sin_space: 0, simulados: 0, fallidos: 0, sin_confirmar: 0 }
   try {
-    const { prerequisito, liberadas } = await liberadasPor(deps, { idAsignacion, fechaISO, estado, emailUsuario })
+    const { prerequisito, liberadas, incompletas = [] } = await liberadasPor(deps, { idAsignacion, fechaISO, estado, emailUsuario })
+    // No se pudo leer alguna agenda: esas NO se avisan (un "Ya podés hacerla"
+    // falso es peor que ninguno), pero se dejan dichas en el log.
+    if (incompletas.length) {
+      resultado.sin_confirmar = incompletas.length
+      log.warn?.({ idAsignacion, incompletas: incompletas.map((i) => `${i.nombre_tarea} — ${i.local}`), ...resultado }, 'dependencias: no se pudo confirmar si quedaron liberadas (fallo la lectura de Calendar)')
+    }
     if (!liberadas.length) return resultado
     resultado.liberadas = liberadas.length
 
-    const chat = await import('./chat.js')
+    // `deps.chat` permite probarlo sin llamar a Google.
+    const chat = deps.chat ?? (await import('./chat.js'))
     const simular = process.env.AVISO_DRY_RUN === '1'
     const hoyISO = hoyEnArgentina()
     const urlApp = process.env.FRONTEND_URL
+    // Devuelve true si salio de verdad. En simulacion no cuenta como enviado.
     const postear = async (space, cuerpo, etiqueta) => {
       if (simular) {
         log.info?.({ space, etiqueta, cuerpo: JSON.stringify(cuerpo) }, 'dependencias: aviso simulado (AVISO_DRY_RUN=1)')
-        return
+        resultado.simulados++
+        return false
       }
       await chat.postearEnSpace(space, cuerpo)
+      return true
     }
 
     // 1) El Space de cada departamento que tenia tareas esperando.
@@ -65,20 +75,20 @@ export async function avisarLiberadas(deps, { idAsignacion, fechaISO, estado = '
       porDepartamento.get(departamento.id).filas.push(filaDe(liberada))
     }
     for (const { departamento, filas } of porDepartamento.values()) {
-      if (!departamento.chat_space_name) continue
+      // Sin Space no hay donde postear: antes se saltaba sin dejar rastro y
+      // el aviso se perdia en silencio. Ahora se cuenta y se loguea.
+      if (!departamento.chat_space_name) {
+        resultado.sin_space++
+        log.warn?.({ departamento: departamento.slug, filas: filas.length }, 'dependencias: el departamento no tiene Space vinculado, el aviso de tareas liberadas no salio')
+        continue
+      }
       try {
-        await postear(departamento.chat_space_name, cardLiberadas({ departamento, filas, prerequisito, hoyISO, urlApp }), departamento.nombre)
-        resultado.spaces++
+        if (await postear(departamento.chat_space_name, cardLiberadas({ departamento, filas, prerequisito, hoyISO, urlApp }), departamento.nombre)) resultado.spaces++
       } catch (err) {
         resultado.fallidos++
+        // Un Space inaccesible (403/404) NO se desvincula aca: ver el comentario
+        // de crearTransporteChatApp. La baja la da REMOVED_FROM_SPACE.
         log.warn?.({ err: err.message, departamento: departamento.slug }, 'dependencias: no se pudo avisar en el Space')
-        // Mismo criterio que el recordatorio diario: un Space inaccesible es
-        // casi siempre que sacaron la app, y se limpia la vinculacion.
-        if (err instanceof chat.SpaceInaccesible) {
-          await db.departamento
-            .updateMany({ where: { chat_space_name: departamento.chat_space_name }, data: { chat_space_name: null } })
-            .catch(() => {})
-        }
       }
     }
 
@@ -93,14 +103,13 @@ export async function avisarLiberadas(deps, { idAsignacion, fechaISO, estado = '
     }
     for (const [email, filas] of porPersona) {
       try {
-        const chatUserName = await chat.idDeChatPorEmail({ db, email, log })
+        const chatUserName = await chat.idDeChatPorEmail({ db, email, log, soloLectura: simular })
         const privado = chatUserName ? await chat.buscarMensajeDirecto(chatUserName) : null
         if (!privado) {
           resultado.sin_privado++
           continue
         }
-        await postear(privado, cardLiberadasPrivada({ filas, prerequisito, hoyISO, urlApp }), email)
-        resultado.privados++
+        if (await postear(privado, cardLiberadasPrivada({ filas, prerequisito, hoyISO, urlApp }), email)) resultado.privados++
       } catch (err) {
         resultado.fallidos++
         log.warn?.({ err: err.message }, 'dependencias: no se pudo mandar el aviso privado')

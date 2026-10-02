@@ -82,8 +82,9 @@ export function agruparDelDia(eventos, nombreLocal, dependencias, grupoLocal = n
     const titulo = props.nombre_tarea || evento.summary || 'Tarea'
     const local = localDe(props, nombreLocal)
     const grupo = (props.id_local_ext && grupoLocal.get(props.id_local_ext)) || null
-    const clave = `${titulo}|${grupo ? `g:${grupo}` : `l:${local}`}`
-    if (!lineas.has(clave)) lineas.set(clave, { titulo, grupo, locales: new Set(), personas: new Set(), marcas: new Set() })
+    const prioridad = props.prioridad === 'ALTA' ? 'ALTA' : props.prioridad === 'NORMAL' ? 'NORMAL' : null
+    const clave = `${titulo}|${grupo ? `g:${grupo}` : `l:${local}`}|${prioridad || ''}`
+    if (!lineas.has(clave)) lineas.set(clave, { titulo, prioridad, grupo, locales: new Set(), personas: new Set(), marcas: new Set() })
     const linea = lineas.get(clave)
     linea.locales.add(local)
     const persona = (props.asignado_a || '').trim().toLowerCase()
@@ -93,15 +94,17 @@ export function agruparDelDia(eventos, nombreLocal, dependencias, grupoLocal = n
   }
   const ordenar = (s) => [...s].sort((a, b) => a.localeCompare(b))
   return [...lineas.values()]
-    .map(({ titulo, grupo, locales, personas, marcas }) => ({
+    .map(({ titulo, prioridad, grupo, locales, personas, marcas }) => ({
       titulo,
+      prioridad,
       // Con un solo local, el nombre del local dice mas que el del grupo.
       donde: grupo && locales.size > 1 ? grupo : ordenar(locales).join(', '),
       locales: ordenar(locales),
       personas: ordenar(personas),
       marcas: ordenar(marcas)
     }))
-    .sort((a, b) => a.titulo.localeCompare(b.titulo) || a.donde.localeCompare(b.donde))
+    // Urgentes (rojo) primero dentro del dia.
+    .sort((a, b) => (a.prioridad === 'ALTA' ? 0 : 1) - (b.prioridad === 'ALTA' ? 0 : 1) || a.titulo.localeCompare(b.titulo) || a.donde.localeCompare(b.donde))
 }
 
 // De lunes a domingo de la semana de `hoyISO`, y la anterior.
@@ -216,8 +219,12 @@ export async function datosSemanaDepartamento({ db, gcal, log = console }, depar
   const items = await gcal.listarInstancias({
     calendarId: departamento.id_calendar_google,
     timeMin: desdeHaceNDias(DIAS_MINIMOS),
-    timeMax: finDeHoyArgentina(semana.hasta)
+    timeMax: finDeHoyArgentina(semana.hasta),
+    maxPaginas: 40
   })
+  // Una lectura truncada trae lo mas viejo y deja afuera la semana: mejor
+  // decirlo (el departamento queda "sin leer") que mandar un resumen a medias.
+  if (items.truncado) throw new Error('lectura truncada: hay mas eventos de los que se pudieron traer')
   const { vencidas, porDia, total } = clasificarSemana(items, { hoyISO, semana, referencia })
   // Las etiquetas de dependencias ("espera a...") de lo que queda por hacer,
   // atrasadas incluidas: explican por que una sigue sin hacerse.

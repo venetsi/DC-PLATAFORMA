@@ -92,33 +92,59 @@ function aplicable(asignacion) {
 // extendedProperty): con el cronograma de informes cargado (31 P&L que
 // esperan a 18 Auditar) eran 36 lecturas de Calendar por listado, ~5 s; asi
 // son 2 (Reportes y Auditoria).
-function lectorDeInstancias(gcal, { desde, hasta }, log = console) {
+function lectorDeInstancias(gcal, { desde, hasta }, log = console, { esperaReintentoMs = 800 } = {}) {
   const porCalendario = new Map() // calendarId -> Promise<Map<idAsignacion, instancias[]>>
+  // Calendarios que NO se pudieron leer enteros (error de Calendar o lectura
+  // truncada). Una lectura fallida NO es "no tiene instancias": quien evalua
+  // tiene que poder distinguirlas, o un error de red se lee como "todo listo"
+  // y sale un "Ya podés hacerla" falso (ver leer.fallo).
+  const fallidos = new Set()
   function leerCalendario(calendarId) {
     if (!porCalendario.has(calendarId)) {
-      porCalendario.set(calendarId, leerCalendarioEntero(gcal, calendarId, desde, hasta).catch((err) => {
+      // Un error transitorio de Calendar (5xx, red) se reintenta UNA vez: esto
+      // corre al marcar, una sola vez, y un fallo pierde el "Ya podés hacerla"
+      // para siempre. Una lectura truncada no se reintenta: daria lo mismo.
+      const leerUnaVez = () => leerCalendarioEntero(gcal, calendarId, desde, hasta)
+      const conReintento = leerUnaVez().catch(async (err) => {
+        if (err.truncada) throw err
+        await new Promise((resolve) => setTimeout(resolve, esperaReintentoMs))
+        return leerUnaVez()
+      })
+      porCalendario.set(calendarId, conReintento.catch((err) => {
+        fallidos.add(calendarId)
         log.warn?.({ err: err.message, calendarId }, 'dependencias: no se pudo leer la agenda')
         return new Map()
       }))
     }
     return porCalendario.get(calendarId)
   }
-  return async (asignacion) => {
+  const leer = async (asignacion) => {
     if (!aplicable(asignacion)) return []
     const porAsignacion = await leerCalendario(asignacion.tarea.departamento.id_calendar_google)
     return porAsignacion.get(asignacion.id) || []
   }
+  // ¿Fallo la lectura de la agenda de esta asignacion? Solo vale despues de
+  // haberla leido con `leer` (la lectura es lo que llena el registro).
+  leer.fallo = (asignacion) => aplicable(asignacion) && fallidos.has(asignacion.tarea.departamento.id_calendar_google)
+  return leer
 }
 
 async function leerCalendarioEntero(gcal, calendarId, desde, hasta) {
   // Un dia de margen a cada lado: los eventos son de dia completo y el corte
   // de timeMin/timeMax depende de la zona del calendario. Despues se filtra
   // por la fecha real de cada instancia.
+  // maxPaginas alto a proposito: aca una lectura truncada apaga las
+  // dependencias del departamento, y las ventanas son anchas (hasta ~370 dias
+  // en el detalle de la cadena). 40 paginas son 100.000 eventos.
   const items = await gcal.listarInstancias({
     calendarId,
     timeMin: `${correrDias(desde, -1)}T00:00:00Z`,
-    timeMax: `${correrDias(hasta, 1)}T23:59:59Z`
+    timeMax: `${correrDias(hasta, 1)}T23:59:59Z`,
+    maxPaginas: 40
   })
+  // listarInstancias marca el resultado como truncado cuando llega al tope de
+  // paginas: faltan eventos, asi que no se puede afirmar que algo "no existe".
+  if (items.truncado) throw Object.assign(new Error('lectura truncada: hay mas eventos de los que se pudieron traer'), { truncada: true })
   const porAsignacion = new Map()
   for (const evento of items) {
     const props = evento.extendedProperties?.private || {}
@@ -167,26 +193,40 @@ function esLaRecienMarcada(hechaAhora, asignacion, instancia) {
 // Para la instancia de A en `fecha`: que prerrequisitos faltan (espera) y
 // cuales ya estan (listas). Un prerrequisito sin instancia en el tramo no
 // aparece en ninguna de las dos.
+//
+// `noVerificadas`: los prerrequisitos que NO se pudo evaluar porque fallo la
+// lectura de su agenda (o la de la propia tarea, que fija el tramo). No son
+// "listos" ni "pendientes": quien llama decide, y nunca debe tratarlos como
+// listos (un "Ya podés hacerla" falso es peor que no avisar).
 async function evaluarEspera(leer, asignacion, prerequisitos, fecha, { hechaAhora = null } = {}) {
   const espera = []
   const listas = []
-  if (!prerequisitos.length) return { espera, listas }
+  const noVerificadas = []
+  if (!prerequisitos.length) return { espera, listas, noVerificadas }
   const fechasA = (await leer(asignacion)).map((i) => i.fecha)
+  const tramoIncierto = leer.fallo?.(asignacion)
   for (const prerequisito of prerequisitos) {
     if (!aplicable(prerequisito)) continue
-    const instancia = prerequisitoQueCorresponde(await leer(prerequisito), fechasA, fecha)
+    const instanciasP = await leer(prerequisito)
+    if (tramoIncierto || leer.fallo?.(prerequisito)) {
+      noVerificadas.push(resumenAsignacion(prerequisito))
+      continue
+    }
+    const instancia = prerequisitoQueCorresponde(instanciasP, fechasA, fecha)
     if (!instancia) continue
     const recien = esLaRecienMarcada(hechaAhora, prerequisito, instancia)
     const nodo = { ...resumenAsignacion(prerequisito), ...detalleDeInstancia(instancia, { hechaAhora: recien ? hechaAhora : null }) }
     if (recien || estaHecha(instancia.props)) listas.push(nodo)
     else espera.push(nodo)
   }
-  return { espera, listas }
+  return { espera, listas, noVerificadas }
 }
 
 // ── API del modulo ───────────────────────────────────────────────────────────
 
-// Prerrequisitos NO cumplidos de (idAsignacion, fechaISO). [] = todo listo.
+// Prerrequisitos NO cumplidos de (idAsignacion, fechaISO). [] = nada que
+// avisar: o esta todo listo, o no se pudo leer Calendar (en ese caso queda un
+// warn en el log y no se avisa nada: es una comodidad, no puede romper el marcado).
 // Lo usa el marcado para avisar "se marco, pero ojo". NUNCA tira: avisar es
 // una comodidad, no puede romper el marcado.
 export async function prerrequisitosPendientes(deps, { idAsignacion, fechaISO }) {
@@ -197,7 +237,7 @@ export async function prerrequisitosPendientes(deps, { idAsignacion, fechaISO })
       include: { asignacion: { include: INCLUDE_ASIGNACION }, prerequisito: { include: INCLUDE_ASIGNACION } }
     })
     if (!filas.length) return []
-    const leer = lectorDeInstancias(gcal, { desde: correrDias(fechaISO, -VENTANA_DIAS), hasta: fechaISO }, log)
+    const leer = lectorDeInstancias(gcal, { desde: correrDias(fechaISO, -VENTANA_DIAS), hasta: fechaISO }, log, { esperaReintentoMs: deps.esperaReintentoMs })
     const { espera } = await evaluarEspera(leer, filas[0].asignacion, filas.map((f) => f.prerequisito), fechaISO)
     return espera.map((p) => ({ tipo: 'prerrequisito_pendiente', ...p }))
   } catch (err) {
@@ -253,7 +293,7 @@ export async function mapaDependencias(deps, { instancias }) {
     const leer = lectorDeInstancias(gcal, {
       desde: correrDias(fechas[0], -VENTANA_DIAS),
       hasta: correrDias(fechas[fechas.length - 1], VENTANA_DIAS)
-    }, log)
+    }, log, { esperaReintentoMs: deps.esperaReintentoMs })
     // Todas las lecturas en paralelo de entrada; despues se evalua en memoria.
     await Promise.all([...asignaciones.values()].map((a) => leer(a)))
 
@@ -264,13 +304,17 @@ export async function mapaDependencias(deps, { instancias }) {
 
       const prerequisitos = prerequisitosDe.get(idAsignacion)
       if (prerequisitos) {
-        const { espera, listas } = await evaluarEspera(leer, asignaciones.get(idAsignacion), prerequisitos, fecha)
+        const { espera, listas, noVerificadas } = await evaluarEspera(leer, asignaciones.get(idAsignacion), prerequisitos, fecha)
         if (espera.length) resultado.espera = espera
-        else if (listas.length) resultado.listas = listas
+        // "Lista" solo si TODO se pudo verificar: con una agenda sin leer, un
+        // ✅ podria esconder un paso pendiente.
+        else if (listas.length && !noVerificadas.length) resultado.listas = listas
       }
 
       const dependientes = dependientesDe.get(idAsignacion)
-      if (dependientes) {
+      // Si la agenda de esta tarea no se pudo leer, sus fechas estan
+      // incompletas y la regla de "a cual frena" daria una etiqueta falsa.
+      if (dependientes && !leer.fallo(asignaciones.get(idAsignacion))) {
         const fechasP = (await leer(asignaciones.get(idAsignacion))).map((i) => i.fecha)
         const laEspera = []
         for (const dependiente of dependientes) {
@@ -311,26 +355,41 @@ export async function liberadasPor(deps, { idAsignacion, fechaISO, estado = 'REA
       }
     }
   })
-  if (!filas.length) return { prerequisito: null, liberadas: [] }
+  if (!filas.length) return { prerequisito: null, liberadas: [], incompletas: [] }
 
   const prerequisito = filas[0].prerequisito
   const hechaAhora = { idAsignacion, fecha: fechaISO, estado, por: emailUsuario, en: ahora.toISOString() }
-  const leer = lectorDeInstancias(gcal, { desde: correrDias(fechaISO, -VENTANA_DIAS), hasta: correrDias(fechaISO, VENTANA_DIAS) }, log)
+  const leer = lectorDeInstancias(gcal, { desde: correrDias(fechaISO, -VENTANA_DIAS), hasta: correrDias(fechaISO, VENTANA_DIAS) }, log, { esperaReintentoMs: deps.esperaReintentoMs })
   const fechasP = (await leer(prerequisito)).map((i) => i.fecha)
   if (!fechasP.includes(fechaISO)) fechasP.push(fechaISO)
   fechasP.sort()
+  // Si no se pudo leer la agenda de la tarea recien marcada, las fechas de P
+  // quedan incompletas y la regla de "cual espera a cual" puede errar.
+  const agendaDePIncierta = leer.fallo(prerequisito)
 
+  // `incompletas`: las que no se pudo confirmar (fallo la lectura de alguna
+  // agenda). No se avisan: se informan, para que no queden en silencio.
   const liberadas = []
+  const incompletas = []
   for (const fila of filas) {
     const asignacion = fila.asignacion
     if (!aplicable(asignacion)) continue
-    const w = dependienteQueCorresponde(await leer(asignacion), fechasP, fechaISO)
+    const instanciasA = await leer(asignacion)
+    if (agendaDePIncierta || leer.fallo(asignacion)) {
+      incompletas.push({ ...resumenAsignacion(asignacion), faltan_verificar: [] })
+      continue
+    }
+    const w = dependienteQueCorresponde(instanciasA, fechasP, fechaISO)
     if (!w || estaHecha(w.props)) continue
-    const { espera } = await evaluarEspera(leer, asignacion, asignacion.dependencias.map((d) => d.prerequisito), w.fecha, { hechaAhora })
+    const { espera, noVerificadas } = await evaluarEspera(leer, asignacion, asignacion.dependencias.map((d) => d.prerequisito), w.fecha, { hechaAhora })
     if (espera.length) continue
+    if (noVerificadas.length) {
+      incompletas.push({ ...resumenAsignacion(asignacion), faltan_verificar: noVerificadas.map((n) => n.nombre_tarea) })
+      continue
+    }
     liberadas.push({ asignacion, instancia: w, ...resumenAsignacion(asignacion), ...detalleDeInstancia(w) })
   }
-  return { prerequisito: { ...resumenAsignacion(prerequisito), ...hechaAhora }, liberadas }
+  return { prerequisito: { ...resumenAsignacion(prerequisito), ...hechaAhora }, liberadas, incompletas }
 }
 
 // La cadena de una instancia para el detalle: hacia atras, sus prerrequisitos
@@ -345,7 +404,7 @@ export async function cadenaDeInstancia(deps, { idAsignacion, fechaISO }) {
   const leer = lectorDeInstancias(gcal, {
     desde: correrDias(fechaISO, -(MAX_NIVELES + 1) * VENTANA_DIAS),
     hasta: correrDias(fechaISO, VENTANA_DIAS)
-  }, log)
+  }, log, { esperaReintentoMs: deps.esperaReintentoMs })
 
   // `camino` corta los ciclos que se hubieran colado (el alta ya los rechaza).
   async function previos(actual, fecha, nivel, camino) {
@@ -356,10 +415,12 @@ export async function cadenaDeInstancia(deps, { idAsignacion, fechaISO }) {
       orderBy: { created_at: 'asc' }
     })
     if (!filas.length) return []
+    leidas.add(actual)
     const fechasA = (await leer(actual)).map((i) => i.fecha)
     const nodos = []
     for (const { prerequisito } of filas) {
       if (!aplicable(prerequisito) || camino.has(prerequisito.id)) continue
+      leidas.add(prerequisito)
       const instancia = prerequisitoQueCorresponde(await leer(prerequisito), fechasA, fecha)
       if (!instancia) continue
       nodos.push({
@@ -371,6 +432,9 @@ export async function cadenaDeInstancia(deps, { idAsignacion, fechaISO }) {
     return nodos
   }
 
+  // Todas las asignaciones que se leyeron: si la agenda de alguna fallo, la
+  // cadena que se arma esta incompleta (antes salia vacia, sin error).
+  const leidas = new Set([asignacion])
   const antes = await previos(asignacion, fechaISO, 1, new Set([asignacion.id]))
 
   const dependientes = await db.tareaAsignacionDependencia.findMany({
@@ -385,11 +449,13 @@ export async function cadenaDeInstancia(deps, { idAsignacion, fechaISO }) {
     fechasX.sort()
     for (const { asignacion: dependiente } of dependientes) {
       if (!aplicable(dependiente)) continue
+      leidas.add(dependiente)
       const w = dependienteQueCorresponde(await leer(dependiente), fechasX, fechaISO)
       if (w) despues.push({ ...resumenAsignacion(dependiente), ...detalleDeInstancia(w) })
     }
   }
-  return { antes, despues }
+  const incompleta = [...leidas].some((a) => leer.fallo(a))
+  return { antes, despues, ...(incompleta ? { incompleta: true } : {}) }
 }
 
 // true si agregar (idAsignacion -> idPrerequisito) cerraria un ciclo.

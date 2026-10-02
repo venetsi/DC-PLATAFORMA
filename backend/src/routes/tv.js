@@ -208,6 +208,7 @@ async function armarResumen(fastify, departamentos, vista = 'semana') {
         estado,
         departamento,
         asignado_a: nombreCorto(props.asignado_a),
+        prioridad: props.prioridad || null,
         realizada_por: nombreCorto(props.realizada_por),
         inicio: evento.start?.dateTime || evento.start?.date,
         fin: evento.end?.dateTime || evento.end?.date,

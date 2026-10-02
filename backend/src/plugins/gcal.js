@@ -193,6 +193,9 @@ async function gcalPlugin(fastify) {
           { calendarId, paginas, items: items.length },
           'listarInstancias corto en maxPaginas -- hay mas eventos sin traer'
         )
+        // Ademas del log, queda marcado en el resultado: quien necesita
+        // afirmar que algo "no existe" (dependencias) lo trata como fallo.
+        Object.defineProperty(items, 'truncado', { value: true })
       }
       return items
     },

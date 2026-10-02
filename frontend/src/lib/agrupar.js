@@ -22,6 +22,8 @@ export function aTarea(ev, mapaLocales, hoyISO = hoyEnArgentina()) {
     titulo: props.nombre_tarea || ev.summary,
     estado,
     asignadoA: props.asignado_a || null,
+    // Urgencia fija: 'ALTA' (🔴) | 'NORMAL' (🟢) | null.
+    prioridad: props.prioridad || null,
     realizadaPor: props.realizada_por || null,
     realizadaEn: props.realizada_en || null,
     noAplicaMotivo: props.no_aplica_motivo || null,
@@ -117,6 +119,7 @@ function crearGrupo(clave, grupo, lista) {
     abiertas,
     idDepartamento: tareas[0].idDepartamento,
     departamento: tareas[0].departamento,
+    prioridad: tareas.some((t) => t.prioridad === 'ALTA') ? 'ALTA' : tareas.find((t) => t.prioridad)?.prioridad || null,
     personas: [...new Set(tareas.map((t) => t.asignadoA).filter(Boolean).map(nombreCorto))].sort(),
     esperaA: unirNodos(tareas.map((t) => t.esperaA || [])),
     // "Lista" solo si ninguna espera y todas las abiertas estan listas.

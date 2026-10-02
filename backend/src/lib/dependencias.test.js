@@ -10,6 +10,8 @@ import {
   prerrequisitosPendientes,
   cadenaDeInstancia
 } from './dependencias.js'
+import { avisarLiberadas } from './avisos-dependencias.js'
+import { SpaceInaccesible } from './chat.js'
 
 const inst = (...fechas) => fechas.map((fecha) => ({ fecha }))
 
@@ -101,13 +103,20 @@ function escenario() {
   })
 
   // Como Calendar: un pedido trae TODO el calendario del departamento.
+  // `fallan`: calendarIds cuya lectura tira error (un 429/5xx de Calendar).
+  // `truncan`: los que devuelven la lectura marcada como truncada.
   let lecturas = 0
+  const fallan = new Set()
+  const truncan = new Set()
   const gcal = {
     async listarInstancias({ calendarId }) {
       lecturas++
-      return Object.values(porId)
+      if (fallan.has(calendarId)) throw Object.assign(new Error('Calendar no responde'), { code: 503 })
+      const lista = Object.values(porId)
         .filter((a) => a.tarea.departamento.id_calendar_google === calendarId)
         .flatMap((a) => (eventos[a.id] || []).map((fecha) => aEvento(a.id, fecha)))
+      if (truncan.has(calendarId)) Object.defineProperty(lista, 'truncado', { value: true })
+      return lista
     }
   }
 
@@ -137,7 +146,7 @@ function escenario() {
     }
   }
   const log = { warn() {}, info() {} }
-  return { deps: { db, gcal, log }, estados, eventos, aEvento, filas, lecturas: () => lecturas }
+  return { deps: { db, gcal, log }, estados, eventos, aEvento, filas, fallan, truncan, porId, lecturas: () => lecturas }
 }
 
 test('mapa: el reporte espera, el cierre frena al reporte', async () => {
@@ -217,4 +226,186 @@ test('cadena: sube por el cierre hasta el CMV y muestra quien espera', async () 
 
   const { despues } = await cadenaDeInstancia(deps, { idAsignacion: 'cierre', fechaISO: '2026-10-02' })
   assert.deepEqual(despues.map((n) => [n.nombre_tarea, n.fecha]), [['Reporte de ventas', '2026-10-03']])
+})
+
+// ── Fallar cerrado: un error de lectura NO es "todo listo" ───────────────────
+
+test('liberadas: si no se pudo leer la agenda del OTRO prerrequisito, no se avisa (antes salia un "Ya podés hacerla" falso)', async () => {
+  const { deps, fallan } = escenario()
+  // El CMV sigue pendiente, pero su calendario (Costos) no responde. Antes se
+  // leia como "no tiene instancia" -> "no espera nada" -> aviso falso.
+  fallan.add('cal-cos')
+  const { liberadas, incompletas } = await liberadasPor(deps, { idAsignacion: 'cierre', fechaISO: '2026-10-02', emailUsuario: 'lruiz@dcsmart.app' })
+  assert.equal(liberadas.length, 0)
+  assert.deepEqual(incompletas.map((i) => [i.nombre_tarea, i.faltan_verificar]), [['Reporte de ventas', ['CMV']]])
+})
+
+test('liberadas: si no se pudo leer la agenda de la tarea que espera, tampoco se avisa', async () => {
+  const { deps, estados, fallan } = escenario()
+  estados['cmv|2026-10-01'] = { estado: 'REALIZADA' }
+  fallan.add('cal-aud')
+  const { liberadas, incompletas } = await liberadasPor(deps, { idAsignacion: 'cierre', fechaISO: '2026-10-02' })
+  assert.equal(liberadas.length, 0)
+  assert.equal(incompletas.length, 1)
+})
+
+test('liberadas: una lectura TRUNCADA tambien cuenta como fallo', async () => {
+  const { deps, estados, truncan } = escenario()
+  estados['cmv|2026-10-01'] = { estado: 'REALIZADA' }
+  truncan.add('cal-cos')
+  const { liberadas, incompletas } = await liberadasPor(deps, { idAsignacion: 'cierre', fechaISO: '2026-10-02' })
+  assert.equal(liberadas.length, 0)
+  assert.equal(incompletas.length, 1)
+})
+
+test('liberadas: con todo legible sigue avisando (el arreglo no apaga el aviso)', async () => {
+  const { deps, estados } = escenario()
+  estados['cmv|2026-10-01'] = { estado: 'REALIZADA' }
+  const { liberadas, incompletas } = await liberadasPor(deps, { idAsignacion: 'cierre', fechaISO: '2026-10-02' })
+  assert.equal(liberadas.length, 1)
+  assert.equal(incompletas.length, 0)
+})
+
+test('mapa: con una agenda sin leer NO se muestra "lista" (un ✅ podria esconder un paso pendiente)', async () => {
+  const { deps, estados, fallan, aEvento } = escenario()
+  estados['cierre|2026-10-02'] = { estado: 'NO_APLICA' }
+  fallan.add('cal-cos') // el CMV no se puede leer
+  const mapa = await mapaDependencias(deps, { instancias: [aEvento('reporte', '2026-10-03')] })
+  const reporte = mapa.get('reporte|2026-10-03')
+  assert.equal(reporte?.listas, undefined)
+  assert.equal(reporte?.espera, undefined)
+})
+
+test('mapa: lo que si se pudo leer sigue mostrandose aunque otra agenda falle', async () => {
+  const { deps, fallan, aEvento } = escenario()
+  fallan.add('cal-cos')
+  const mapa = await mapaDependencias(deps, { instancias: [aEvento('reporte', '2026-10-03')] })
+  // El cierre (Tesoreria) se leyo bien y esta pendiente: eso se sigue diciendo.
+  assert.deepEqual(mapa.get('reporte|2026-10-03').espera.map((p) => p.nombre_tarea), ['Cierre de caja'])
+})
+
+// ── El aviso de Chat con la base y Calendar falsos ──────────────────────────
+
+test('aviso: sin Space se cuenta como sin_space (antes se perdia sin rastro)', async () => {
+  const { deps, estados } = escenario()
+  estados['cmv|2026-10-01'] = { estado: 'REALIZADA' }
+  const r = await avisarLiberadas(deps, { idAsignacion: 'cierre', fechaISO: '2026-10-02', emailUsuario: 'reporte@dcsmart.app' })
+  assert.deepEqual([r.liberadas, r.sin_space, r.spaces, r.fallidos], [1, 1, 0, 0])
+})
+
+test('aviso: en simulacion NO cuenta como enviado (antes inflaba "spaces")', async () => {
+  const { deps, estados, porId } = escenario()
+  estados['cmv|2026-10-01'] = { estado: 'REALIZADA' }
+  porId.reporte.tarea.departamento.chat_space_name = 'spaces/AUD'
+  process.env.AVISO_DRY_RUN = '1'
+  try {
+    const r = await avisarLiberadas(deps, { idAsignacion: 'cierre', fechaISO: '2026-10-02', emailUsuario: 'reporte@dcsmart.app' })
+    assert.deepEqual([r.simulados, r.spaces, r.sin_space], [1, 0, 0])
+  } finally {
+    delete process.env.AVISO_DRY_RUN
+  }
+})
+
+test('aviso: si no se pudo confirmar por un fallo de lectura, lo dice (sin_confirmar) y no avisa', async () => {
+  const { deps, fallan, porId } = escenario()
+  fallan.add('cal-cos')
+  porId.reporte.tarea.departamento.chat_space_name = 'spaces/AUD'
+  process.env.AVISO_DRY_RUN = '1'
+  try {
+    const r = await avisarLiberadas(deps, { idAsignacion: 'cierre', fechaISO: '2026-10-02', emailUsuario: 'lruiz@dcsmart.app' })
+    assert.deepEqual([r.sin_confirmar, r.liberadas, r.simulados, r.spaces], [1, 0, 0, 0])
+  } finally {
+    delete process.env.AVISO_DRY_RUN
+  }
+})
+
+// ── Mas fallar cerrado ───────────────────────────────────────────────────────
+
+test('mapa: si la agenda de la PROPIA tarea no se pudo leer, sus prerrequisitos no se muestran "listos" contra un tramo equivocado', async () => {
+  const { deps, estados, fallan, aEvento } = escenario()
+  estados['cierre|2026-10-02'] = { estado: 'NO_APLICA' }
+  estados['cmv|2026-10-01'] = { estado: 'REALIZADA' }
+  fallan.add('cal-aud') // la agenda del reporte: fija el tramo en el que se busca cada prerrequisito
+  const mapa = await mapaDependencias(deps, { instancias: [aEvento('reporte', '2026-10-03')] })
+  assert.equal(mapa.get('reporte|2026-10-03')?.listas, undefined)
+})
+
+test('mapa: con la agenda de la tarea sin leer NO se dice a quien frena (antes salia una etiqueta "frena a..." falsa)', async () => {
+  const { deps, eventos, fallan, aEvento } = escenario()
+  eventos.cierre = ['2026-10-01', '2026-10-02']
+  const instancias = [aEvento('cierre', '2026-10-01'), aEvento('cierre', '2026-10-02')]
+  const sano = await mapaDependencias(deps, { instancias })
+  assert.equal(sano.get('cierre|2026-10-01')?.la_espera, undefined) // el del 2 es el que de verdad frena al reporte
+  assert.ok(sano.get('cierre|2026-10-02').la_espera)
+
+  fallan.add('cal-tes')
+  const roto = await mapaDependencias(deps, { instancias })
+  assert.equal(roto.get('cierre|2026-10-01')?.la_espera, undefined)
+  assert.equal(roto.get('cierre|2026-10-02')?.la_espera, undefined)
+})
+
+test('un error transitorio de Calendar se reintenta UNA vez (antes se perdia el aviso para siempre)', async () => {
+  const { deps, estados } = escenario()
+  estados['cmv|2026-10-01'] = { estado: 'REALIZADA' }
+  const original = deps.gcal.listarInstancias
+  let intentos = 0
+  deps.gcal.listarInstancias = async (a) => {
+    if (a.calendarId === 'cal-cos' && intentos++ === 0) throw Object.assign(new Error('503 un momento'), { code: 503 })
+    return original(a)
+  }
+  deps.esperaReintentoMs = 0
+  const { liberadas, incompletas } = await liberadasPor(deps, { idAsignacion: 'cierre', fechaISO: '2026-10-02' })
+  assert.equal(liberadas.length, 1)
+  assert.equal(incompletas.length, 0)
+  assert.equal(intentos, 2) // fallo una vez y la segunda anduvo
+})
+
+test('una lectura TRUNCADA no se reintenta (daria lo mismo)', async () => {
+  const { deps, truncan } = escenario()
+  truncan.add('cal-cos')
+  deps.esperaReintentoMs = 0
+  let lecturasCos = 0
+  const original = deps.gcal.listarInstancias
+  deps.gcal.listarInstancias = async (a) => { if (a.calendarId === 'cal-cos') lecturasCos++; return original(a) }
+  await liberadasPor(deps, { idAsignacion: 'cierre', fechaISO: '2026-10-02' })
+  assert.equal(lecturasCos, 1)
+})
+
+test('la lectura de dependencias pide hasta 40 paginas (una truncada apaga las dependencias del departamento)', async () => {
+  const { deps, aEvento } = escenario()
+  const pedidos = []
+  const original = deps.gcal.listarInstancias
+  deps.gcal.listarInstancias = async (a) => { pedidos.push(a.maxPaginas); return original(a) }
+  await mapaDependencias(deps, { instancias: [aEvento('reporte', '2026-10-03')] })
+  assert.ok(pedidos.length > 0)
+  assert.deepEqual([...new Set(pedidos)], [40])
+})
+
+test('cadena: con una agenda sin leer se marca incompleta (antes salia vacia, como si no hubiera dependencias)', async () => {
+  const { deps, fallan } = escenario()
+  const sana = await cadenaDeInstancia(deps, { idAsignacion: 'reporte', fechaISO: '2026-10-03' })
+  assert.equal(sana.incompleta, undefined)
+  fallan.add('cal-cos')
+  const rota = await cadenaDeInstancia(deps, { idAsignacion: 'reporte', fechaISO: '2026-10-03' })
+  assert.equal(rota.incompleta, true)
+})
+
+// ── El aviso de Chat con un Space que rechaza ────────────────────────────────
+
+test('aviso: un 403 al postear NO desvincula el Space (queda como fallido y se informa)', async () => {
+  const { deps, estados, porId } = escenario()
+  estados['cmv|2026-10-01'] = { estado: 'REALIZADA' }
+  porId.reporte.tarea.departamento.chat_space_name = 'spaces/AUD'
+  const llamadasADesvincular = []
+  deps.db.departamento = { updateMany: async (a) => { llamadasADesvincular.push(a); return { count: 1 } } }
+  deps.chat = {
+    SpaceInaccesible,
+    postearEnSpace: async () => { throw new SpaceInaccesible('Requested entity was not found.', 404) },
+    idDeChatPorEmail: async () => null,
+    buscarMensajeDirecto: async () => null
+  }
+  delete process.env.AVISO_DRY_RUN
+  const r = await avisarLiberadas(deps, { idAsignacion: 'cierre', fechaISO: '2026-10-02', emailUsuario: 'reporte@dcsmart.app' })
+  assert.deepEqual([r.liberadas, r.spaces, r.fallidos], [1, 0, 1])
+  assert.equal(llamadasADesvincular.length, 0, 'no se toco chat_space_name')
 })

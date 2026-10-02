@@ -113,6 +113,12 @@ o **Tarea › Grupo ×N** si ese día la misma tarea está en varios locales del
 (ver [Tareas agrupadas por grupo de locales](#tareas-agrupadas-por-grupo-de-locales)),
 ordenadas por tarea y local. Debajo va el responsable (→ nombre, o «equipo» si no
 tiene uno fijo; ✓ nombre si ya está hecha) y, si depende de otra, su etiqueta:
+🔴 / 🟢 **Urgencia.** Delante del nombre de una tarea, el círculo dice cuánta
+prisa tiene: 🔴 urgente, 🟢 normal; sin círculo, la tarea no está clasificada.
+Se ve igual en Mi agenda, la TV y los avisos de Chat, y las 🔴 van primero en
+cada día. Se define por grupo de locales desde **Agendas** (ver el manual del
+administrador).
+
 ⏳ **Espera a…** o 🔗 **Sigue con…** (ver
 [Tareas que dependen de otra](#tareas-que-dependen-de-otra)).
 
@@ -377,7 +383,9 @@ Los lunes a las 8, en lugar del recordatorio diario, cada Space recibe **Tu sema
   día.
 
 Al marcar una atrasada, la tarjeta se actualiza en su lugar. Un departamento sin
-tareas en la semana ni atrasadas no recibe nada. Un **Space combinado** (ver
+tareas en la semana ni atrasadas no recibe nada. Si no se pudo leer la agenda de
+algún departamento, el resumen de Dirección lo dice («No pude leer la agenda
+de…») en vez de mostrarlo como «sin tareas». Un **Space combinado** (ver
 [Spaces de Chat](#spaces-de-chat)) recibe una sola tarjeta con todos sus
 departamentos.
 
@@ -499,7 +507,12 @@ Sí: cada local tiene su propia agenda. En Agendas, tildá solo ese local y usá
 
 **Mi departamento no recibe los avisos de Chat.**
 Le falta un Space vinculado. Sus atrasadas igual escalan a Dirección. Pedile a
-Dirección que escriba `/vincular` en el Space del departamento.
+Dirección que escriba `/vincular` en el Space del departamento. Si el Space ya
+estaba vinculado y dejó de recibir, puede que hayan sacado la app: el Space se
+desvincula y el resumen de los lunes de Dirección lo lista como «Con tareas pero
+sin Space donde recibir avisos». Si en cambio el aviso falló un día (por ejemplo,
+un error de Google), Dirección recibe una advertencia con los Spaces donde no se
+pudo avisar y se reintenta al día siguiente.
 
 **La TV volvió a mostrar el QR.**
 La desconectaron desde **Pantallas**, o quien la conectó ya no ve esas agendas.

@@ -272,6 +272,18 @@ Y siempre disponibles:
   pasa a esperar a la otra tarea en su mismo local ("Toda la empresa" con
   "Toda la empresa"); informa los locales sin par y los que cerrarían un ciclo.
 
+### Urgencia (🔴/🟢) y fechas exactas
+
+- **Urgencia fija:** cada asignación tiene `prioridad` (`ALTA` = 🔴, `NORMAL` = 🟢,
+  vacía = sin marcar). Se elige al crear la tarea y, en lote, con **Cambiar
+  urgencia** en el detalle de la tarea. Se copia a `extendedProperties.private.prioridad`
+  de cada evento, así que las vistas no consultan la base. Requiere la columna
+  `tarea_asignaciones.prioridad` (`prisma db push`, aditivo).
+- **Fechas exactas:** la frecuencia `FECHAS` guarda una lista de fechas (un `RDATE`
+  en Calendar, sin `UNTIL`). No se renueva sola: el job `reconciliar` informa en
+  `series_de_fechas_por_terminar` las que tienen menos de 60 días por delante.
+  Desactivar una excluye las fechas futuras (`EXDATE`) y reactivar las devuelve.
+
 ### Dependencias entre tareas (`lib/dependencias.js`)
 
 - **Regla** (desde el 2026-09-28): una instancia de la tarea que espera (A, fecha
@@ -595,6 +607,59 @@ con otros tildados recibe solo la de su departamento. El escalamiento a Direcci�
 cualquier otro día, después del resumen. Si el lunes es feriado, el resumen sale
 igual ese día. Probarlo sin esperar al lunes: `AVISO_MODO=semanal` (con
 `AVISO_DRY_RUN=1` para no postear).
+
+**Cuando algo sale mal** (el job de avisos de las 8:00):
+- Cada departamento se **lee y se arma por separado**, y cada sección (Spaces
+  combinados, resumen a Dirección, escalamiento) tiene su propio manejo de
+  errores: un fallo en una cosa no tumba el resto. Las lecturas de Calendar se
+  reintentan con espera (1, 2 y 4 s) ante una cuota (403 de cuota, 429) o un
+  error transitorio (500/502/503/504); un 403 de permisos reales no se reintenta.
+  Una lectura **truncada** (más eventos de los que se pudieron traer) cuenta como
+  no leída.
+- Los **avisos que se postean en Chat** se reintentan solo ante un 429 o un 503
+  (seguro: el mensaje no se creó). Un 500/502/504 no se reintenta, porque podría
+  haberse creado y se duplicaría.
+- **Dirección recibe en su Space** una advertencia, una por corrida, con lo que
+  no se pudo leer, lo que no se pudo armar y los Spaces donde no se pudo avisar.
+  Si ni a Dirección se le pudo avisar, queda en el log como
+  `ALERTA: no se pudo advertir a Direccion` con el texto completo.
+- En el **resumen de los lunes**, un departamento sin leer aparece como «No pude
+  leer la agenda de…» (no como «sin tareas») y el subtítulo dice «sin X», porque
+  el % y el ranking se calculan solo con lo leído. Los departamentos **con tareas
+  pero sin ningún lugar donde recibir avisos** (sin Space propio, sin webhook y
+  fuera de un Space combinado) salen en «📭 Con tareas pero sin Space…».
+- Un **Space que rechaza un aviso (403/404) no se desvincula solo**: queda como
+  fallido, Dirección lo ve y se reintenta al día siguiente. La baja de verdad la
+  da Chat cuando sacan la app (`REMOVED_FROM_SPACE`), que además saca los
+  departamentos compartidos de ese Space. **Si el Space dejó de existir y ese
+  evento nunca llegó**, el vínculo queda colgado y el departamento no se puede
+  reasignar desde Chat: hay que limpiarlo en la base,
+  `UPDATE departamentos SET chat_space_name = NULL WHERE chat_space_name = 'spaces/…'`
+  (pedíselo a Claude), y volver a vincular con `/vincular`.
+- **Código de salida**: la ejecución termina en *fallida* (código 1) solo si no
+  hay ningún departamento que evaluar, si no se pudo leer ninguna agenda, si había
+  avisos para enviar y no salió ninguno, o si el job lanza una excepción no
+  controlada. En los tres primeros casos reintentar es seguro, porque no salió
+  nada. Un fallo **parcial** termina en código 0 (un reintento repetiría los
+  avisos que ya salieron), pero queda como `ERROR` en el log («Avisos de Chat CON
+  PROBLEMAS») y en la advertencia a Dirección. Cuando la ejecución va a
+  reintentarse, la advertencia solo sale en el primer intento.
+- El resultado del job incluye `errores_lectura`, `errores_armado`, `sin_canal`,
+  `feriados_cargados`, `veredicto` y `advertencia_a_direccion`. Si no se pudieron
+  cargar los feriados, los días de atraso se cuentan de más y Dirección lo ve en la
+  advertencia.
+- **«Ya podés hacerla»** no sale si no se pudo leer la agenda de alguno de los
+  pasos: es preferible no avisar a avisar de más. En el log queda
+  `no se pudo confirmar si quedaron liberadas`. El aviso solo existe al marcar
+  (no se reintenta después), por eso se hace un reintento corto de la lectura
+  antes de rendirse. Los contadores `sin_space` (el departamento no tiene Space),
+  `sin_confirmar` y `simulados` (con `AVISO_DRY_RUN`) quedan en el log del aviso.
+- Las etiquetas «Lista» (✅) y «Sigue con» no aparecen mientras la agenda de la
+  tarea o de alguno de sus pasos no se pueda leer, y el detalle de la cadena
+  responde «No se pudo leer la cadena» en lugar de mostrarse vacío.
+- Pendiente a propósito: el recordatorio diario y el snapshot no tienen una alerta
+  externa (Cloud Monitoring) si el job directamente no corre; hoy eso se ve
+  mirando las ejecuciones en Cloud Run.
 
 Los tres usan la misma imagen (`dc-plataforma-avisos:latest`). Al cambiar su
 código hay que reconstruirla (`gcloud builds submit --config

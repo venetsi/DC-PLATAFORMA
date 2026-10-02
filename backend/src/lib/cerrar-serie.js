@@ -18,6 +18,7 @@
 // propiedades) y vuelve tal cual con status 'confirmed' (ver restaurarSerie y
 // agenda.js#reabrirAsignacion).
 import { estaHecha } from './vencimiento.js'
+import { conFechasCerradas, esSerieDeFechas } from './recurrencia.js'
 
 const sinReintento = (fn) => fn()
 
@@ -26,6 +27,8 @@ export function untilRule(untilDate) {
 }
 
 export function conCierre(recurrence, untilDate) {
+  // Una serie de fechas no tiene UNTIL: se cierra con EXDATE (reversible).
+  if (esSerieDeFechas(recurrence)) return conFechasCerradas(recurrence, untilDate)
   const regla = untilRule(untilDate)
   return (recurrence || []).map((rule) => (/UNTIL=/.test(rule) ? rule.replace(/UNTIL=\d{8}T\d{6}Z/, regla) : `${rule};${regla}`))
 }
@@ -55,7 +58,12 @@ export async function cerrarSerie(calendar, { calendarId, eventId, untilDate, re
   }
 
   if (!recurrente) return 'nada'
-  await reintentar(() => calendar.events.patch({ calendarId, eventId, requestBody: { recurrence: conCierre(maestro.recurrence, untilDate) } }))
+  // En una serie de fechas se anota hasta cuando estuvo abierta: es lo que
+  // permite saber, al reactivar, si se cerro hace poco (agenda.js).
+  const extra = esSerieDeFechas(maestro.recurrence)
+    ? { extendedProperties: { private: { ...maestro.extendedProperties?.private, cerrada_hasta: untilDate } } }
+    : {}
+  await reintentar(() => calendar.events.patch({ calendarId, eventId, requestBody: { recurrence: conCierre(maestro.recurrence, untilDate), ...extra } }))
   return 'cerrada'
 }
 

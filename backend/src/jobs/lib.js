@@ -6,6 +6,7 @@ import { google } from 'googleapis'
 import 'dotenv/config'
 import { crearAuthClient } from '../lib/gcal-auth.js'
 import { opcionesPrisma } from '../lib/db-url.js'
+import { conReintento } from '../lib/reintento.js'
 
 // Pool acotado: la base es compartida con dcsmart (ver lib/db-url.js).
 export const prisma = new PrismaClient(opcionesPrisma())
@@ -18,8 +19,7 @@ export function getCalendar() {
 
 // Misma paginacion que plugins/gcal.js:listarInstancias -- ver el comentario
 // largo alla. Sin esto, events.list corta en 250 sin avisar y a los jobs les
-// faltan tareas en silencio. (Sigue sin backoff a proposito: los jobs corren
-// desatendidos y un 429 se resuelve en la corrida siguiente.)
+// faltan tareas en silencio.
 export async function listarInstancias({ calendarId, timeMin, timeMax, estado, propiedades, maxPaginas = 10 }) {
   const calendar = await getCalendar()
   const filtros = { ...(estado ? { estado } : {}), ...propiedades }
@@ -29,7 +29,7 @@ export async function listarInstancias({ calendarId, timeMin, timeMax, estado, p
   let pageToken
   let paginas = 0
   do {
-    const { data } = await calendar.events.list({
+    const { data } = await conReintento(() => calendar.events.list({
       calendarId,
       timeMin,
       timeMax,
@@ -38,7 +38,7 @@ export async function listarInstancias({ calendarId, timeMin, timeMax, estado, p
       maxResults: 2500,
       ...(pageToken ? { pageToken } : {}),
       ...(privateExtendedProperty.length ? { privateExtendedProperty } : {})
-    })
+    }))
     items.push(...(data.items || []))
     pageToken = data.nextPageToken
     paginas++
@@ -46,6 +46,7 @@ export async function listarInstancias({ calendarId, timeMin, timeMax, estado, p
 
   if (pageToken) {
     console.warn(`[listarInstancias] corto en ${maxPaginas} paginas (${items.length} eventos) -- hay mas sin traer`)
+    Object.defineProperty(items, 'truncado', { value: true })
   }
   return items
 }

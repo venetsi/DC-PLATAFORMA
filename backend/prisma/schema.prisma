@@ -272,6 +272,10 @@ model TareaAsignacion {
   // una llamada por asignacion, y sin precargar, editar la recurrencia
   // borraria el responsable ya cargado.
   asignado_a        String?
+  // Urgencia fija de la asignacion: 'ALTA' (rojo) | 'NORMAL' (verde) | null (sin
+  // marcar). Tambien va a extendedProperties.private.prioridad del evento para
+  // que Mi agenda, la TV y el Chat la lean sin consultar la base.
+  prioridad         String?
   activa            Boolean  @default(true)
   created_at        DateTime @default(now())
   updated_at        DateTime @updatedAt

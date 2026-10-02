@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { agruparPorDiaYLocal, agruparPorGrupo, pieDeGrupo } from '../lib/agrupar.js'
 import DetalleTarea from './DetalleTarea.jsx'
 import EtiquetasDependencia from './EtiquetasDependencia.jsx'
+import Urgencia from './Urgencia.jsx'
 
 const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
@@ -63,7 +64,7 @@ export default function AgendaAgrupada({ eventos, mapaLocales, grupoDeLocal, onA
                         <span className="tarea-texto">
                           <span>
                             {depto && <span className="chip-depto" style={{ color: depto.color, background: `${depto.color}26` }} title={depto.nombre}>{depto.abreviatura}</span>}
-                            {t.titulo}<span className="grupo-cuenta">×{t.tareas.length}</span>
+                            <Urgencia prioridad={t.prioridad} />{t.titulo}<span className="grupo-cuenta">×{t.tareas.length}</span>
                             {t.diasVencida > 0 && <span className="tarea-atraso">hace {t.diasVencida} {t.diasVencida === 1 ? 'día' : 'días'}</span>}
                           </span>
                           <span className="tarea-persona">{pieDeGrupo(t)}</span>
@@ -95,7 +96,7 @@ export default function AgendaAgrupada({ eventos, mapaLocales, grupoDeLocal, onA
                           {depto && (
                             <span className="chip-depto" style={{ color: depto.color, background: `${depto.color}26` }} title={depto.nombre}>{depto.abreviatura}</span>
                           )}
-                          {t.titulo}
+                          <Urgencia prioridad={t.prioridad} />{t.titulo}
                           {t.diasVencida > 0 && (
                             <span className="tarea-atraso">
                               hace {t.diasVencida} {t.diasVencida === 1 ? 'día' : 'días'}

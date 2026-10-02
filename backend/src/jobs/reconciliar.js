@@ -10,7 +10,7 @@
 //
 // Ver docs/superpowers/plans.
 import { prisma, getCalendar } from './lib.js'
-import { horizontePorDefecto, MESES_DE_HORIZONTE } from '../lib/recurrencia.js'
+import { horizontePorDefecto, MESES_DE_HORIZONTE, esSerieDeFechas, ultimaFechaDeSerie } from '../lib/recurrencia.js'
 import { hoyEnArgentina } from '../lib/vencimiento.js'
 import { cerrarSerie } from '../lib/cerrar-serie.js'
 
@@ -55,9 +55,18 @@ function cerrarRecurrencia(calendar, { calendarId, eventId, untilDate }) {
 
 // Devuelve true si renovo. Idempotente: si al UNTIL todavia le sobra tiempo,
 // o la serie es infinita (una vieja), no toca nada.
+const porTerminar = new Set()
+
 async function renovarSiHaceFalta(calendar, { calendarId, eventId, hoy }) {
   const { data: current } = await calendar.events.get({ calendarId, eventId })
   if (!current.recurrence?.length) return false // evento UNICO, no hay nada que renovar
+  // Una serie de fechas exactas no tiene UNTIL y no se renueva sola: se cuenta
+  // aparte las que se quedan sin fechas para avisar a tiempo (ver `porTerminar`).
+  if (esSerieDeFechas(current.recurrence)) {
+    const ultima = ultimaFechaDeSerie(current.recurrence, current.start?.date)
+    if (ultima && diasEntre(hoy, ultima) <= DIAS_ANTES_DE_RENOVAR) porTerminar.add(`${calendarId}|${eventId}`)
+    return false
+  }
 
   const until = untilDeRecurrence(current.recurrence)
   if (!until) return false // serie infinita (pre-horizonte): se deja como esta
@@ -136,6 +145,7 @@ async function correr() {
     asignaciones_cerradas: cerradas,
     series_evaluadas: activas.length,
     series_renovadas: renovadas,
+    series_de_fechas_por_terminar: porTerminar.size,
     renovaciones_fallidas: fallidas,
     horizonte_meses: MESES_DE_HORIZONTE
   }

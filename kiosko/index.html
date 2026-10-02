@@ -490,8 +490,10 @@
 
   // "Tarea › Local", ordenadas por tarea y local (pedido del usuario: antes se
   // agrupaba por local y el nombre del local quedaba como titulo aparte).
+  // Urgencia fija de la tarea: rojo urgente, verde normal.
+  function icono(ev) { return ev.prioridad === 'ALTA' ? '🔴 ' : ev.prioridad === 'NORMAL' ? '🟢 ' : ''; }
   function tareaYLocal(ev) {
-    return esc(ev.titulo) + ' <span class="sep-local">›</span> ' + esc(ev.nombre_local || 'Toda la empresa')
+    return icono(ev) + esc(ev.titulo) + ' <span class="sep-local">›</span> ' + esc(ev.nombre_local || 'Toda la empresa')
       + (ev.esGrupo ? '<span class="grupo-cuenta">×' + ev.n + '</span>' : '');
   }
   function porTareaYLocal(a, b) {
@@ -520,6 +522,7 @@
     return {
       esGrupo: true,
       titulo: miembros[0].titulo,
+      prioridad: miembros.some(function (m) { return m.prioridad === 'ALTA'; }) ? 'ALTA' : (miembros.filter(function (m) { return m.prioridad; })[0] || {}).prioridad || null,
       nombre_local: miembros[0].grupo,
       estado: PEOR_ESTADO.filter(function (e) { return estados.indexOf(e) >= 0; })[0] || miembros[0].estado,
       departamento: miembros[0].departamento,
@@ -697,7 +700,7 @@
           var clase = ev.estado === 'vencida' ? 'vencida' : ev.fecha === hoy ? 'hoy' : 'futura';
           var texto = clase === 'vencida' ? fechaCorta(ev.fecha) + ' · hace ' + diasEntre(ev.fecha, hoy) + ' d' : clase === 'hoy' ? 'Hoy' : fechaCorta(ev.fecha);
           var quien = ev.esGrupo ? (ev.personas.length ? ev.personas.join(', ') : 'equipo') : (ev.asignado_a || 'equipo');
-          return '<div class="tv-tarjeta"><div class="t">' + esc(ev.titulo) + '</div>'
+          return '<div class="tv-tarjeta"><div class="t">' + icono(ev) + esc(ev.titulo) + '</div>'
             + '<div class="m">' + esc(ev.nombre_local) + (ev.esGrupo ? '<span class="grupo-cuenta">×' + ev.n + '</span>' : '') + ' · ' + esc(quien) + '</div>'
             + depsHtml(ev)
             + '<span class="vence ' + clase + '">' + esc(texto) + '</span></div>';
@@ -734,7 +737,7 @@
       var items = Object.keys(grupos).map(function (k) { return grupos[k]; })
         .sort(function (a, b) { return orden[a.estado] - orden[b.estado] || String(a.ev.titulo).localeCompare(String(b.ev.titulo)); })
         .map(function (g) {
-          return '<div class="cal-item ' + esc(g.estado) + '">' + chipDepto(g.ev.departamento) + g.marca + esc(g.ev.titulo) + (g.n > 1 ? ' ×' + g.n : '') + '</div>';
+          return '<div class="cal-item ' + esc(g.estado) + '">' + chipDepto(g.ev.departamento) + g.marca + icono(g.ev) + esc(g.ev.titulo) + (g.n > 1 ? ' ×' + g.n : '') + '</div>';
         }).join('');
       var fuera = tramo.mes && fecha.slice(0, 7) !== tramo.mes;
       return '<div class="cal-dia' + (fuera ? ' fuera' : '') + (fecha === hoy ? ' hoy' : '') + '">'

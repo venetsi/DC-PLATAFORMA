@@ -1,7 +1,7 @@
 import { usuarioActual, puede, esAdminGlobal, departamentosDe, departamentosCon } from '../lib/permisos.js'
-import { leerRecurrence, MAX_DIA_HABIL } from '../lib/recurrencia.js'
+import { leerRecurrence, MAX_DIA_HABIL, fechasDeConfig } from '../lib/recurrencia.js'
 import { clasificarInstancia, fechaDeInstancia, hoyEnArgentina } from '../lib/vencimiento.js'
-import { definirAgenda, asegurarAsignacion, cerrarAsignacion, INCLUDES_AGENDA, sumarDias } from '../lib/agenda.js'
+import { definirAgenda, asegurarAsignacion, cerrarAsignacion, INCLUDES_AGENDA, sumarDias, prioridadValida } from '../lib/agenda.js'
 
 // Pantalla "Agendas": ver y gestionar las tareas de uno o todos los
 // departamentos en un solo lugar. Direccion (admin) ve y opera todos; cada
@@ -21,6 +21,9 @@ function validarAgenda(agenda) {
     return `El día hábil va de 1 a ${MAX_DIA_HABIL}`
   }
   if (recurrencia_tipo === 'UNICA' && !recurrencia_config?.fecha) return 'Elegí la fecha'
+  if (recurrencia_tipo === 'FECHAS') {
+    try { fechasDeConfig(recurrencia_config) } catch (err) { return err.message }
+  }
   return null
 }
 
@@ -122,6 +125,7 @@ export default async function agendasRoutes(fastify) {
             local: a.local?.nombre ?? null,
             grupo: a.local?.grupo ?? null,
             asignado_a: a.asignado_a,
+            prioridad: a.prioridad,
             compartidas: a.compartidas.filter((c) => c.departamento.activo).map((c) => ({ id: c.departamento.id, nombre: c.departamento.nombre })),
             agenda: maestro ? leerRecurrence(maestro.recurrence, maestro.start?.date) : null,
             agendada: !!a.id_calendar_event,
@@ -134,11 +138,12 @@ export default async function agendasRoutes(fastify) {
 
   // Crear una tarea completa en un paso: nombre + donde + cuando + quien.
   fastify.post('/tareas', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { nombre: nombreRaw, descripcion, id_departamento, alcance, agenda, asignado_a = null, compartir_con = [] } = request.body || {}
+    const { nombre: nombreRaw, descripcion, id_departamento, alcance, agenda, asignado_a = null, compartir_con = [], prioridad } = request.body || {}
     const nombre = String(nombreRaw || '').trim()
     if (!nombre || !id_departamento) return reply.code(400).send({ error: 'Poné un nombre y elegí el departamento' })
     const errorAgenda = validarAgenda(agenda)
     if (errorAgenda) return reply.code(400).send({ error: errorAgenda })
+    try { prioridadValida(prioridad) } catch (err) { return reply.code(400).send({ error: err.message }) }
 
     const usuario = await usuarioActual(fastify, request)
     if (!puede(usuario, 'editar', id_departamento)) return reply.code(403).send({ error: 'Crear tareas lo puede hacer un MANAGER u OWNER del grupo del departamento' })
@@ -169,7 +174,7 @@ export default async function agendasRoutes(fastify) {
         }
       })
     }
-    const r = await aplicarAlcance(tarea, { locales, agenda, asignado_a, compartir_con })
+    const r = await aplicarAlcance(tarea, { locales, agenda, asignado_a, compartir_con, prioridad })
     return reply.code(201).send({ tarea, ...r })
   })
 
@@ -179,23 +184,24 @@ export default async function agendasRoutes(fastify) {
     if (!tarea?.activa) return reply.code(404).send({ error: 'Tarea no encontrada' })
     const usuario = await usuarioActual(fastify, request)
     if (!puede(usuario, 'editar', tarea.id_departamento)) return reply.code(403).send({ error: 'Editar tareas lo puede hacer un MANAGER u OWNER del grupo del departamento' })
-    const { alcance, agenda, asignado_a = null, compartir_con = [] } = request.body || {}
+    const { alcance, agenda, asignado_a = null, compartir_con = [], prioridad } = request.body || {}
     const errorAgenda = validarAgenda(agenda)
     if (errorAgenda) return reply.code(400).send({ error: errorAgenda })
+    try { prioridadValida(prioridad) } catch (err) { return reply.code(400).send({ error: err.message }) }
     const locales = await localesDelAlcance(fastify.db, alcance)
     if (!locales.length) return reply.code(400).send({ error: 'Elegí al menos un local' })
-    return aplicarAlcance(tarea, { locales, agenda, asignado_a, compartir_con })
+    return aplicarAlcance(tarea, { locales, agenda, asignado_a, compartir_con, prioridad })
   })
 
-  async function aplicarAlcance(tarea, { locales, agenda, asignado_a, compartir_con }) {
+  async function aplicarAlcance(tarea, { locales, agenda, asignado_a, compartir_con, prioridad }) {
     const r = { asignaciones: 0, agendadas: 0, ya_existian: 0, errores: [] }
     for (const idLocal of locales) {
       try {
-        const { asignacion, yaActiva } = await asegurarAsignacion(fastify, { tarea, idLocal, asignadoA: asignado_a, compartirCon: compartir_con })
+        const { asignacion, yaActiva } = await asegurarAsignacion(fastify, { tarea, idLocal, asignadoA: asignado_a, compartirCon: compartir_con, prioridad })
         if (yaActiva) { r.ya_existian++; continue }
         r.asignaciones++
         if (agenda) {
-          await definirAgenda(fastify, asignacion, { ...agenda, vigencia_hasta: null, asignado_a: asignado_a || '' })
+          await definirAgenda(fastify, asignacion, { ...agenda, vigencia_hasta: null, asignado_a: asignado_a || '', ...(prioridad !== undefined ? { prioridad } : {}) })
           r.agendadas++
         }
       } catch (err) {
@@ -217,9 +223,10 @@ export default async function agendasRoutes(fastify) {
   // Sin `agenda`, cada una conserva la suya (se lee del maestro) y cambia solo
   // el responsable -- definirAgenda no toca la recurrencia en ese caso.
   fastify.post('/asignaciones/agenda', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { ids, agenda, asignado_a } = request.body || {}
+    const { ids, agenda, asignado_a, prioridad } = request.body || {}
     if (!Array.isArray(ids) || !ids.length) return reply.code(400).send({ error: 'Elegí al menos un local' })
-    if (!agenda && asignado_a === undefined) return reply.code(400).send({ error: 'No hay nada para cambiar' })
+    if (!agenda && asignado_a === undefined && prioridad === undefined) return reply.code(400).send({ error: 'No hay nada para cambiar' })
+    try { prioridadValida(prioridad) } catch (err) { return reply.code(400).send({ error: err.message }) }
     const errorAgenda = validarAgenda(agenda)
     if (errorAgenda) return reply.code(400).send({ error: errorAgenda })
 
@@ -236,14 +243,18 @@ export default async function agendasRoutes(fastify) {
         }
         if (!regla) {
           // Sin agenda todavia: el responsable se guarda igual, sin evento.
-          await fastify.db.tareaAsignacion.update({ where: { id: a.id }, data: { asignado_a: asignado_a || null } })
+          await fastify.db.tareaAsignacion.update({ where: { id: a.id }, data: {
+            ...(asignado_a !== undefined ? { asignado_a: asignado_a || null } : {}),
+            ...(prioridad !== undefined ? { prioridad: prioridadValida(prioridad) } : {})
+          } })
           r.sin_agenda++
           continue
         }
         await definirAgenda(fastify, a, {
           ...regla,
           ...(agenda ? { vigencia_hasta: null } : {}),
-          asignado_a: asignado_a === undefined ? a.asignado_a || '' : asignado_a || ''
+          asignado_a: asignado_a === undefined ? a.asignado_a || '' : asignado_a || '',
+          ...(prioridad !== undefined ? { prioridad } : {})
         })
         r.actualizadas++
       } catch (err) {

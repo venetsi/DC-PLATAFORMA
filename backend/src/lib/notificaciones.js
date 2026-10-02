@@ -4,6 +4,13 @@
 // Un mensaje es { etiqueta, destino, texto, card? }: lleva las DOS
 // representaciones y cada transporte toma la que entiende. Asi el job no tiene
 // que saber si el departamento tiene Space vinculado o webhook viejo.
+import { conReintento } from './reintento.js'
+
+// Al POSTEAR en Chat solo se reintenta lo que seguro no se proceso (429 de
+// cuota, 503): con un 500/502/504 el mensaje pudo haberse creado, y reintentar
+// lo duplicaria. Sin esto, un 429 puntual dejaba sin resumen semanal a un
+// departamento hasta el lunes siguiente.
+const CODIGOS_DE_POSTEO = new Set([429, 503])
 
 export function crearTransporteWebhook({ fetchImpl = fetch } = {}) {
   return {
@@ -25,25 +32,23 @@ export function crearTransporteWebhook({ fetchImpl = fetch } = {}) {
 
 // Transporte de la Chat App: postea en el Space vinculado, con cards y
 // botones. Un Space inaccesible (403/404) casi siempre significa que sacaron
-// la app: se limpia la vinculacion y NO se reintenta, en vez de gastar cuota
-// todos los dias contra un Space que ya no existe.
-export function crearTransporteChatApp({ db, log = console } = {}) {
+// la app, y NO se reintenta en el momento (seria gastar cuota).
+//
+// Tampoco se limpia el vinculo: antes un solo 403/404 puntual desvinculaba el
+// Space, y desde ahi el departamento dejaba de recibir avisos SIN que nadie se
+// enterara. Ahora el fallo queda en `fallidos`, el job lo cuenta y le avisa a
+// Direccion, y se vuelve a intentar al dia siguiente. La baja de verdad la da
+// el evento REMOVED_FROM_SPACE de Chat (routes/chat.js#manejarRemovido).
+export function crearTransporteChatApp({ postear, esperaBaseMs = 2000 } = {}) {
   return {
     nombre: 'chat-app',
     soporta: (destino) => Boolean(destino?.chat_space_name),
     async enviar(destino, mensaje) {
-      const { postearEnSpace, SpaceInaccesible } = await import('./chat.js')
-      try {
-        await postearEnSpace(destino.chat_space_name, mensaje.card || { text: mensaje.texto })
-      } catch (err) {
-        if (err instanceof SpaceInaccesible && db) {
-          await db.departamento
-            .updateMany({ where: { chat_space_name: destino.chat_space_name }, data: { chat_space_name: null } })
-            .catch(() => {})
-          log.warn?.(`[notificaciones] ${destino.slug}: space inaccesible (${err.codigo}), vinculación limpiada`)
-        }
-        throw err
-      }
+      const enviar = postear || (await import('./chat.js')).postearEnSpace
+      await conReintento(
+        () => enviar(destino.chat_space_name, mensaje.card || { text: mensaje.texto }),
+        { intentos: 3, esperaBaseMs, codigos: CODIGOS_DE_POSTEO }
+      )
     }
   }
 }
@@ -53,9 +58,11 @@ export function crearTransporteChatApp({ db, log = console } = {}) {
 //
 // La precedencia es explicita y no "los dos": sin esto, un departamento con
 // Space Y webhook recibiria el mismo aviso dos veces. El webhook se conserva
-// como rollback si la app falla.
-export function crearTransporteChat({ db, log = console, fetchImpl = fetch } = {}) {
-  const app = crearTransporteChatApp({ db, log })
+// como respaldo SOLO para los departamentos que no tienen Space vinculado (si
+// el Space existe pero rechaza el aviso, no se cae al webhook: el fallo se
+// informa, ver crearTransporteChatApp).
+export function crearTransporteChat({ postear, fetchImpl = fetch, esperaBaseMs } = {}) {
+  const app = crearTransporteChatApp({ postear, esperaBaseMs })
   const webhook = crearTransporteWebhook({ fetchImpl })
   return {
     nombre: 'chat (app + webhook)',

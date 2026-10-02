@@ -5,6 +5,7 @@ import EditorFrecuencia from './EditorFrecuencia.jsx'
 import { describirAgenda, valorDesdeAgenda, agendaDesdeValor, errorDeValor } from '../lib/agenda-texto.js'
 import { etiquetaDeNodo, detalleDeNodo, avisoAntesDeMarcar } from '../lib/dependencias.js'
 import { hoyEnArgentina } from '../lib/vencimiento.js'
+import Urgencia from './Urgencia.jsx'
 
 const ICONO_PASO = { realizada: '✓', no_aplica: '⊘', vencida: '⏳', pendiente: '⏳' }
 
@@ -173,7 +174,7 @@ export default function DetalleTarea({ tarea, onCerrar, onMarcar, onNoAplica, on
     <div className="detalle-fondo" onClick={() => !marcando && onCerrar()}>
       <div className="card detalle-tarea" role="dialog" aria-modal="true" aria-label={`Detalle: ${tarea.titulo}`} onClick={(e) => e.stopPropagation()}>
         <div className="detalle-encabezado">
-          <h3 style={{ margin: 0 }}>{tarea.titulo}</h3>
+          <h3 style={{ margin: 0 }}><Urgencia prioridad={tarea.prioridad} />{tarea.titulo}</h3>
           <button className="btn btn-secondary" onClick={onCerrar} disabled={marcando} aria-label="Cerrar">✕</button>
         </div>
         <p className="detalle-sub">

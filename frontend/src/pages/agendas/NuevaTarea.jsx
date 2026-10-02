@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { URGENCIAS } from '../../lib/urgencia.js'
+import Urgencia from '../../components/Urgencia.jsx'
 import { agendasApi } from '../../api/recursos.js'
 import EditorFrecuencia from '../../components/EditorFrecuencia.jsx'
 import SelectorAlcance, { ALCANCE_VACIO, alcanceCompleto, describirAlcance } from './SelectorAlcance.jsx'
@@ -28,6 +30,7 @@ export default function NuevaTarea({ departamentos, idDepartamentoInicial, local
   const [alcance, setAlcance] = useState(ALCANCE_VACIO)
   const [frecuencia, setFrecuencia] = useState(() => (fechaInicial ? { ...valorInicial(), tipo: 'UNICA', fecha: fechaInicial, desde: fechaInicial } : valorInicial()))
   const [responsable, setResponsable] = useState('')
+  const [urgencia, setUrgencia] = useState('')
   const [masOpciones, setMasOpciones] = useState(false)
   const [descripcion, setDescripcion] = useState('')
   const [compartir, setCompartir] = useState([])
@@ -55,6 +58,7 @@ export default function NuevaTarea({ departamentos, idDepartamentoInicial, local
         alcance,
         agenda,
         asignado_a: responsable || null,
+        prioridad: urgencia || undefined,
         compartir_con: compartir
       })
       onCreada(r)
@@ -74,7 +78,7 @@ export default function NuevaTarea({ departamentos, idDepartamentoInicial, local
     setError('')
     setGuardando(true)
     try {
-      const r = await agendasApi.agregarAlcance(existente.id, { alcance, agenda, asignado_a: responsable || null, compartir_con: compartir })
+      const r = await agendasApi.agregarAlcance(existente.id, { alcance, agenda, asignado_a: responsable || null, prioridad: urgencia || undefined, compartir_con: compartir })
       onCreada({ ...r, sumada: true, tarea: { id: existente.id, nombre: existente.nombre, id_departamento: existente.id_departamento } })
     } catch (err) {
       setError(err.response?.data?.error || 'No se pudieron sumar los locales')
@@ -116,6 +120,13 @@ export default function NuevaTarea({ departamentos, idDepartamentoInicial, local
           <select value={responsable} onChange={(e) => setResponsable(e.target.value)}>
             <option value="">Equipo (sin responsable fijo)</option>
             {usuarios.map((u) => <option key={u.id} value={u.email}>{u.nombre || u.email}</option>)}
+          </select>
+        </label>
+        <label className="campo">
+          <span>Urgencia</span>
+          <select value={urgencia} onChange={(e) => setUrgencia(e.target.value)}>
+            <option value="">Sin marcar</option>
+            {URGENCIAS.map((u) => <option key={u.valor} value={u.valor}>{u.icono} {u.etiqueta}</option>)}
           </select>
         </label>
       </div>

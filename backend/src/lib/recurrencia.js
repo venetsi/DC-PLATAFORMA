@@ -36,6 +36,13 @@ function untilSuffix(vigenciaHasta) {
 // `vigenciaDesde` es opcional y solo se usa para calcular el horizonte por
 // defecto cuando no vino un `vigenciaHasta` explicito.
 export function construirRecurrence(tipo, config, vigenciaHasta, vigenciaDesde) {
+  // FECHAS lleva sus fechas explicitas: el horizonte de 6 meses no corresponde.
+  if (tipo === 'FECHAS') {
+    const fechas = fechasVigentes(config, vigenciaDesde, vigenciaHasta)
+    // La primera es el inicio del evento; el resto, un RDATE. Una sola fecha
+    // es un evento unico (sin recurrence).
+    return fechas.length > 1 ? [`RDATE;VALUE=DATE:${fechas.slice(1).map(compacta).join(',')}`] : null
+  }
   const hasta = vigenciaHasta || (vigenciaDesde ? horizontePorDefecto(vigenciaDesde) : null)
   const until = untilSuffix(hasta)
   switch (tipo) {
@@ -75,7 +82,15 @@ const RRULE_A_DIAS_ISO = Object.fromEntries(Object.entries(DIAS_ISO_A_RRULE).map
 // Inverso de construirRecurrence: lee el maestro de Calendar y devuelve la
 // agenda en el mismo vocabulario del formulario. null si la regla no es una
 // de las que arma la plataforma (evento editado a mano en Calendar).
-export function leerRecurrence(recurrence, startDate) {
+export function leerRecurrence(recurrence, startDate, { conExcluidas = false } = {}) {
+  if (esSerieDeFechas(recurrence)) {
+    return {
+      recurrencia_tipo: 'FECHAS',
+      recurrencia_config: { fechas: fechasDeSerie(recurrence, startDate, { conExcluidas }) },
+      vigencia_desde: startDate,
+      vigencia_hasta: null
+    }
+  }
   const regla = (recurrence || []).find((r) => r.startsWith('RRULE:'))
   if (!regla) return { recurrencia_tipo: 'UNICA', recurrencia_config: { fecha: startDate }, vigencia_desde: startDate, vigencia_hasta: null }
 
@@ -136,6 +151,7 @@ export function mismaRegla(a, b) {
 // lunes aparecia ese lunes y vencia esa noche.
 export function primeraFecha(tipo, config, vigenciaDesde) {
   if (tipo === 'UNICA') return config.fecha
+  if (tipo === 'FECHAS') return fechasVigentes(config, vigenciaDesde, null)[0]
   const [a, m, d] = String(vigenciaDesde).split('-').map(Number)
   const desde = new Date(Date.UTC(a, m - 1, d))
   const iso = (f) => f.toISOString().slice(0, 10)
@@ -182,4 +198,82 @@ export function diaHabilDelMes(anio, mes, n) {
     f.setUTCDate(f.getUTCDate() + 1)
   }
   return null
+}
+
+// ── FECHAS: una lista de fechas exactas ──────────────────────────────────────
+// Para calendarios que no son una regla: por ejemplo "el P&L del 7 de cada mes"
+// con "Ordenes 3 dias habiles antes", cuyo dia habil cambia de un mes al otro.
+// En Calendar es un evento que arranca en la primera fecha, mas un RDATE con
+// las demas (probado contra Calendar real: cada ocurrencia es una instancia
+// normal, con id {serie}_{AAAAMMDD}). Cerrar una serie de fechas no borra
+// nada: agrega un EXDATE con las futuras, y reabrir lo saca.
+//
+// No se renueva sola como las reglas (no hay UNTIL que extender): cuando se le
+// acaban las fechas hay que cargar otra lista; jobs/reconciliar.js avisa
+// cuando faltan menos de 60 dias.
+
+export const MAX_FECHAS = 400
+const RE_FECHA = /^\d{4}-\d{2}-\d{2}$/
+
+const compacta = (iso) => iso.replaceAll('-', '')
+const expandida = (c) => `${c.slice(0, 4)}-${c.slice(4, 6)}-${c.slice(6, 8)}`
+
+// Las fechas de la config, validadas, sin repetidas y ordenadas.
+export function fechasDeConfig(config) {
+  const lista = Array.isArray(config?.fechas) ? config.fechas : []
+  const fechas = [...new Set(lista.map((f) => String(f).slice(0, 10)))]
+  if (!fechas.length) throw new Error('Cargá al menos una fecha')
+  if (fechas.length > MAX_FECHAS) throw new Error(`Son demasiadas fechas (máximo ${MAX_FECHAS})`)
+  for (const f of fechas) {
+    if (!RE_FECHA.test(f) || Number.isNaN(Date.parse(`${f}T00:00:00Z`)) || new Date(`${f}T00:00:00Z`).toISOString().slice(0, 10) !== f) {
+      throw new Error(`La fecha ${f} no es válida`)
+    }
+  }
+  return fechas.sort()
+}
+
+// Las que valen desde `desde` (inclusive) hasta `hasta` (inclusive, opcional).
+export function fechasVigentes(config, desde, hasta) {
+  const fechas = fechasDeConfig(config).filter((f) => (!desde || f >= desde) && (!hasta || f <= hasta))
+  if (!fechas.length) throw new Error('No quedan fechas a partir de esa fecha')
+  return fechas
+}
+
+export function esSerieDeFechas(recurrence) {
+  return (recurrence || []).some((r) => r.startsWith('RDATE'))
+}
+
+function fechasDeLinea(linea) {
+  return linea.slice(linea.indexOf(':') + 1).split(',').map((x) => x.trim().slice(0, 8)).filter((x) => /^\d{8}$/.test(x))
+}
+
+const fechasDeLineas = (recurrence, prefijo) => (recurrence || []).filter((r) => r.startsWith(prefijo)).flatMap(fechasDeLinea)
+
+// La lista completa de una serie de fechas: el inicio + el RDATE. Sin las
+// excluidas (EXDATE, o sea las de una serie cerrada), salvo `conExcluidas`.
+export function fechasDeSerie(recurrence, startDate, { conExcluidas = false } = {}) {
+  const todas = new Set([startDate, ...fechasDeLineas(recurrence, 'RDATE').map(expandida)].filter(Boolean))
+  if (!conExcluidas) for (const c of fechasDeLineas(recurrence, 'EXDATE')) todas.delete(expandida(c))
+  return [...todas].sort()
+}
+
+// Cierra una serie de fechas "hasta" una fecha: EXDATE de las posteriores.
+// Reversible (conFechasAbiertas): los datos quedan en el evento.
+export function conFechasCerradas(recurrence, hastaISO) {
+  const excluidas = new Set([
+    ...fechasDeLineas(recurrence, 'EXDATE'),
+    ...fechasDeLineas(recurrence, 'RDATE').filter((c) => expandida(c) > hastaISO)
+  ])
+  const sinExdate = (recurrence || []).filter((r) => !r.startsWith('EXDATE'))
+  return excluidas.size ? [...sinExdate, `EXDATE;VALUE=DATE:${[...excluidas].sort().join(',')}`] : sinExdate
+}
+
+export function conFechasAbiertas(recurrence) {
+  return (recurrence || []).filter((r) => !r.startsWith('EXDATE'))
+}
+
+// La ultima fecha de la serie (sin contar las excluidas), o null.
+export function ultimaFechaDeSerie(recurrence, startDate) {
+  const fechas = fechasDeSerie(recurrence, startDate)
+  return fechas.length ? fechas[fechas.length - 1] : null
 }

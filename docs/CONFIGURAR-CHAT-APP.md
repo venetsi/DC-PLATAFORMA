@@ -224,7 +224,14 @@ Por cada departamento, en Google Chat:
    funciona; ver el estado de los clicks más abajo).
 
 No hay que cargar nada por SQL. Si más adelante se saca la app del Space, la
-vinculación se limpia sola.
+vinculación se limpia sola (la avisa Chat con el evento `REMOVED_FROM_SPACE`, y se
+sacan también los departamentos compartidos de ese Space).
+
+Un error puntual al postear (403/404) **no** desvincula: queda como "no se pudo
+avisar", Dirección lo ve en su Space y se vuelve a intentar al día siguiente. Si
+el Space se borró y Chat no mandó `REMOVED_FROM_SPACE`, el vínculo queda colgado y
+hay que limpiarlo a mano (ver "Cuando algo sale mal" en el manual de
+administrador).
 
 > **Dirección es distinta a los demás**: además de recibir el consolidado del
 > escalamiento, su Space entra en **"modo todo"** (ver más abajo) — conviene armar el

@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { URGENCIAS } from '../../lib/urgencia.js'
+import Urgencia from '../../components/Urgencia.jsx'
 import { agendasApi } from '../../api/recursos.js'
 import EditorFrecuencia from '../../components/EditorFrecuencia.jsx'
 import SelectorAlcance, { ALCANCE_VACIO, alcanceCompleto } from './SelectorAlcance.jsx'
@@ -13,10 +15,11 @@ import { cuandoTexto } from './resumen.js'
 // checkbox ni acciones (crear y editar pide MANAGER u OWNER).
 export default function DetalleAgenda({ tarea, locales, grupos, departamentos, usuarios, nombrePorEmail, onCambio, avisar, soloLectura = false }) {
   const [seleccion, setSeleccion] = useState(() => new Set())
-  // null | 'cuando' | 'responsable' | 'quitar' | 'agregar' | 'avanzado'
+  // null | 'cuando' | 'responsable' | 'urgencia' | 'quitar' | 'agregar' | 'avanzado'
   const [accion, setAccion] = useState(null)
   const [frecuencia, setFrecuencia] = useState(null)
   const [responsable, setResponsable] = useState('')
+  const [urgencia, setUrgencia] = useState('NORMAL')
   const [alcance, setAlcance] = useState(ALCANCE_VACIO)
   const [igualQueElResto, setIgualQueElResto] = useState(true)
   const [guardando, setGuardando] = useState(false)
@@ -85,7 +88,7 @@ export default function DetalleAgenda({ tarea, locales, grupos, departamentos, u
                 {a.compartidas.length > 0 && <div className="tenue">compartida con {a.compartidas.map((c) => c.nombre).join(', ')}</div>}
               </td>
               <td>{a.agenda ? describirAgenda(a.agenda) : <span className="tono-medio">Sin agenda</span>}</td>
-              <td>{a.asignado_a ? nombrePorEmail(a.asignado_a) : <span className="tenue">Equipo</span>}</td>
+              <td><Urgencia prioridad={a.prioridad} />{a.asignado_a ? nombrePorEmail(a.asignado_a) : <span className="tenue">Equipo</span>}</td>
               <td>{a.proxima ? fechaHumana(a.proxima) : <span className="tenue">—</span>}</td>
               <td>{a.atrasadas ? <span className="pill-mal">{a.atrasadas} atrasada{a.atrasadas > 1 ? 's' : ''}</span> : a.agenda ? <span className="pill-ok">Al día</span> : null}</td>
               {/* Desactivar UN local sin tocar el resto de la tarea: antes solo
@@ -123,6 +126,7 @@ export default function DetalleAgenda({ tarea, locales, grupos, departamentos, u
             <span className="tenue">{n}:</span>
             <button className={accion === 'cuando' ? 'btn' : 'btn btn-secondary'} onClick={() => abrir('cuando')}>Cambiar cuándo</button>
             <button className={accion === 'responsable' ? 'btn' : 'btn btn-secondary'} onClick={() => abrir('responsable')}>Cambiar responsable</button>
+            <button className={accion === 'urgencia' ? 'btn' : 'btn btn-secondary'} onClick={() => abrir('urgencia')}>Cambiar urgencia</button>
             <button className={accion === 'quitar' ? 'btn' : 'btn btn-secondary'} onClick={() => abrir('quitar')}>Desactivar en estos locales</button>
           </>
         ) : (
@@ -161,6 +165,22 @@ export default function DetalleAgenda({ tarea, locales, grupos, departamentos, u
             <button className="btn" disabled={guardando} onClick={() => ejecutar(
               () => agendasApi.cambiarAgenda({ ids, asignado_a: responsable || null }),
               (r) => `Responsable actualizado en ${r.actualizadas + r.sin_agenda} ${r.actualizadas + r.sin_agenda === 1 ? 'local' : 'locales'}.`
+            )}>{guardando ? 'Guardando…' : `Aplicar a ${n}`}</button>
+            <button className="btn btn-secondary" onClick={() => setAccion(null)} disabled={guardando}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {accion === 'urgencia' && (
+        <div className="panel-accion">
+          <select value={urgencia} onChange={(e) => setUrgencia(e.target.value)} aria-label="Urgencia">
+            {URGENCIAS.map((u) => <option key={u.valor} value={u.valor}>{u.icono} {u.etiqueta}</option>)}
+          </select>
+          {error && <p className="error-texto">{error}</p>}
+          <div className="acciones">
+            <button className="btn" disabled={guardando} onClick={() => ejecutar(
+              () => agendasApi.cambiarAgenda({ ids, prioridad: urgencia }),
+              (r) => `Urgencia actualizada en ${r.actualizadas + r.sin_agenda} ${r.actualizadas + r.sin_agenda === 1 ? 'local' : 'locales'}.`
             )}>{guardando ? 'Guardando…' : `Aplicar a ${n}`}</button>
             <button className="btn btn-secondary" onClick={() => setAccion(null)} disabled={guardando}>Cancelar</button>
           </div>

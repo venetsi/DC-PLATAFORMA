@@ -4,6 +4,7 @@
 import { lineaDeTarea } from './mensajes-chat.js'
 import { formatearMonto } from './pagos.js'
 import { agruparDelDia, localDe, marcaDependencia, rangoTexto, sumarDiasISO as sumarDias, tituloDia } from './resumen-semanal.js'
+import { prefijoDe } from './prioridad.js'
 
 // Una card no puede llevar un boton por cada tarea de un backlog largo: Chat
 // corta el mensaje. Se muestran las mas viejas -- que son las que importan --
@@ -824,8 +825,8 @@ const MAX_LINEAS_POR_DIA = 15
 
 // "<b>P&L</b> › GRUPO TITA · gquinteros · ⏳ espera a Auditar".
 export function lineasDelDia(eventos, nombreLocal, dependencias, grupoLocal) {
-  return agruparDelDia(eventos, nombreLocal, dependencias, grupoLocal).map(({ titulo, donde, personas, marcas }) => {
-    const partes = [`<b>${escaparHtml(titulo)}</b> › ${escaparHtml(donde)}`]
+  return agruparDelDia(eventos, nombreLocal, dependencias, grupoLocal).map(({ titulo, prioridad, donde, personas, marcas }) => {
+    const partes = [`${prefijoDe({ prioridad })}<b>${escaparHtml(titulo)}</b> › ${escaparHtml(donde)}`]
     if (personas.length) partes.push(escaparHtml(personas.map(nombreCorto).join(', ')))
     for (const marca of marcas) partes.push(escaparHtml(marca))
     return partes.join(' · ')
@@ -848,7 +849,7 @@ function textoAtrasada({ evento, dias }, nombreLocal, dependencias) {
   const props = evento.extendedProperties?.private || {}
   const titulo = props.nombre_tarea || evento.summary || 'Tarea'
   const fecha = evento.start?.date
-  const partes = [`<b>${escaparHtml(titulo)} › ${escaparHtml(localDe(props, nombreLocal))}</b>`]
+  const partes = [`${prefijoDe(props)}<b>${escaparHtml(titulo)} › ${escaparHtml(localDe(props, nombreLocal))}</b>`]
   if (fecha) partes.push(`del ${fechaCorta(fecha)}`)
   if (dias > 0) partes.push(`<font color="#c62828">hace ${dias === 1 ? '1 día hábil' : `${dias} días hábiles`}</font>`)
   if (props.asignado_a) partes.push(escaparHtml(nombreCorto(props.asignado_a)))
@@ -926,7 +927,7 @@ function chipDepto(departamento, info) {
   return i?.color ? `<font color="${i.color}"><b>${abreviatura}</b></font>` : `<b>${abreviatura}</b>`
 }
 
-export function cardSemanalCombinada(partes, nombreLocal, { hoyISO, urlApp, grupoLocal, info, space } = {}) {
+export function cardSemanalCombinada(partes, nombreLocal, { hoyISO, urlApp, grupoLocal, info, space, sinLeer = [] } = {}) {
   const vistas = new Set()
   const unaVez = (evento) => {
     const props = evento.extendedProperties?.private || {}
@@ -985,6 +986,9 @@ export function cardSemanalCombinada(partes, nombreLocal, { hoyISO, urlApp, grup
   if (!secciones.length) {
     secciones.push({ widgets: [{ textParagraph: { text: 'No hay tareas esta semana ni atrasadas. 👌' } }] })
   }
+  if (sinLeer.length) {
+    secciones.push({ widgets: [{ textParagraph: { text: `⚠️ <b>No pude leer la agenda de:</b> ${escaparHtml(sinLeer.join(', '))}. Faltan en esta tarjeta.` } }] })
+  }
   secciones.push({ widgets: [{ buttonList: { buttons: [botonAbrir(urlApp, 'Abrir en la plataforma', '/')] } }] })
 
   const semana = partes[0]?.datos.semana
@@ -1014,10 +1018,12 @@ function porcentaje({ hechas, total }) {
 //   filas:   [{ departamento, total, atrasadas, pasada: { hechas, total } }]
 //   sinNada: nombres de los departamentos sin tareas ni atrasadas
 //   ranking: [{ quien, atrasadas, masVieja }] (ver rankingPorResponsable)
-export function cardResumenDireccion({ semana, filas, sinNada = [], ranking = [], pasadaTotal, urlApp }) {
+export function cardResumenDireccion({ semana, filas, sinNada = [], sinLeer = [], sinCanal = [], ranking = [], pasadaTotal, urlApp }) {
   const pct = porcentaje(pasadaTotal || { hechas: 0, total: 0 })
   const subtitulo = [`${rangoTexto(semana.desde, sumarDias(semana.desde, 4))}`]
   if (pct !== null) subtitulo.push(`semana pasada: ${pct}% cumplido (${pasadaTotal.hechas} de ${pasadaTotal.total})`)
+  // El % y el ranking se calculan con lo que SI se pudo leer: que no parezcan globales.
+  if (sinLeer.length) subtitulo.push(`sin ${sinLeer.join(', ')}`)
 
   const widgetsDeptos = filas.map(({ departamento, total, atrasadas, pasada }) => {
     const partes = [`<b>${escaparHtml(departamento.nombre)}</b>`, plural(total, 'tarea esta semana', 'tareas esta semana')]
@@ -1029,6 +1035,17 @@ export function cardResumenDireccion({ semana, filas, sinNada = [], ranking = []
   if (!widgetsDeptos.length) widgetsDeptos.push({ textParagraph: { text: 'Ningún departamento tiene tareas esta semana.' } })
   if (sinNada.length) {
     widgetsDeptos.push({ textParagraph: { text: `<i>Sin tareas esta semana ni atrasadas: ${escaparHtml(sinNada.join(', '))}</i>` } })
+  }
+
+  // Un departamento que no se pudo leer NO es "sin tareas": se dice aparte,
+  // o su ausencia se leeria como que no tiene nada.
+  if (sinLeer.length) {
+    widgetsDeptos.push({ textParagraph: { text: `⚠️ <b>No pude leer la agenda de:</b> ${escaparHtml(sinLeer.join(', '))}. Faltan en este resumen.` } })
+  }
+
+  // Con tareas esta semana pero sin ningun lugar donde recibir avisos.
+  if (sinCanal.length) {
+    widgetsDeptos.push({ textParagraph: { text: `📭 <b>Con tareas pero sin Space donde recibir avisos:</b> ${escaparHtml(sinCanal.join(', '))}. Se vinculan con <b>/vincular</b>.` } })
   }
 
   const secciones = [{ header: 'Por departamento', collapsible: false, widgets: widgetsDeptos }]

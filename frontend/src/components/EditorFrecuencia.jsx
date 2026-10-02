@@ -17,6 +17,7 @@ export default function EditorFrecuencia({ valor, onChange }) {
         <option value="INTERVALO_MESES">Un día del mes</option>
         <option value="DIA_HABIL">Un día hábil del mes</option>
         <option value="UNICA">Una sola vez</option>
+        {valor.tipo === 'FECHAS' && <option value="FECHAS">Fechas exactas (de planilla)</option>}
       </select>
 
       {valor.tipo === 'DIA_HABIL' && (
@@ -57,7 +58,11 @@ export default function EditorFrecuencia({ valor, onChange }) {
         </span>
       )}
 
-      {valor.tipo === 'UNICA' ? (
+      {valor.tipo === 'FECHAS' ? (
+        <span className="en-linea" title="Se cargan desde una planilla; para cambiarlas hay que volver a cargarlas">
+          {valor.fechas?.length || 0} fechas, del {[...(valor.fechas || [])].sort()[0]} al {[...(valor.fechas || [])].sort().slice(-1)[0]}
+        </span>
+      ) : valor.tipo === 'UNICA' ? (
         <span className="en-linea">
           el <input type="date" value={valor.fecha} onChange={(e) => set('fecha', e.target.value)} aria-label="Fecha" />
         </span>

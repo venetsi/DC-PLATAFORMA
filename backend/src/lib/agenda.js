@@ -1,6 +1,16 @@
-import { construirRecurrence, primeraFecha, mismaRegla, leerRecurrence, untilDe, conUntil, horizontePorDefecto } from './recurrencia.js'
+import { construirRecurrence, primeraFecha, mismaRegla, leerRecurrence, untilDe, conUntil, horizontePorDefecto, esSerieDeFechas, conFechasAbiertas } from './recurrencia.js'
 import { componerTitulo } from './titulo.js'
 import { hoyEnArgentina } from './vencimiento.js'
+
+// Urgencia de la tarea (la columna "grupo" del Excel traia 🔴/🟢): ALTA o
+// NORMAL. Fija por asignacion; null = sin clasificar.
+export const PRIORIDADES = ['ALTA', 'NORMAL']
+export function prioridadValida(valor) {
+  if (valor === undefined || valor === null || valor === '') return null
+  const v = String(valor).toUpperCase()
+  if (!PRIORIDADES.includes(v)) throw Object.assign(new Error('La urgencia es ALTA o NORMAL'), { status: 400 })
+  return v
+}
 
 export function sumarDias(fechaISO, n) {
   const d = new Date(`${fechaISO}T00:00:00Z`)
@@ -19,7 +29,7 @@ export function sumarDias(fechaISO, n) {
 // tarea" (routes/tareas.js) agende las copias con exactamente la misma logica.
 // `asignacion` tiene que venir con tarea.departamento, local y
 // compartidas.departamento incluidos. Tira Error con `status` si falta algo.
-export async function definirAgenda(fastify, asignacion, { recurrencia_tipo, recurrencia_config, vigencia_desde, vigencia_hasta, asignado_a }) {
+export async function definirAgenda(fastify, asignacion, { recurrencia_tipo, recurrencia_config, vigencia_desde, vigencia_hasta, asignado_a, prioridad }) {
   const calendarId = asignacion.tarea.departamento.id_calendar_google
   if (!calendarId) throw Object.assign(new Error('El departamento todavia no tiene calendario propio'), { status: 409 })
 
@@ -38,6 +48,8 @@ export async function definirAgenda(fastify, asignacion, { recurrencia_tipo, rec
   // kiosko/app no repitan el local en cada bullet (ya agrupan por local).
   const titulo = componerTitulo(asignacion.tarea.nombre, asignacion.local)
   const responsable = (asignado_a ?? asignacion.asignado_a) || ''
+  // undefined = conserva la que tiene; null/'' = la saca.
+  const urgencia = prioridad === undefined ? asignacion.prioridad || null : prioridadValida(prioridad)
 
   async function escribirEvento({ calendarId: calId, eventIdActual, idDepartamentoEvento }) {
     const props = {
@@ -45,7 +57,8 @@ export async function definirAgenda(fastify, asignacion, { recurrencia_tipo, rec
       id_departamento: idDepartamentoEvento,
       id_local_ext: asignacion.id_local_ext ?? '',
       nombre_tarea: asignacion.tarea.nombre,
-      asignado_a: responsable
+      asignado_a: responsable,
+      prioridad: urgencia || ''
     }
     const maestro = eventIdActual ? await fastify.gcal.leerInstancia({ calendarId: calId, instanceId: eventIdActual }) : null
     if (maestro) {
@@ -115,7 +128,7 @@ export async function definirAgenda(fastify, asignacion, { recurrencia_tipo, rec
 
   return fastify.db.tareaAsignacion.update({
     where: { id: asignacion.id },
-    data: { id_calendar_event: eventId, asignado_a: responsable || null }
+    data: { id_calendar_event: eventId, asignado_a: responsable || null, prioridad: urgencia }
   })
 }
 
@@ -126,7 +139,8 @@ const INCLUDES_AGENDA = { tarea: { include: { departamento: true } }, local: tru
 // local (hay un unico por tarea+local), se reactiva con una serie NUEVA: la
 // vieja quedo cerrada con UNTIL y "misma regla" no la reabriria. Comparte con
 // `compartirCon` (ids de departamento), salteando el dueño y los inactivos.
-export async function asegurarAsignacion(fastify, { tarea, idLocal, asignadoA = null, compartirCon = [] }) {
+export async function asegurarAsignacion(fastify, { tarea, idLocal, asignadoA = null, compartirCon = [], prioridad }) {
+  const urgencia = prioridad === undefined ? undefined : prioridadValida(prioridad)
   const existente = await fastify.db.tareaAsignacion.findFirst({ where: { id_tarea: tarea.id, id_local_ext: idLocal } })
   let asignacion
   let yaActiva = false
@@ -136,12 +150,12 @@ export async function asegurarAsignacion(fastify, { tarea, idLocal, asignadoA = 
   } else if (existente) {
     asignacion = await fastify.db.tareaAsignacion.update({
       where: { id: existente.id },
-      data: { activa: true, id_calendar_event: null, asignado_a: asignadoA }
+      data: { activa: true, id_calendar_event: null, asignado_a: asignadoA, ...(urgencia !== undefined ? { prioridad: urgencia } : {}) }
     })
     // Las copias compartidas de la serie vieja tambien quedaron cerradas.
     await fastify.db.tareaAsignacionDepto.updateMany({ where: { id_asignacion: existente.id }, data: { id_calendar_event: null } })
   } else {
-    asignacion = await fastify.db.tareaAsignacion.create({ data: { id_tarea: tarea.id, id_local_ext: idLocal, asignado_a: asignadoA } })
+    asignacion = await fastify.db.tareaAsignacion.create({ data: { id_tarea: tarea.id, id_local_ext: idLocal, asignado_a: asignadoA, ...(urgencia ? { prioridad: urgencia } : {}) } })
   }
 
   const destinos = compartirCon.length
@@ -201,6 +215,27 @@ export async function reabrirAsignacion(fastify, asignacion) {
       }
       return fastify.db.tareaAsignacion.update({ where: { id: asignacion.id }, data: { activa: true } })
     }
+  } else if (maestro && esSerieDeFechas(maestro.recurrence)) {
+    // Una serie de fechas se cierra con EXDATE (nada se borra). Si se cerro
+    // hace poco, vuelve LA MISMA con todas sus fechas; si no, va una nueva
+    // desde hoy con las que queden (abajo).
+    const cerradaHasta = maestro.extendedProperties?.private?.cerrada_hasta || null
+    if (!cerradaHasta || cerradaHasta >= sumarDias(hoy, -1)) {
+      const abrir = (calId, evento) => fastify.gcal.editarRecurrencia({
+        calendarId: calId,
+        eventId: evento.id,
+        recurrence: conFechasAbiertas(evento.recurrence),
+        extendedProperties: { cerrada_hasta: '' }
+      })
+      await abrir(calendarId, maestro)
+      for (const compartida of asignacion.compartidas || []) {
+        const calId = compartida.departamento.id_calendar_google
+        if (!calId || !compartida.id_calendar_event) continue
+        const copia = await fastify.gcal.leerInstancia({ calendarId: calId, instanceId: compartida.id_calendar_event })
+        if (copia && esSerieDeFechas(copia.recurrence)) await abrir(calId, copia)
+      }
+      return fastify.db.tareaAsignacion.update({ where: { id: asignacion.id }, data: { activa: true } })
+    }
   } else if (maestro && (!until || until >= sumarDias(hoy, -1))) {
     const hasta = horizontePorDefecto(hoy)
     if (until) {
@@ -217,11 +252,13 @@ export async function reabrirAsignacion(fastify, asignacion) {
     return fastify.db.tareaAsignacion.update({ where: { id: asignacion.id }, data: { activa: true } })
   }
 
-  const agenda = maestro ? leerRecurrence(maestro.recurrence, maestro.start?.date) : null
+  // `conExcluidas`: en una serie de fechas cerrada, las futuras estan en EXDATE.
+  const agenda = maestro ? leerRecurrence(maestro.recurrence, maestro.start?.date, { conExcluidas: true }) : null
   const { asignacion: nueva } = await asegurarAsignacion(fastify, {
     tarea: asignacion.tarea,
     idLocal: asignacion.id_local_ext,
-    asignadoA: asignacion.asignado_a
+    asignadoA: asignacion.asignado_a,
+    prioridad: asignacion.prioridad ?? undefined
   })
   if (agenda && agenda.recurrencia_tipo !== 'UNICA') {
     await definirAgenda(fastify, nueva, { ...agenda, vigencia_desde: hoy, vigencia_hasta: null, asignado_a: asignacion.asignado_a || '' })
