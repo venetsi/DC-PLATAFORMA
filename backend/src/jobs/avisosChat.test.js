@@ -33,7 +33,7 @@ const evento = (id, fecha, extra = {}) => ({
   extendedProperties: { private: { estado: 'PENDIENTE', nombre_tarea: `Tarea ${id}`, asignado_a: `${id}@dcsmart.app`, ...extra } }
 })
 
-function armar({ departamentos, eventos = {}, fallanLectura = new Set(), truncan = new Set(), fallanEnvio = new Set(), feriados = ['2026-10-12'], compartidos = [], compartidosTira = false, env = {}, tareasAsignaciones } = {}) {
+function armar({ departamentos, eventos = {}, fallanLectura = new Set(), truncan = new Set(), fallanEnvio = new Set(), feriados = ['2026-10-12'], compartidos = [], compartidosTira = false, env = {}, tareasAsignaciones, series = { filas: [], fallidas: 0 } } = {}) {
   const enviados = []
   const listar = async ({ calendarId }) => {
     if (fallanLectura.has(calendarId) || fallanLectura.has('*')) throw Object.assign(new Error('Calendar caido'), { code: 500 })
@@ -61,6 +61,7 @@ function armar({ departamentos, eventos = {}, fallanLectura = new Set(), truncan
     cargarFeriadosFn: async () => feriados,
     crearTransporte: () => transporte,
     ahora: AHORA,
+    leerSeries: async () => series,
     env: { AVISO_MODO: 'diario', ...env },
     esperar: async () => {},
     pausaEnvioMs: 0
@@ -234,4 +235,33 @@ test('semanal: si fallan TODOS los departamentos no se manda un resumen vacio a 
   const { opciones, enviados } = armar({ departamentos: [costos, direccion], fallanLectura: new Set(['*']), env: lunes })
   await correr(opciones)
   assert.equal(enviados.some((m) => m.etiqueta === 'direccion (resumen semanal)'), false)
+})
+
+// ── Series por terminar ──────────────────────────────────────────────────────
+
+const serie = (dias, extra = {}) => ({ tarea: 'P&L', departamento: 'Reportes', local: 'TITA', fin: new Date(Date.UTC(2026, 9, 6 + dias)).toISOString().slice(0, 10), ...extra })
+
+test('series por terminar: a diario solo si a alguna le quedan 7 dias o menos', async () => {
+  const lejos = armar({ departamentos: [direccion], series: { filas: [serie(20)], fallidas: 0 } })
+  const r1 = await correr(lejos.opciones)
+  assert.equal(r1.series_por_terminar, 1)
+  assert.equal(lejos.enviados.filter((m) => /por terminar/.test(m.etiqueta)).length, 0)
+
+  const cerca = armar({ departamentos: [direccion], series: { filas: [serie(5)], fallidas: 0 } })
+  await correr(cerca.opciones)
+  const m = cerca.enviados.find((x) => /por terminar/.test(x.etiqueta))
+  assert.match(m.texto, /P&L.*Reportes.*termina en 5 días/)
+  assert.match(m.texto, /reagendar la secuencia/)
+})
+
+test('series por terminar: los lunes (semanal) se avisa aunque falten 20 dias', async () => {
+  const { opciones, enviados } = armar({ departamentos: [direccion], env: { AVISO_MODO: 'semanal' }, series: { filas: [serie(20)], fallidas: 0 } })
+  await correr(opciones)
+  assert.equal(enviados.filter((m) => /por terminar/.test(m.etiqueta)).length, 1)
+})
+
+test('series por terminar: si no se pueden leer, Direccion se entera en vez de callar', async () => {
+  const { opciones } = armar({ departamentos: [direccion], series: { filas: [], fallidas: 3 } })
+  const r = await correr(opciones)
+  assert.ok(r.errores_armado?.some?.((e) => /Series por terminar/.test(e.departamento)) || JSON.stringify(r).includes('Series por terminar'))
 })

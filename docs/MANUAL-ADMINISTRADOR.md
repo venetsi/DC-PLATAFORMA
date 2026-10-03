@@ -280,7 +280,11 @@ Y siempre disponibles:
   de cada evento, así que las vistas no consultan la base. Requiere la columna
   `tarea_asignaciones.prioridad` (`prisma db push`, aditivo).
 - **Fechas exactas:** la frecuencia `FECHAS` guarda una lista de fechas (un `RDATE`
-  en Calendar, sin `UNTIL`). No se renueva sola: el job `reconciliar` informa en
+  en Calendar, sin `UNTIL`). No se renueva sola. Ninguna serie se renueva ya sola
+  (`reconciliar` está pausado): el job de avisos le avisa a Dirección, por Chat,
+  de las series recurrentes que terminan en los próximos 30 días (los lunes, y a
+  diario cuando a alguna le quedan 7 días o menos), recomendando reagendar la
+  secuencia desde Agendas. Antes informaba en
   `series_de_fechas_por_terminar` las que tienen menos de 60 días por delante.
   Desactivar una excluye las fechas futuras (`EXDATE`) y reactivar las devuelve.
 
@@ -590,7 +594,7 @@ quedan sin recordatorio diario.
 | Job | Qué hace | Cuándo (Cloud Scheduler, hora argentina) |
 |---|---|---|
 | `dc-plataforma-avisos` (`avisosChat.js`) | Recordatorio por departamento + escalamiento a Dirección. Los lunes, en lugar del recordatorio, el resumen semanal (ver abajo) | 8:00, lunes a viernes |
-| `dc-plataforma-reconciliar` (`reconciliar.js`) | Renueva series por vencer, cierra las de locales dados de baja | Cada 6 horas |
+| `dc-plataforma-reconciliar` (`reconciliar.js`) | **PAUSADO desde el 3/10/2026.** Renovaba series por vencer y cerraba las de locales dados de baja. Para reactivarlo: reanudar su trabajo en Cloud Scheduler | (pausado) |
 | `dc-plataforma-snapshot` (`snapshotCumplimiento.js`) | Totales del día (`cumplimiento_diario`) + tablero por instancia de los últimos 60 días (`cumplimiento_instancias`) | 1:00, todos los días |
 
 **Resumen semanal de los lunes** (`lib/resumen-semanal.js`). Lo decide el mismo

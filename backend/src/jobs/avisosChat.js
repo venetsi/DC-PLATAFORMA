@@ -30,7 +30,8 @@
 // cosa no tumba el resto. Lo que fallo se le dice a Direccion en su Space y
 // queda como ERROR en el log. El codigo de salida es de error SOLO si no salio
 // nada habiendo algo para enviar (ahi reintentar es seguro).
-import { prisma as prismaReal, listarInstancias } from './lib.js'
+import { prisma as prismaReal, listarInstancias, getCalendar } from './lib.js'
+import { agruparPorTerminar, finDeSerie, mensajePorTerminar, DIAS_POR_TERMINAR } from '../lib/por-terminar.js'
 import { hoyEnArgentina } from '../lib/vencimiento.js'
 import { clasificarParaAviso, resolverUmbrales } from '../lib/escalamiento.js'
 import { crearTransporteChat, crearTransporteConsola, enviarEnSerie } from '../lib/notificaciones.js'
@@ -98,12 +99,46 @@ function armarSemanal({ depto, datos, umbrales, hoyISO, ahora, nombreLocal, grup
   return { baldes, mensajes }
 }
 
+// Fin de cada serie recurrente activa. Una lectura por serie (events.get), de a
+// pocas a la vez: son cientos y el job corre una vez por dia.
+async function leerSeriesReales({ prisma }) {
+  const calendar = await getCalendar()
+  const asignaciones = await prisma.tareaAsignacion.findMany({
+    where: { activa: true, id_calendar_event: { not: null }, tarea: { activa: true } },
+    include: { tarea: { include: { departamento: true } }, local: true }
+  })
+  const filas = []
+  let fallidas = 0
+  const cola = [...asignaciones]
+  await Promise.all(Array.from({ length: 5 }, async () => {
+    while (cola.length) {
+      const a = cola.pop()
+      const calendarId = a.tarea.departamento.id_calendar_google
+      if (!calendarId) continue
+      try {
+        const { data } = await calendar.events.get({ calendarId, eventId: a.id_calendar_event })
+        if (data.status === 'cancelled') continue
+        filas.push({
+          tarea: a.tarea.nombre,
+          departamento: a.tarea.departamento.nombre,
+          local: a.local?.nombre || 'Toda la empresa',
+          fin: finDeSerie(data.recurrence, data.start?.date || String(data.start?.dateTime || '').slice(0, 10))
+        })
+      } catch {
+        fallidas++
+      }
+    }
+  }))
+  return { filas, fallidas }
+}
+
 export async function correr({
   prisma = prismaReal,
   listar = listarInstancias,
   cargarFeriadosFn = cargarFeriados,
   crearTransporte = (simulacion) => (simulacion ? crearTransporteConsola() : crearTransporteChat()),
   ahora = new Date(),
+  leerSeries = leerSeriesReales,
   env = process.env,
   esperar = esperarMs,
   pausaEnvioMs
@@ -279,6 +314,26 @@ export async function correr({
     }
   }
 
+  // Series que estan por terminar: a Direccion, los lunes (con el resumen
+  // semanal) y a diario cuando a alguna le quedan 7 dias o menos.
+  let seriesPorTerminar = 0
+  if (direccion) {
+    try {
+      const { filas, fallidas } = await leerSeries({ prisma })
+      const grupos = agruparPorTerminar(filas, { hoyISO })
+      seriesPorTerminar = grupos.reduce((n, g) => n + g.locales.length, 0)
+      if (grupos.length && (semanalHoy || grupos[0].diasMin <= 7)) {
+        mensajes.push({ etiqueta: `${direccion.slug} (series por terminar)`, destino: direccion, texto: mensajePorTerminar(grupos, { dias: DIAS_POR_TERMINAR, urlApp }) })
+      }
+      if (fallidas) {
+        erroresArmado.push({ departamento: 'Series por terminar', error: `no se pudieron leer ${fallidas} series de Calendar` })
+      }
+    } catch (err) {
+      erroresArmado.push({ departamento: 'Series por terminar', error: err.message })
+      console.error(`[avisos] no se pudo armar el aviso de series por terminar: ${err.message}`)
+    }
+  }
+
   // AVISO_DRY_RUN=1 arma y muestra los mensajes sin postear nada: sirve para
   // revisar contra datos reales antes de soltarlo en el horario real.
   const simulacion = env.AVISO_DRY_RUN === '1'
@@ -324,6 +379,7 @@ export async function correr({
     departamentos_con_webhook: departamentos.filter((d) => d.chat_webhook_url).length,
     vencidas_totales: vencidasTotales,
     avisos_departamento: avisosDepartamento,
+    series_por_terminar: seriesPorTerminar,
     escaladas_a_direccion: paraDireccion.reduce((n, d) => n + d.items.length, 0),
     direccion_sin_destino: !direccion?.chat_space_name && !direccion?.chat_webhook_url,
     umbral_direccion: umbralDireccion,
