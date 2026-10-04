@@ -24,6 +24,13 @@ async function crearAuthClient() {
 
 let chatPromise
 export function getChat() {
-  chatPromise ??= crearAuthClient().then((auth) => google.chat({ version: 'v1', auth }))
+  // Si crear las credenciales falla (red al arrancar, IAM), NO se guarda la
+  // promesa rechazada: sino esa instancia no podria hablar con Chat hasta reiniciar.
+  chatPromise ??= crearAuthClient()
+    .then((auth) => google.chat({ version: 'v1', auth }))
+    .catch((err) => {
+      chatPromise = undefined
+      throw err
+    })
   return chatPromise
 }

@@ -536,6 +536,16 @@ Solo administradores. Los documentos que usa `/buscar` en Chat.
   (manual; no baja subcarpetas; de un Sheet lee solo la primera hoja).
 - `/buscar` responde **solo** con esos documentos, nunca con conocimiento
   general, y si no encuentra la respuesta lo dice con un texto fijo.
+- **Alcance**: lo que ve `/buscar` depende del Space donde se escribe: los generales
+  + los repositorios de los departamentos que ese Space cubre. En un Space sin vincular
+  (o donde la persona no puede operar) busca **solo en los generales** y lo avisa, porque
+  la respuesta la ve todo el Space; en el chat privado con la app usa los departamentos
+  de la persona. Un repositorio asignado a un solo departamento **no** se ve desde otro Space.
+- **Tiempos**: el mensaje «🔎 Buscando…» se actualiza con la respuesta. Si Gemini tarda
+  más de ~22 s dice «La búsqueda tardó demasiado» (el pedido entero se corta a los 27 s,
+  por debajo de los ~30 s de Chat). Las respuestas se recortan a ~3.800 caracteres. En los
+  logs de Cloud Run, cada consulta deja `chat: /buscar terminado` con `estado` (`ok`,
+  `tiempo`, `error`, `sin_documentos`, `sin_placeholder`) y `duracion_ms`.
 
 ---
 

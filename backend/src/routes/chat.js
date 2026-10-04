@@ -23,6 +23,8 @@
 import { verificarPeticionDeChat, ChatNoConfigurado, ChatTokenInvalido } from '../lib/chat-verificar.js'
 import { resolverEmail, postearEnSpace, actualizarMensaje } from '../lib/chat.js'
 import { responderPregunta } from '../lib/gemini-buscar.js'
+import { ejecutarBuscar, esMensajeDirecto } from '../lib/buscar-chat.js'
+import { escaparPseudoEtiquetas } from '../lib/chat-texto.js'
 import { repositoriosVisibles } from '../lib/repositorios.js'
 import {
   cardVincular,
@@ -109,14 +111,8 @@ import {
 // interprete entidades HTML, y si no lo hiciera el usuario veria "&lt;tarea&gt;"
 // literal. Un corchete se ve bien siempre y ademas es la convencion habitual
 // para un placeholder.
-const ETIQUETAS_QUE_CHAT_ACEPTA = /^\/?(b|i|u|s|font|a)(\s|$)/i
-
-export function escaparPseudoEtiquetas(texto) {
-  if (typeof texto !== 'string') return texto
-  return texto.replace(/<([^<>]*)>/g, (completo, dentro) =>
-    ETIQUETAS_QUE_CHAT_ACEPTA.test(dentro) ? completo : `[${dentro}]`
-  )
-}
+// El saneado vive en lib/chat-texto.js (lo usa tambien /buscar, que actualiza por REST).
+export { escaparPseudoEtiquetas }
 
 function mensajeNuevo(message) {
   const seguro = message?.text ? { ...message, text: escaparPseudoEtiquetas(message.text) } : message
@@ -240,6 +236,8 @@ async function manejarRemovido(fastify, payload) {
 // Comando de barra (/hoy, /atrasadas, /mias, /ayuda). Camino independiente del
 // de los botones: llega como appCommandPayload, no como buttonClickedPayload.
 async function manejarComando(fastify, chatEvent) {
+  // Chat cuenta sus ~30 s desde que manda el evento: /buscar mide sus plazos desde aca.
+  const inicioPedido = Date.now()
   const comandoId = chatEvent.appCommandPayload?.appCommandMetadata?.appCommandId
   const usuario = chatEvent.user
   const space = chatEvent.appCommandPayload?.space?.name || chatEvent.space?.name
@@ -325,41 +323,32 @@ async function manejarComando(fastify, chatEvent) {
 
   // /buscar pregunta algo y Gemini responde anclado SOLO en los documentos
   // del ambito de este Space (general + los departamentos que cubra, ver
-  // ambitoDelSpace). NO devuelve texto en la respuesta del webhook -- una
-  // consulta a Gemini puede tardar mas que los ~30s que da Chat para
-  // responder. Se postea un placeholder por afuera (misma API que usa el job
-  // de avisos) y se actualiza en background al terminar -- mismo idioma
-  // fire-and-forget que propagarEnBackground en marcar-instancia.js.
+  // ambitoDelSpace). Se postea un placeholder por la API (la misma que usa el job
+  // de avisos) y se actualiza al terminar; el webhook devuelve `{}`.
   if (comando === COMANDO_BUSCAR) {
-    const pregunta = argumentoDeComando(texto)
-    if (!pregunta) {
-      return mensajeNuevo({ text: 'Escribí `/buscar` seguido de tu pregunta. Ejemplo: `/buscar cuál es la política de viáticos`' })
-    }
-
-    const { departamentos } = await ambitoDelSpace(fastify.db, { space, extUser })
-    const repositorios = await repositoriosVisibles(fastify.db, departamentos.map((d) => d.id))
-    const storeNames = repositorios.map((r) => r.gemini_file_search_store).filter(Boolean)
-    if (!storeNames.length) {
-      return mensajeNuevo({ text: 'No hay documentos cargados todavía para este Space. Pedile a un administrador que cargue algo desde la plataforma.' })
-    }
-
-    let mensaje
-    try {
-      mensaje = await postearEnSpace(space, { text: '🔎 Buscando…' })
-    } catch (err) {
-      fastify.log.error({ err: err.message }, 'chat: no se pudo postear el placeholder de /buscar')
-      return mensajeNuevo({ text: '⚠️ No pude iniciar la búsqueda. Probá de nuevo.' })
-    }
-
-    responderPregunta(fastify, { pregunta, storeNames })
-      .then((texto) => actualizarMensaje(mensaje.name, { text: texto }))
-      .catch((err) => {
-        fastify.log.error({ err: err.message }, 'chat: falló /buscar')
-        return actualizarMensaje(mensaje.name, { text: '⚠️ No pude responder eso. Probá de nuevo.' })
-      })
-      .catch((err) => fastify.log.error({ err: err.message }, 'chat: no se pudo ni actualizar el placeholder de /buscar'))
-
-    return {}
+    // La logica vive en lib/buscar-chat.js (probada aparte). El pedido queda
+    // abierto hasta que el mensaje se actualiza, con topes por debajo de los 30 s
+    // de Chat: ver el comentario de ese archivo.
+    const { texto: respuestaInmediata } = await ejecutarBuscar(
+      {
+        pregunta: argumentoDeComando(texto),
+        space,
+        extUser,
+        inicioPedido,
+        // Chat privado con la app: la respuesta la ve solo quien pregunta.
+        esMensajeDirecto: esMensajeDirecto(chatEvent.appCommandPayload?.space || chatEvent.space)
+      },
+      {
+        db: fastify.db,
+        log: fastify.log,
+        ambitoDelSpace,
+        repositoriosVisibles,
+        postear: postearEnSpace,
+        actualizar: actualizarMensaje,
+        responder: (args) => responderPregunta(fastify, args)
+      }
+    )
+    return respuestaInmediata ? mensajeNuevo({ text: respuestaInmediata }) : {}
   }
 
   const respuesta = await ejecutarComando(fastify, { comandoId, texto, space, extUser, email })

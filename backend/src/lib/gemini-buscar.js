@@ -45,13 +45,22 @@ function extraerTextoYCitas(interaction) {
 // storeNames: array de resource names de File Search stores (general +
 // departamentos en ámbito). Nunca vacío -- el caller corta antes con "no hay
 // documentos cargados" si no hay ningún store con contenido.
-export async function responderPregunta(fastify, { pregunta, storeNames }) {
-  const interaction = await fastify.gemini.interactions.create({
-    model: MODELO,
-    input: pregunta,
-    system_instruction: buildBuscarSystemPrompt(),
-    tools: [{ type: 'file_search', file_search_store_names: storeNames }]
-  })
+// `signal`: AbortSignal para cortar la consulta (ver buscar-chat.js: Chat da ~30 s
+// y Cloud Run solo tiene CPU mientras dura el pedido). Es el UNICO mecanismo de
+// corte: con `signal`, el `timeout` del SDK se ignora (verificado en el SDK
+// 2.23.0). `maxRetries: 1` en vez de los 4 por defecto: un 429/503 transitorio de
+// Gemini se resuelve solo con un reintento, y mas reintentos se comerian el
+// plazo; igual quedan acotados por el signal.
+export async function responderPregunta(fastify, { pregunta, storeNames, signal }) {
+  const interaction = await fastify.gemini.interactions.create(
+    {
+      model: MODELO,
+      input: pregunta,
+      system_instruction: buildBuscarSystemPrompt(),
+      tools: [{ type: 'file_search', file_search_store_names: storeNames }]
+    },
+    { maxRetries: 1, ...(signal ? { signal } : {}) }
+  )
 
   const { texto, citas } = extraerTextoYCitas(interaction)
   if (!texto || texto.includes(SENTINEL_SIN_INFO)) return NO_INFO_REPLY

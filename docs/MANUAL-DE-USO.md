@@ -506,7 +506,7 @@ y te avisa. Si alguien ya la había marcado, te dice quién.
 
 | Comando | Qué hace |
 |---|---|
-| `/buscar cuál es la política de viáticos` | Gemini responde **solo** con los documentos cargados para tu departamento y los generales, y dice de qué documento salió |
+| `/buscar cuál es la política de viáticos` | Gemini responde **solo** con los documentos cargados para el departamento de **ese Space** y los generales, y dice de qué documento salió. En un Space sin vincular (o donde no podés operar) busca solo en los generales y te lo avisa; en tu chat privado con la app usa los de tus departamentos. Si tarda más de ~20 segundos, el mensaje te dice que tardó demasiado: probá de nuevo |
 
 **De administración** (Dirección)
 

@@ -112,8 +112,8 @@ export const COMANDO_DEPARTAMENTOS = 15
 // departamentos que resuelva ambitoDelSpace), respondida por Gemini File
 // Search. NO pasa por el dispatch generico de ejecutarComando/HANDLERS de
 // abajo -- se especial-casea en manejarComando (routes/chat.js), porque una
-// consulta a Gemini puede tardar mas que los ~30s que da Chat para responder
-// (ver el comentario ahi). Requiere reconfigurar el comando en la consola de
+// consulta a Gemini puede tardar mas que lo que conviene bloquear el webhook
+// (la logica y sus plazos estan en lib/buscar-chat.js). Requiere reconfigurar el comando en la consola de
 // Chat de "barra" a "barra" simple (no dialogo) -- ver CONFIGURAR-CHAT-APP.md.
 export const COMANDO_BUSCAR = 23
 
@@ -225,7 +225,7 @@ const AYUDA = [
   '`/equipo` — quién tiene qué',
   '',
   '*Para consultar información*',
-  '`/buscar cuál es la política de viáticos` — le preguntás a Gemini, que responde solo con los documentos cargados para tu departamento (manuales, políticas, instructivos)',
+  '`/buscar cuál es la política de viáticos` — le preguntás a Gemini, que responde solo con los documentos cargados para el departamento de este Space y los generales (manuales, políticas, instructivos)',
   '',
   '_No hace falta escribir el nombre completo de la tarea: con una parte alcanza_',
   '_(`/tomar cierre`). Si hay más de una que coincida, te pregunto cuál._',
