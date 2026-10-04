@@ -33,6 +33,35 @@ export async function postearEnSpace(space, cuerpo) {
   }
 }
 
+// Nombre visible de cada Space (el que se ve en Chat). Un Space que no se puede
+// leer (sacaron la app, Chat tarda) simplemente no aparece en el resultado: quien
+// llama muestra el codigo en su lugar. Se guarda 10 minutos para no repetir la
+// consulta en cada /spaces, y la espera total esta acotada porque Chat corta a
+// los 30 s.
+const cacheNombres = new Map()
+const VIDA_NOMBRES_MS = 10 * 60 * 1000
+
+export async function nombresDeSpaces(spaces, { esperaMaxMs = 8000, ahora = Date.now() } = {}) {
+  const nombres = new Map()
+  const pendientes = []
+  for (const space of new Set(spaces)) {
+    const guardado = cacheNombres.get(space)
+    if (guardado && ahora - guardado.en < VIDA_NOMBRES_MS) nombres.set(space, guardado.nombre)
+    else pendientes.push(space)
+  }
+  if (!pendientes.length) return nombres
+  const chat = await getChat()
+  const pedir = Promise.allSettled(pendientes.map(async (space) => {
+    const { data } = await chat.spaces.get({ name: space })
+    if (data?.displayName) {
+      cacheNombres.set(space, { nombre: data.displayName, en: ahora })
+      nombres.set(space, data.displayName)
+    }
+  }))
+  await Promise.race([pedir, new Promise((resolver) => setTimeout(resolver, esperaMaxMs))])
+  return nombres
+}
+
 // Reemplaza el mensaje en su lugar (la card se actualiza donde esta, en vez de
 // apilar uno nuevo por cada click).
 export async function actualizarMensaje(name, cuerpo) {

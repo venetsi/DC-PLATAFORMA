@@ -515,7 +515,7 @@ y te avisa. Si alguien ya la había marcado, te dice quién.
 | `/vincular` | Elegir qué departamento(s) cubre este Space |
 | `/desvincular` | Que el Space deje de cubrir departamentos |
 | `/departamentos` | Panorama de configuración de todos los departamentos |
-| `/spaces` | Cómo están vinculados los Spaces y sus combinaciones (propios, con otros departamentos, combinados) y quién no tiene Space. Si no sos administrador, ves solo lo de este Space |
+| `/spaces` | Cómo están vinculados los Spaces (con su nombre en Chat) y sus combinaciones (propios, con otros departamentos, combinados) y quién no tiene Space. Si no sos administrador, ves solo lo de este Space |
 
 ### Spaces de Chat
 

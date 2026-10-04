@@ -37,10 +37,12 @@ export function mapaDeSpaces({ departamentos, compartidos, actual = null }) {
   return { spaces: lista, sinSpace, soloWebhook }
 }
 
-const nombres = (ds) => ds.map((d) => d.nombre).join(', ')
+const nombresDeptos = (ds) => ds.map((d) => d.nombre).join(', ')
 
-export function textoDeSpaces(mapa, { completo }) {
+export function textoDeSpaces(mapa, { completo, nombres = new Map() }) {
   const l = []
+  // El nombre del Space en Chat; si no se pudo leer, el final de su codigo.
+  const cual = (s) => (nombres.get(s.space) ? `«${nombres.get(s.space)}»` : `\`${corto(s.space)}\``)
   const aqui = (s) => (s.esteSpace ? '  👈 _este Space_' : '')
   const ve = (s) => (s.dueño?.slug === SLUG_DIRECCION ? ' · 👁️ ve todo' : '')
   const grupos = [
@@ -56,9 +58,9 @@ export function textoDeSpaces(mapa, { completo }) {
     hay = true
     l.push(titulo)
     for (const s of lista) {
-      if (tipo === 'propio') l.push(`• *${s.dueño.nombre}*${ve(s)} (\`${corto(s.space)}\`)${aqui(s)}`)
-      else if (tipo === 'con_compartidos') l.push(`• *${s.dueño.nombre}* + ${nombres(s.departamentos.slice(1))} (\`${corto(s.space)}\`)${aqui(s)}`)
-      else l.push(`• ${nombres(s.departamentos)} (\`${corto(s.space)}\`)${aqui(s)}`)
+      if (tipo === 'propio') l.push(`• *${s.dueño.nombre}*${ve(s)} → ${cual(s)}${aqui(s)}`)
+      else if (tipo === 'con_compartidos') l.push(`• *${s.dueño.nombre}* + ${nombresDeptos(s.departamentos.slice(1))} → ${cual(s)}${aqui(s)}`)
+      else l.push(`• ${nombresDeptos(s.departamentos)} → ${cual(s)}${aqui(s)}`)
     }
     l.push('')
   }
@@ -67,9 +69,9 @@ export function textoDeSpaces(mapa, { completo }) {
     l.push('')
   }
   if (completo) {
-    if (mapa.soloWebhook.length) l.push(`🔗 *Solo webhook* (sin Space): ${nombres(mapa.soloWebhook)}`, '')
+    if (mapa.soloWebhook.length) l.push(`🔗 *Solo webhook* (sin Space): ${nombresDeptos(mapa.soloWebhook)}`, '')
     if (mapa.sinSpace.length) {
-      l.push(`⚠️ *Sin Space ni webhook* (no reciben su recordatorio; sus atrasadas igual escalan a Dirección): ${nombres(mapa.sinSpace)}`, '')
+      l.push(`⚠️ *Sin Space ni webhook* (no reciben su recordatorio; sus atrasadas igual escalan a Dirección): ${nombresDeptos(mapa.sinSpace)}`, '')
     }
     l.push('_`/vincular` y `/desvincular` cambian lo de este Space. `/departamentos` muestra el detalle de cada departamento._')
   }

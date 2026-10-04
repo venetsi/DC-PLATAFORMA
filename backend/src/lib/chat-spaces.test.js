@@ -57,3 +57,20 @@ test('/spaces: un Space sin vincular lo dice', async () => {
   const t = await ejecutarComando({ db }, { comandoId: 24, texto: '/spaces', space: 'spaces/NADA', extUser: { email: 'b@x' }, email: 'b@x' })
   assert.match(t, /no está vinculado/)
 })
+
+test('/spaces: muestra el nombre de cada Space en Chat y, si no se pudo leer, el codigo', async () => {
+  const db = { departamento: { findMany: async () => deptos }, departamentoCompartidoEnSpace: { findMany: async () => compartidos } }
+  const nombresDeSpaces = async () => new Map([['spaces/AUD11111', 'Auditoría - equipo'], ['spaces/COM55555', 'INFORMES']])
+  const t = await ejecutarComando({ db, nombresDeSpaces }, { comandoId: 24, texto: '/spaces', space: 'spaces/AUD11111', extUser: { es_admin_global: true, email: 'a@x' }, email: 'a@x' })
+  assert.match(t, /\*Auditoría\* → «Auditoría - equipo».*este Space/)
+  assert.match(t, /Auditoría, Reportes → «INFORMES»/)
+  assert.match(t, /\*Reportes\* → `…22222`/) // sin nombre: el codigo
+})
+
+test('/spaces: si Chat falla al dar los nombres, igual responde con los codigos', async () => {
+  const db = { departamento: { findMany: async () => deptos }, departamentoCompartidoEnSpace: { findMany: async () => compartidos } }
+  const nombresDeSpaces = async () => { throw new Error('Chat caido') }
+  const t = await ejecutarComando({ db, nombresDeSpaces }, { comandoId: 24, texto: '/spaces', space: 'x', extUser: { es_admin_global: true, email: 'a@x' }, email: 'a@x' })
+  assert.match(t, /Spaces vinculados/)
+  assert.match(t, /`…11111`/)
+})

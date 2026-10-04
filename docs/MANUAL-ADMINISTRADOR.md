@@ -554,7 +554,7 @@ todos ("modo todo").
 | `/resumen` | `/estado` | rápido | Pendientes, atrasadas y % de cumplimiento |
 | `/equipo` | | rápido | Quién tiene qué y cuánto atraso |
 | `/departamentos` | | rápido, **solo admin** | Panorama de configuración (abajo) |
-| `/spaces` | `/espacios`, `/vinculos` | barra (ID 24) | Mapa de Spaces: propios, propios con otros departamentos, combinados, solo webhook y sin Space. Solo lee la base. Un no admin ve solo lo del Space donde escribe |
+| `/spaces` | `/espacios`, `/vinculos` | barra (ID 24) | Mapa de Spaces con el nombre que tienen en Chat (si Chat no lo da, el final del código): propios, propios con otros departamentos, combinados, solo webhook y sin Space. Solo lee la base. Un no admin ve solo lo del Space donde escribe |
 | `/vincular` | | barra + diálogo, **solo admin** | Qué departamento(s) cubre este Space |
 | `/desvincular` | | barra | Deja de cubrir departamentos en este Space |
 | `/marcar` | `/hecha` | barra | Da una tarea por hecha |

@@ -14,6 +14,7 @@ import { lineaDeTarea } from './mensajes-chat.js'
 import { esAdminGlobal, puede, conPermisos, departamentosDe } from './permisos.js'
 import { SLUG_DIRECCION } from './direccion.js'
 import { mapaDeSpaces, textoDeSpaces } from './chat-spaces.js'
+import { nombresDeSpaces } from './chat.js'
 import { marcarInstanciaYPropagar } from './marcar-instancia.js'
 import { ganchosDeDependencias } from './avisos-dependencias.js'
 import { pagosRecientesDeLocal, pagoPorId, formatearMonto } from './pagos.js'
@@ -1772,7 +1773,9 @@ export async function ejecutarComando(deps, { comandoId, texto, space, extUser, 
       const mapa = mapaDeSpaces({ departamentos, compartidos, actual: space })
       // Quien no es administrador ve solo lo de este Space.
       if (!completo) mapa.spaces = mapa.spaces.filter((s) => s.esteSpace)
-      return textoDeSpaces(mapa, { completo })
+      // Nombres de los Spaces tal como se ven en Chat (si no se pueden leer, sale el codigo).
+      const nombres = await (deps.nombresDeSpaces || nombresDeSpaces)(mapa.spaces.map((s) => s.space)).catch(() => new Map())
+      return textoDeSpaces(mapa, { completo, nombres })
     } catch (err) {
       log.error?.({ err: err.message }, 'chat: fallo /spaces')
       return '⚠️ No pude traer los Spaces. Probá de nuevo.'
