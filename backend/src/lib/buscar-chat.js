@@ -29,8 +29,11 @@
 //     privado con la app (nadie mas lo ve), donde se usan sus departamentos.
 import { escaparPseudoEtiquetas } from './chat-texto.js'
 
-export const TOPE_PEDIDO_MS = 27_000
-export const PLAZO_GEMINI_MS = 22_000
+// El tope deja ~5 s de colchon contra los ~30 s de Chat: el reloj de Chat corre
+// desde que manda el evento y aca se mide desde que lo recibe esta ruta (no cuenta
+// la verificacion del token ni un arranque en frio de Cloud Run).
+export const TOPE_PEDIDO_MS = 25_000
+export const PLAZO_GEMINI_MS = 21_000
 export const MARGEN_ACTUALIZAR_MS = 4_000
 export const MAX_CARACTERES = 3_800
 
@@ -109,6 +112,7 @@ export async function ejecutarBuscar(
     const soloGenerales = !dm && (Boolean(porFallback) || departamentos.length === 0)
     const ids = soloGenerales ? [] : departamentos.map((d) => d.id)
     const repositorios = await repositoriosVisibles(db, ids)
+    if (ctx.cancelado) return { texto: null } // el tope ya vencio: el webhook contesto, no se empieza nada nuevo
     const storeNames = repositorios.map((r) => r.gemini_file_search_store).filter(Boolean)
     if (!storeNames.length) {
       medir('sin_documentos', { solo_generales: soloGenerales })
@@ -126,9 +130,22 @@ export async function ejecutarBuscar(
       return { texto: TEXTO_NO_INICIO }
     }
 
+    // El tope vencio mientras se posteaba (Chat lento): el webhook ya dijo "tardo
+    // demasiado". Se deja ese mismo texto en el placeholder, sin consultar a Gemini
+    // (sino quedaria un segundo mensaje fantasma tras haber contestado).
+    if (ctx.cancelado) {
+      try {
+        await actualizar(ctx.mensaje.name, { text: escaparPseudoEtiquetas(TEXTO_LENTO) })
+      } catch (err) {
+        log.error?.({ err: mensajeDe(err) }, 'chat: no se pudo cerrar el placeholder tardío de /buscar')
+      }
+      return { texto: null }
+    }
+
     // A Gemini se le da lo que quede del pedido menos un margen para actualizar.
     const plazoMs = Math.max(Math.min(1_000, plazoGeminiMs), Math.min(plazoGeminiMs, topePedidoMs - transcurrido() - margenActualizarMs))
     const control = new AbortController()
+    ctx.control = control
     const corte = setTimeout(() => control.abort(), plazoMs)
     let estado = 'ok'
     let texto
@@ -139,7 +156,7 @@ export async function ejecutarBuscar(
         control.signal.addEventListener('abort', () => rechazar(Object.assign(new Error('Se agotó el plazo de la búsqueda'), { name: 'AbortError' })), { once: true })
       })
       cortado.catch(() => {})
-      texto = await Promise.race([responder({ pregunta, storeNames, signal: control.signal }), cortado])
+      texto = await Promise.race([responder({ pregunta, storeNames, signal: control.signal, plazoMs }), cortado])
       texto = String(texto ?? '').trim()
       if (!texto) throw new Error('Gemini devolvió una respuesta vacía')
       if (soloGenerales) texto = `${recortar(texto, MAX_CARACTERES - AVISO_SIN_VINCULAR.length - 2)}\n\n${AVISO_SIN_VINCULAR}`
@@ -186,6 +203,8 @@ export async function ejecutarBuscar(
       limite
     ])
     if (r !== 'limite') return r
+    ctx.cancelado = true // lo que todavia no empezo, ya no empieza
+    ctx.control?.abort()
     log.warn?.({ duracion_ms: transcurrido(), con_placeholder: Boolean(ctx.mensaje) }, 'chat: /buscar pasó el tope del pedido; se responde igual')
     // Con placeholder ya posteado, el trabajo sigue por su cuenta y lo actualiza;
     // sin placeholder, la persona no ve nada: se le avisa.

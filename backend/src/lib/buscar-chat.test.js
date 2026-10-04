@@ -201,7 +201,7 @@ test('Space vinculado y modo todo: usa todos los departamentos del ambito, sin a
 
 // ── Lo que se le pasa al SDK de Gemini ───────────────────────────────────────
 
-test('responderPregunta: 1 reintento, con signal, y la respuesta lleva las fuentes', async () => {
+test('responderPregunta: corte por el timeout del SDK (NO por signal: el abort en vuelo no es fiable), sin reintentos del SDK, y la respuesta lleva las fuentes', async () => {
   let recibido
   const fastify = {
     gemini: {
@@ -216,18 +216,47 @@ test('responderPregunta: 1 reintento, con signal, y la respuesta lleva las fuent
       }
     }
   }
-  const signal = new AbortController().signal
-  const texto = await responderPregunta(fastify, { pregunta: 'p', storeNames: ['fileSearchStores/a'], signal })
-  assert.equal(recibido.opciones.maxRetries, 1)
-  assert.equal(recibido.opciones.signal, signal)
+  const texto = await responderPregunta(fastify, { pregunta: 'p', storeNames: ['fileSearchStores/a'], signal: new AbortController().signal, plazoMs: 20000 })
+  assert.equal(recibido.opciones.maxRetries, 0)
+  assert.ok(recibido.opciones.timeout > 19000 && recibido.opciones.timeout <= 20000, `timeout ${recibido.opciones.timeout}`)
+  assert.equal('signal' in recibido.opciones, false, 'no se pasa signal al SDK: con signal el SDK ignora su timeout')
   assert.deepEqual(recibido.params.tools, [{ type: 'file_search', file_search_store_names: ['fileSearchStores/a'] }])
   assert.equal(texto, 'Respuesta\n\n_Fuentes: politica.pdf_')
 })
 
-test('responderPregunta: sin signal ni plazo sigue andando (compatibilidad) y SIN_INFORMACION da el texto fijo', async () => {
-  const fastify = { gemini: { interactions: { create: async (_p, o) => { assert.deepEqual(o, { maxRetries: 1 }); return { output_text: 'SIN_INFORMACION', steps: [] } } } } }
-  const texto = await responderPregunta(fastify, { pregunta: 'p', storeNames: ['x'] })
-  assert.match(texto, /No encontré esa información/)
+test('responderPregunta: un 503 transitorio se reintenta UNA vez (si queda tiempo); otro error no', async () => {
+  let llamadas = 0
+  const falla503 = Object.assign(new Error('overloaded'), { status: 503 })
+  const fastify = { gemini: { interactions: { create: async () => { llamadas++; if (llamadas === 1) throw falla503; return { output_text: 'ok', steps: [] } } } } }
+  assert.equal(await responderPregunta(fastify, { pregunta: 'p', storeNames: ['x'], plazoMs: 20000 }), 'ok')
+  assert.equal(llamadas, 2)
+
+  llamadas = 0
+  const siempre = { gemini: { interactions: { create: async () => { llamadas++; throw falla503 } } } }
+  await assert.rejects(responderPregunta(siempre, { pregunta: 'p', storeNames: ['x'], plazoMs: 20000 }), /overloaded/)
+  assert.equal(llamadas, 2, 'solo UN reintento')
+
+  llamadas = 0
+  const mala = { gemini: { interactions: { create: async () => { llamadas++; throw Object.assign(new Error('400'), { status: 400 }) } } } }
+  await assert.rejects(responderPregunta(mala, { pregunta: 'p', storeNames: ['x'], plazoMs: 20000 }), /400/)
+  assert.equal(llamadas, 1)
+})
+
+test('responderPregunta: sin tiempo suficiente (< 4 s) o con signal abortado, NO reintenta', async () => {
+  let llamadas = 0
+  const falla = Object.assign(new Error('503'), { status: 503 })
+  const fastify = { gemini: { interactions: { create: async () => { llamadas++; throw falla } } } }
+  await assert.rejects(responderPregunta(fastify, { pregunta: 'p', storeNames: ['x'], plazoMs: 3000 }))
+  assert.equal(llamadas, 1)
+  llamadas = 0
+  const ac = new AbortController(); ac.abort()
+  await assert.rejects(responderPregunta(fastify, { pregunta: 'p', storeNames: ['x'], plazoMs: 20000, signal: ac.signal }))
+  assert.equal(llamadas, 1)
+})
+
+test('responderPregunta: SIN_INFORMACION da el texto fijo', async () => {
+  const fastify = { gemini: { interactions: { create: async () => ({ output_text: 'SIN_INFORMACION', steps: [] }) } } }
+  assert.match(await responderPregunta(fastify, { pregunta: 'p', storeNames: ['x'] }), /No encontré esa información/)
 })
 
 // ── Revision del 2026-10-04: casos que faltaban ──────────────────────────────
@@ -325,4 +354,36 @@ test('un fallo de la base antes de responder se convierte en mensaje, no en un 5
   deps.ambitoDelSpace = async () => { throw new Error('base caida') }
   const r = await ejecutarBuscar(entrada(), deps)
   assert.equal(r.texto, TEXTO_ERROR)
+})
+
+// ── Cancelacion al vencer el tope (hallazgo del harness de punta a punta) ─────
+
+test('si el tope vence ANTES de poder postear el placeholder: el webhook avisa y NO queda un mensaje fantasma ni se consulta a Gemini', async () => {
+  let liberar
+  const { deps, reg } = armar({ opciones: { topePedidoMs: 50 } })
+  deps.postear = (space, cuerpo) => new Promise((resolver) => { liberar = () => { reg.posteos.push([space, cuerpo]); resolver({ name: 'spaces/S/messages/M' }) } })
+  const r = await ejecutarBuscar(entrada(), deps)
+  assert.equal(r.texto, TEXTO_LENTO)
+  // Chat contesta tarde: el placeholder aparece, pero no se consulta a Gemini y se deja el texto de "tardo demasiado".
+  liberar()
+  await new Promise((resolver) => setTimeout(resolver, 30))
+  assert.equal(reg.responderArgs, null, 'no se debe consultar a Gemini despues de haber contestado')
+  assert.deepEqual(reg.actualizaciones, [['spaces/S/messages/M', { text: TEXTO_LENTO }]])
+})
+
+test('si el tope vence mientras esperaba al ambito, no se postea nada despues', async () => {
+  const { deps, reg } = armar({ opciones: { topePedidoMs: 40 } })
+  deps.ambitoDelSpace = () => new Promise((resolver) => setTimeout(() => resolver({ departamentos: [{ id: 'd1' }], porFallback: false }), 120))
+  const r = await ejecutarBuscar(entrada(), deps)
+  assert.equal(r.texto, TEXTO_LENTO)
+  await new Promise((resolver) => setTimeout(resolver, 250))
+  assert.equal(reg.posteos.length, 0)
+  assert.equal(reg.responderArgs, null)
+})
+
+test('a responder se le pasa el plazo (plazoMs) ademas del signal', async () => {
+  const { deps, reg } = armar({ opciones: { topePedidoMs: 25000, plazoGeminiMs: 21000 } })
+  await ejecutarBuscar(entrada(), deps)
+  assert.ok(reg.responderArgs.plazoMs > 20000 && reg.responderArgs.plazoMs <= 21000, `plazoMs ${reg.responderArgs.plazoMs}`)
+  assert.ok(reg.responderArgs.signal instanceof AbortSignal)
 })

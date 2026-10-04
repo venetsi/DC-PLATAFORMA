@@ -427,14 +427,16 @@ sobre la Generative Language API — no tiene variante por cuenta de servicio.
 `/buscar` **no** es de tipo Diálogo — responde con texto: publica «🔎 Buscando…» y lo
 actualiza con la respuesta. El pedido del webhook **se queda abierto hasta que el
 mensaje se actualiza** (Cloud Run solo tiene CPU mientras dura el pedido), con topes
-medidos desde que llega el evento: Gemini se corta como mucho a los 22 s (menos si el
-pedido ya consumió tiempo) y el pedido entero a los 27 s, por debajo de los ~30 s que
-da Chat. Si Gemini tarda más, el mensaje dice «La búsqueda tardó demasiado».
+medidos desde que llega el evento: Gemini se corta como mucho a los 21 s (menos si el
+pedido ya consumió tiempo; el corte es el `timeout` del SDK, no un `AbortSignal`, que no
+es fiable en vuelo) y el pedido entero a los 25 s, por debajo de los ~30 s que
+da Chat. Un 429/503 de Gemini se reintenta una vez si quedan 4 s o más. Si Gemini tarda más, el mensaje dice «La búsqueda tardó demasiado».
 La respuesta se recorta a ~3.800 caracteres y todo texto pasa por
 `lib/chat-texto.js` (`escaparPseudoEtiquetas`) antes de mandarse. En un Space sin
 vincular, o donde la persona no puede operar, busca **solo en los documentos
 generales** (la respuesta la ve todo el Space); en el chat privado con la app usa los
-departamentos de la persona. La lógica está en `lib/buscar-chat.js`.
+departamentos de la persona (se detecta por el evento o, si no trae el tipo de Space,
+consultando `spaces.get`). La lógica está en `lib/buscar-chat.js`.
 
 ### Repositorios de tipo carpeta de Google Drive
 

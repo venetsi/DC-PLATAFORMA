@@ -21,7 +21,7 @@
 // El tipo de evento se infiere por CUAL de esas claves de payload esta
 // presente -- no hay un campo "type" directo.
 import { verificarPeticionDeChat, ChatNoConfigurado, ChatTokenInvalido } from '../lib/chat-verificar.js'
-import { resolverEmail, postearEnSpace, actualizarMensaje } from '../lib/chat.js'
+import { resolverEmail, postearEnSpace, actualizarMensaje, esChatPrivado } from '../lib/chat.js'
 import { responderPregunta } from '../lib/gemini-buscar.js'
 import { ejecutarBuscar, esMensajeDirecto } from '../lib/buscar-chat.js'
 import { escaparPseudoEtiquetas } from '../lib/chat-texto.js'
@@ -248,7 +248,8 @@ async function manejarComando(fastify, chatEvent) {
   // contestara "Atrasadas".
   const texto = chatEvent.appCommandPayload?.message?.text || ''
 
-  fastify.log.info({ comandoId, texto, space }, 'chat: comando recibido')
+  const espacioRecibido = chatEvent.appCommandPayload?.space || chatEvent.space
+  fastify.log.info({ comandoId, texto, space, tipoDeSpace: espacioRecibido?.spaceType || espacioRecibido?.type || null }, 'chat: comando recibido')
 
   const email = await resolverEmail({ user: usuario, db: fastify.db, log: fastify.log })
   if (!email) {
@@ -329,16 +330,22 @@ async function manejarComando(fastify, chatEvent) {
     // La logica vive en lib/buscar-chat.js (probada aparte). El pedido queda
     // abierto hasta que el mensaje se actualiza, con topes por debajo de los 30 s
     // de Chat: ver el comentario de ese archivo.
+    // Chat privado con la app: la respuesta la ve solo quien pregunta. Si el evento
+    // trae el tipo de Space se usa; si no, se le pregunta a Chat (ver esChatPrivado).
+    const espacioDelEvento = chatEvent.appCommandPayload?.space || chatEvent.space
+    const traeTipo = Boolean(espacioDelEvento?.spaceType || espacioDelEvento?.type) || espacioDelEvento?.singleUserBotDm !== undefined
+    const privado = esMensajeDirecto(espacioDelEvento) || (!traeTipo && (await (fastify.esChatPrivado || esChatPrivado)(space)))
     const { texto: respuestaInmediata } = await ejecutarBuscar(
       {
         pregunta: argumentoDeComando(texto),
         space,
         extUser,
         inicioPedido,
-        // Chat privado con la app: la respuesta la ve solo quien pregunta.
-        esMensajeDirecto: esMensajeDirecto(chatEvent.appCommandPayload?.space || chatEvent.space)
+        esMensajeDirecto: privado
       },
       {
+        // `fastify.buscarOpciones` (plazos) existe para poder probar la ruta sin esperar 25 s.
+        ...(fastify.buscarOpciones || {}),
         db: fastify.db,
         log: fastify.log,
         ambitoDelSpace,

@@ -45,22 +45,38 @@ function extraerTextoYCitas(interaction) {
 // storeNames: array de resource names de File Search stores (general +
 // departamentos en ámbito). Nunca vacío -- el caller corta antes con "no hay
 // documentos cargados" si no hay ningún store con contenido.
-// `signal`: AbortSignal para cortar la consulta (ver buscar-chat.js: Chat da ~30 s
-// y Cloud Run solo tiene CPU mientras dura el pedido). Es el UNICO mecanismo de
-// corte: con `signal`, el `timeout` del SDK se ignora (verificado en el SDK
-// 2.23.0). `maxRetries: 1` en vez de los 4 por defecto: un 429/503 transitorio de
-// Gemini se resuelve solo con un reintento, y mas reintentos se comerian el
-// plazo; igual quedan acotados por el signal.
-export async function responderPregunta(fastify, { pregunta, storeNames, signal }) {
-  const interaction = await fastify.gemini.interactions.create(
-    {
-      model: MODELO,
-      input: pregunta,
-      system_instruction: buildBuscarSystemPrompt(),
-      tools: [{ type: 'file_search', file_search_store_names: storeNames }]
-    },
-    { maxRetries: 1, ...(signal ? { signal } : {}) }
-  )
+const esperar = (ms) => new Promise((resolver) => setTimeout(resolver, ms))
+
+// `plazoMs`: presupuesto TOTAL de la consulta (buscar-chat.js: Chat da ~30 s y Cloud
+// Run solo tiene CPU mientras dura el pedido). El corte es el `timeout` del propio
+// SDK, NO un AbortSignal: con el SDK 2.23.0 el abort de un request ya en vuelo no
+// es fiable (pasada cierta espera, o tras un GC, la conexion queda abierta y el
+// SDK nunca rechaza), y ademas con `signal` el SDK ignora su `timeout`. Se verifico
+// con el SDK real contra un servidor colgado: con `timeout` corta siempre.
+//
+// Reintentos: `maxRetries: 0` en el SDK (sus reintentos son por intento y se
+// pasarian del plazo) y UN reintento manual solo ante 429/503 (los picos de
+// demanda de Gemini), solo si quedan >= 4 s del presupuesto. `signal` solo sirve
+// para no reintentar si quien llama ya se rindio.
+export async function responderPregunta(fastify, { pregunta, storeNames, signal, plazoMs = 22_000 }) {
+  const params = {
+    model: MODELO,
+    input: pregunta,
+    system_instruction: buildBuscarSystemPrompt(),
+    tools: [{ type: 'file_search', file_search_store_names: storeNames }]
+  }
+  const limite = Date.now() + plazoMs
+  let interaction
+  for (let intento = 1; ; intento++) {
+    try {
+      interaction = await fastify.gemini.interactions.create(params, { maxRetries: 0, timeout: Math.max(1_000, limite - Date.now()) })
+      break
+    } catch (err) {
+      const transitorio = err?.status === 429 || err?.status === 503
+      if (intento >= 2 || !transitorio || signal?.aborted || limite - Date.now() < 4_000) throw err
+      await esperar(500)
+    }
+  }
 
   const { texto, citas } = extraerTextoYCitas(interaction)
   if (!texto || texto.includes(SENTINEL_SIN_INFO)) return NO_INFO_REPLY

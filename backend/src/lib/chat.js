@@ -65,6 +65,29 @@ export async function nombresDeSpaces(spaces, { esperaMaxMs = 8000, ahora = Date
   return nombres
 }
 
+// ¿Es el chat privado entre una persona y la app (no un Space de equipo)? El
+// evento de un comando no siempre dice el tipo de Space, y confiar en un campo no
+// confirmado es lo que decide a cuantos documentos se busca: se le pregunta a
+// Chat (spaces.get). Si no se puede saber, `false` (el caso seguro: se trata como
+// Space y se busca solo en lo general). El tipo no cambia: se guarda para siempre.
+const cacheChatPrivado = new Map()
+
+export async function esChatPrivado(space, { esperaMaxMs = 3000 } = {}) {
+  if (!space) return false
+  if (cacheChatPrivado.has(space)) return cacheChatPrivado.get(space)
+  try {
+    const chat = await getChat()
+    const pedir = chat.spaces.get({ name: space }).then(({ data }) => {
+      const privado = data?.spaceType === 'DIRECT_MESSAGE' || data?.singleUserBotDm === true
+      cacheChatPrivado.set(space, privado)
+      return privado
+    })
+    return await Promise.race([pedir, new Promise((resolver) => setTimeout(() => resolver(false), esperaMaxMs))])
+  } catch {
+    return false
+  }
+}
+
 // Reemplaza el mensaje en su lugar (la card se actualiza donde esta, en vez de
 // apilar uno nuevo por cada click).
 export async function actualizarMensaje(name, cuerpo) {
