@@ -74,3 +74,11 @@ test('/spaces: si Chat falla al dar los nombres, igual responde con los codigos'
   assert.match(t, /Spaces vinculados/)
   assert.match(t, /`…11111`/)
 })
+
+test('/spaces: un chat privado con la app se avisa como tal (no es un Space de equipo)', async () => {
+  const db = { departamento: { findMany: async () => deptos }, departamentoCompartidoEnSpace: { findMany: async () => compartidos } }
+  const nombresDeSpaces = async () => new Map([['spaces/AUD11111', '__mensaje_directo__']])
+  const t = await ejecutarComando({ db, nombresDeSpaces }, { comandoId: 24, texto: '/spaces', space: 'spaces/AUD11111', extUser: { es_admin_global: true, email: 'a@x' }, email: 'a@x' })
+  assert.match(t, /\*Auditoría\* → 🔒 \*chat privado con la app\*/)
+  assert.match(t, /Ojo:.*Auditoría.*chat privado.*no a un Space de equipo/)
+})

@@ -38,6 +38,7 @@ export async function postearEnSpace(space, cuerpo) {
 // llama muestra el codigo en su lugar. Se guarda 10 minutos para no repetir la
 // consulta en cada /spaces, y la espera total esta acotada porque Chat corta a
 // los 30 s.
+export const MENSAJE_DIRECTO = '__mensaje_directo__'
 const cacheNombres = new Map()
 const VIDA_NOMBRES_MS = 10 * 60 * 1000
 
@@ -53,9 +54,11 @@ export async function nombresDeSpaces(spaces, { esperaMaxMs = 8000, ahora = Date
   const chat = await getChat()
   const pedir = Promise.allSettled(pendientes.map(async (space) => {
     const { data } = await chat.spaces.get({ name: space })
-    if (data?.displayName) {
-      cacheNombres.set(space, { nombre: data.displayName, en: ahora })
-      nombres.set(space, data.displayName)
+    // Un chat privado con la app (no un Space) no tiene nombre: se marca aparte.
+    const nombre = data?.displayName || (data?.spaceType === 'DIRECT_MESSAGE' || data?.singleUserBotDm ? MENSAJE_DIRECTO : null)
+    if (nombre) {
+      cacheNombres.set(space, { nombre, en: ahora })
+      nombres.set(space, nombre)
     }
   }))
   await Promise.race([pedir, new Promise((resolver) => setTimeout(resolver, esperaMaxMs))])

@@ -4,6 +4,7 @@
 // ningun otro lado. Ver resumen-semanal.js#espaciosCombinados para la misma
 // regla de "combinado" (un Space sin dueño, solo con departamentos compartidos).
 import { SLUG_DIRECCION } from './direccion.js'
+import { MENSAJE_DIRECTO } from './chat.js'
 
 const corto = (space) => `…${String(space).slice(-5)}`
 
@@ -42,7 +43,8 @@ const nombresDeptos = (ds) => ds.map((d) => d.nombre).join(', ')
 export function textoDeSpaces(mapa, { completo, nombres = new Map() }) {
   const l = []
   // El nombre del Space en Chat; si no se pudo leer, el final de su codigo.
-  const cual = (s) => (nombres.get(s.space) ? `«${nombres.get(s.space)}»` : `\`${corto(s.space)}\``)
+  const esDm = (s) => nombres.get(s.space) === MENSAJE_DIRECTO
+  const cual = (s) => (esDm(s) ? '🔒 *chat privado con la app* (no es un Space)' : nombres.get(s.space) ? `«${nombres.get(s.space)}»` : `\`${corto(s.space)}\``)
   const aqui = (s) => (s.esteSpace ? '  👈 _este Space_' : '')
   const ve = (s) => (s.dueño?.slug === SLUG_DIRECCION ? ' · 👁️ ve todo' : '')
   const grupos = [
@@ -67,6 +69,10 @@ export function textoDeSpaces(mapa, { completo, nombres = new Map() }) {
   if (!hay) {
     l.push(completo ? 'Todavía no hay ningún Space vinculado. En un Space, escribí `/vincular`.' : 'Este Space no está vinculado a ningún departamento. Un administrador lo vincula con `/vincular`.')
     l.push('')
+  }
+  const enPrivado = mapa.spaces.filter(esDm)
+  if (enPrivado.length) {
+    l.push(`🔒 *Ojo:* ${nombresDeptos(enPrivado.flatMap((s) => s.departamentos))} está vinculado a un **chat privado** con la app, no a un Space de equipo: los avisos le llegan solo a esa persona. Para que lo reciba el equipo, creá un Space, agregá la app y escribí \`/vincular\` ahí.`, '')
   }
   if (completo) {
     if (mapa.soloWebhook.length) l.push(`🔗 *Solo webhook* (sin Space): ${nombresDeptos(mapa.soloWebhook)}`, '')
