@@ -364,6 +364,55 @@ departamento ve las que muestran su agenda y las puede desconectar.
 Los links viejos del kiosko, los que tenían la clave del departamento, ya no andan:
 esas TVs muestran el QR y hay que volver a conectarlas.
 
+## Circuito de notificaciones y avisos
+
+**Todos los avisos salen por Google Chat, al Space de cada departamento.** Si un
+departamento no tiene Space vinculado, no recibe sus avisos (Dirección lo ve en su
+resumen de los lunes). Además, la **pantalla de oficina** y **Mi agenda** muestran
+siempre el estado al momento, sin que nadie tenga que avisar.
+
+### Qué recibe cada uno, y cuándo
+
+| Cuándo | Qué es | Quién lo recibe |
+|---|---|---|
+| **Martes a viernes, 8:00** | **Recordatorio diario**: lo que vence hoy y lo atrasado, con botón **Marcar hecha** | El Space de cada departamento |
+| **Lunes, 8:00** | **Tu semana**: en lugar del recordatorio de ese día. Las atrasadas con botón y la semana día por día | El Space de cada departamento (un Space *combinado* recibe una sola tarjeta con varios departamentos) |
+| **Lunes, 8:00** | **Resumen por departamento**: tareas de la semana, atrasadas, % de cumplimiento de la semana pasada y quiénes tienen más atrasadas | Dirección |
+| **Lunes a viernes, 8:00** | **Escalamiento**: lo que lleva muchos días hábiles atrasado, en un solo mensaje agrupado por departamento | Dirección (se **suma** al aviso del departamento, no lo reemplaza) |
+| **Cuando se marca la última tarea que otra esperaba** | **«Ya podés hacerla»**, con botón **Marcar hecha** | El Space del departamento que esperaba y, en privado, su responsable (hoy el privado solo le llega a quien ya usó la app de Chat) |
+| **30 días antes de que termine una serie** | **Series por terminar**: recomienda reagendar la secuencia. Sale los lunes y, si falta una semana o menos, a diario | Dirección |
+| **Cuando algo falla** | **Advertencia**: qué agenda no se pudo leer o a qué Space no se pudo avisar | Dirección |
+
+### Cómo leer un aviso
+
+- **Atrasada** es lo que pasó el umbral del departamento (por defecto **2 días
+  hábiles**, de lunes a viernes y sin feriados). Antes de eso figura como *vencida*.
+  Dirección recibe lo que pasó su propio umbral (por defecto **5**).
+- **🔴 / 🟢** delante del nombre es la urgencia de la tarea.
+- **⏳** quiere decir que la tarea espera a otra que todavía no está hecha. Se puede
+  marcar igual.
+- Las tareas iguales del mismo grupo de locales vienen en **una sola línea**
+  (*P&L › GRUPO TITA*).
+- Desde el aviso se marca **Marcar hecha** y la tarjeta se actualiza sola.
+
+### Lo que se consulta, sin que nadie avise
+
+- La **pantalla de oficina** se actualiza sola cada minuto.
+- **Mi agenda** y **Mis tareas** muestran el estado al momento.
+- Los comandos `/hoy`, `/atrasadas`, `/mias`, `/resumen` y `/equipo` responden cuando
+  los escribís. Con `/spaces` ves cómo está vinculado cada Space.
+
+### Para no perderse nada
+
+1. **Sin Space vinculado no hay avisos.** Escribí `/spaces` para ver qué Spaces están
+   vinculados y a qué departamentos cubren.
+2. **No hay avisos por mail**, y los mensajes privados son solo los de «Ya podés
+   hacerla». El resto llega al Space del departamento.
+3. **Fines de semana y feriados no hay recordatorio diario.**
+4. **Si algo se atrasa mucho, llega a Dirección** aunque el departamento no haga nada.
+5. **Las series ya no se renuevan solas:** cuando una está por terminar, el aviso le
+   llega a Dirección, que es quien la vuelve a agendar.
+
 ## Google Chat
 
 ### El recordatorio de todas las mañanas
@@ -466,6 +515,7 @@ y te avisa. Si alguien ya la había marcado, te dice quién.
 | `/vincular` | Elegir qué departamento(s) cubre este Space |
 | `/desvincular` | Que el Space deje de cubrir departamentos |
 | `/departamentos` | Panorama de configuración de todos los departamentos |
+| `/spaces` | Cómo están vinculados los Spaces y sus combinaciones (propios, con otros departamentos, combinados) y quién no tiene Space. Si no sos administrador, ves solo lo de este Space |
 
 ### Spaces de Chat
 

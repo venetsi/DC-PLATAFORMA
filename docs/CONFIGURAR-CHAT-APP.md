@@ -422,6 +422,7 @@ sobre la Generative Language API — no tiene variante por cuenta de servicio.
 | ID | Nombre | Tipo | Para qué |
 |---|---|---|---|
 | `23` | `buscar` | barra | Preguntar algo, respondido por Gemini con los documentos cargados |
+| `24` | `spaces` | barra (respuesta rápida) | Cómo están vinculados los Spaces y sus combinaciones. Para administradores muestra todos; para el resto, solo el Space donde escriben |
 
 `/buscar` **no** es de tipo Diálogo — responde con texto (actualizado en el mismo
 mensaje mientras Gemini procesa, no en la respuesta síncrona del webhook, porque una

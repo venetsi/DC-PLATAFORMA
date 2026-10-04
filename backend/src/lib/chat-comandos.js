@@ -13,6 +13,7 @@ import { hoyEnArgentina, clasificarInstancia, diasHabilesVencida, estaHecha } fr
 import { lineaDeTarea } from './mensajes-chat.js'
 import { esAdminGlobal, puede, conPermisos, departamentosDe } from './permisos.js'
 import { SLUG_DIRECCION } from './direccion.js'
+import { mapaDeSpaces, textoDeSpaces } from './chat-spaces.js'
 import { marcarInstanciaYPropagar } from './marcar-instancia.js'
 import { ganchosDeDependencias } from './avisos-dependencias.js'
 import { pagosRecientesDeLocal, pagoPorId, formatearMonto } from './pagos.js'
@@ -115,6 +116,12 @@ export const COMANDO_DEPARTAMENTOS = 15
 // Chat de "barra" a "barra" simple (no dialogo) -- ver CONFIGURAR-CHAT-APP.md.
 export const COMANDO_BUSCAR = 23
 
+// Como estan vinculados los Spaces y sus combinaciones (texto, sin Calendar).
+// Para administradores: el mapa completo. Para el resto: lo de este Space.
+// Registrar en la consola de Chat como comando de barra con el ID 24 (ver
+// CONFIGURAR-CHAT-APP.md).
+export const COMANDO_SPACES = 24
+
 const POR_NOMBRE = {
   hoy: COMANDO_HOY,
   tareas: COMANDO_HOY,
@@ -146,7 +153,10 @@ const POR_NOMBRE = {
   estado: COMANDO_RESUMEN,
   equipo: COMANDO_EQUIPO,
   departamentos: COMANDO_DEPARTAMENTOS,
-  buscar: COMANDO_BUSCAR
+  buscar: COMANDO_BUSCAR,
+  spaces: COMANDO_SPACES,
+  espacios: COMANDO_SPACES,
+  vinculos: COMANDO_SPACES
 }
 
 // Separador para los comandos que llevan dos partes:
@@ -1749,6 +1759,24 @@ export async function ejecutarComando(deps, { comandoId, texto, space, extUser, 
     if (modoTodo) return `${AYUDA}${AVISO_MODO_TODO}`
     if (departamentos.length > 1) return `${AYUDA}${avisoModoCompartido(departamentos)}`
     return AYUDA
+  }
+
+  // Solo lee la configuracion: no necesita un departamento con calendario.
+  if (comando === COMANDO_SPACES) {
+    try {
+      const completo = esAdminGlobal(extUser)
+      const [departamentos, compartidos] = await Promise.all([
+        db.departamento.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } }),
+        db.departamentoCompartidoEnSpace.findMany({ select: { chat_space_name: true, id_departamento: true } })
+      ])
+      const mapa = mapaDeSpaces({ departamentos, compartidos, actual: space })
+      // Quien no es administrador ve solo lo de este Space.
+      if (!completo) mapa.spaces = mapa.spaces.filter((s) => s.esteSpace)
+      return textoDeSpaces(mapa, { completo })
+    } catch (err) {
+      log.error?.({ err: err.message }, 'chat: fallo /spaces')
+      return '⚠️ No pude traer los Spaces. Probá de nuevo.'
+    }
   }
 
   // Un Pago no tiene departamento -- antes de la resolucion de mas abajo, que
