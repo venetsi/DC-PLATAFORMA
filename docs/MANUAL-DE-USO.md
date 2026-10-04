@@ -5,7 +5,7 @@ hacer, en qué local, cuándo, quién la tiene, y si ya se hizo. Todo vive en Go
 Calendar y se opera desde la plataforma o desde Google Chat.
 
 > Este manual es el que ves en **Ayuda** dentro de la plataforma. Se actualiza
-> cada vez que cambia algo. Actualizado el 28/09/2026.
+> cada vez que cambia algo. Actualizado el 04/10/2026.
 
 **Direcciones:**
 
@@ -113,12 +113,6 @@ o **Tarea › Grupo ×N** si ese día la misma tarea está en varios locales del
 (ver [Tareas agrupadas por grupo de locales](#tareas-agrupadas-por-grupo-de-locales)),
 ordenadas por tarea y local. Debajo va el responsable (→ nombre, o «equipo» si no
 tiene uno fijo; ✓ nombre si ya está hecha) y, si depende de otra, su etiqueta:
-🔴 / 🟢 **Urgencia.** Delante del nombre de una tarea, el círculo dice cuánta
-prisa tiene: 🔴 urgente, 🟢 normal; sin círculo, la tarea no está clasificada.
-Se ve igual en Mi agenda, la TV y los avisos de Chat, y las 🔴 van primero en
-cada día. Se define por grupo de locales desde **Agendas** (ver el manual del
-administrador).
-
 ⏳ **Espera a…** o 🔗 **Sigue con…** (ver
 [Tareas que dependen de otra](#tareas-que-dependen-de-otra)).
 
@@ -136,6 +130,15 @@ El punto de color de cada tarea indica cómo viene:
 | Gris | No aplica |
 
 Una tarea vence a la medianoche de su día (hora argentina).
+
+### Urgencia: 🔴 y 🟢
+
+Delante del nombre de una tarea puede haber un círculo que dice cuánta prisa tiene:
+🔴 **urgente**, 🟢 **normal**. Sin círculo, la tarea no está clasificada. Lo
+define quien gestiona las agendas, por grupo de locales, y se ve igual en todas las
+vistas de Mi agenda, en la pantalla de oficina y en los avisos de Chat. En el resumen de los lunes de Chat,
+las 🔴 van primero dentro de cada día. No es el punto de color de arriba: ese es el estado de la tarea
+(pendiente, atrasada, hecha); el círculo es la urgencia.
 
 ### Sobre una tarea
 
@@ -188,8 +191,8 @@ tarea, local o grupo.
 
 Siendo Miembro la ves en modo lectura. Siendo Manager u Owner:
 
-- **+ Nueva tarea**: se crea en un solo paso. Completás qué, dónde, cuándo y
-  quién, y una frase abajo te dice exactamente qué se va a crear antes de
+- **+ Nueva tarea**: se crea en un solo paso. Completás qué, dónde, cuándo,
+  quién y, si querés, la **urgencia** (🔴 o 🟢), y una frase abajo te dice exactamente qué se va a crear antes de
   confirmar. En **Más opciones** podés compartirla con otros departamentos: cada
   uno la ve en su agenda, y marcarla en uno la marca en todos.
 - **Una tarea, muchos locales**: el nombre no se repite, porque una misma tarea
@@ -197,11 +200,14 @@ Siendo Miembro la ves en modo lectura. Siendo Manager u Owner:
   **+ Nueva tarea** ponés un nombre que ya existe, te ofrece **sumarle esos
   locales** con la agenda y el responsable que cargaste.
 - **Cuándo** puede ser lunes a viernes, todos los días, algunos días de la
-  semana, un día del mes, **un día hábil del mes** o una sola vez. El día hábil
+  semana, un día del mes, **un día hábil del mes** o una sola vez. Algunas tareas
+  tienen **fechas exactas** (por ejemplo, las que vienen de una planilla): en
+  Agendas se leen como «7 fechas exactas, del 5/10 al 5/04» y se cargan
+  completas; para cambiarlas, pedile a Dirección que las vuelva a cargar. El día hábil
   cuenta de lunes a viernes: el día hábil 10 es el décimo del mes sin sábados ni
   domingos. Los feriados no se descuentan.
 - Tocá una tarea para ver sus locales. Tildá varios para **cambiar cuándo** o
-  **cambiar responsable** a todos juntos, o para **desactivarla en esos locales**.
+  **cambiar responsable** a todos juntos, **cambiar urgencia** (🔴/🟢), o para **desactivarla en esos locales**.
   Cada local tiene además su botón **Desactivar**: la tarea deja de agendarse solo
   ahí y el resto de los locales sigue igual. Con **+ Agregar locales** sumás un
   grupo o locales sueltos (también vuelve a activar uno que habías desactivado).
@@ -221,7 +227,7 @@ Siendo Owner, además:
 - Los **avisos de tu departamento** (webhook de Chat y cuántos días hábiles de
   atraso disparan cada aviso).
 
-Las agendas se crean por 6 meses y se renuevan solas mientras la tarea siga activa.
+Las agendas se crean por 6 meses y **no se renuevan solas**: Dirección recibe por Chat un aviso cuando una serie está por terminar (30 días antes), para volver a agendarla. Las de fechas exactas terminan en su última fecha.
 
 ### Tareas que dependen de otra
 
@@ -370,6 +376,8 @@ defecto 2 días hábiles) la tarea aparece como atrasada; pasado el de Direcció
 defecto 5), además entra en un mensaje consolidado a Dirección.
 
 ### El resumen de los lunes
+
+Delante de cada tarea ves su urgencia (🔴 o 🟢) si la tiene; en el resumen de los lunes, las 🔴 van primero dentro de cada día.
 
 Los lunes a las 8, en lugar del recordatorio diario, cada Space recibe **Tu semana**:
 
