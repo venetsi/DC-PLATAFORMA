@@ -1,3 +1,4 @@
+import { pesoUrgencia } from '../lib/urgencia.js'
 import { aTarea } from '../lib/agrupar.js'
 import { clasificarInstancia } from '../lib/vencimiento.js'
 
@@ -58,7 +59,7 @@ export default function Cronograma({ eventos, desdeISO, cantidadDias, idsVisible
               {f.info.nombre}
             </div>
             {dias.map((d) => {
-              const grupos = [...(celdas.get(f.id).get(d.fecha)?.entries() || [])].sort(([a], [b]) => a.localeCompare(b))
+              const grupos = [...(celdas.get(f.id).get(d.fecha)?.entries() || [])].sort(([a, ta], [b, tb]) => pesoUrgencia(ta.some((t) => t.prioridad === 'ALTA') ? 'ALTA' : null) - pesoUrgencia(tb.some((t) => t.prioridad === 'ALTA') ? 'ALTA' : null) || a.localeCompare(b))
               return (
                 <div key={d.fecha} className={`crono-celda${d.finde ? ' finde' : ''}${d.fecha === hoyISO ? ' hoy' : ''}`}>
                   {grupos.map(([titulo, tareas]) => {

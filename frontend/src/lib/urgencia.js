@@ -4,6 +4,9 @@ export const URGENCIAS = [
   { valor: 'NORMAL', icono: '🟢', etiqueta: 'Normal' }
 ]
 
+// Para ordenar: las urgentes (🔴) antes que el resto.
+export const pesoUrgencia = (prioridad) => (prioridad === 'ALTA' ? 0 : 1)
+
 export function iconoUrgencia(prioridad) {
   return URGENCIAS.find((u) => u.valor === prioridad)?.icono || ''
 }

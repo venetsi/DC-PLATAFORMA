@@ -136,8 +136,9 @@ Una tarea vence a la medianoche de su día (hora argentina).
 Delante del nombre de una tarea puede haber un círculo que dice cuánta prisa tiene:
 🔴 **urgente**, 🟢 **normal**. Sin círculo, la tarea no está clasificada. Lo
 define quien gestiona las agendas, por grupo de locales, y se ve igual en todas las
-vistas de Mi agenda, en la pantalla de oficina y en los avisos de Chat. En el resumen de los lunes de Chat,
-las 🔴 van primero dentro de cada día. No es el punto de color de arriba: ese es el estado de la tarea
+vistas de Mi agenda, en la pantalla de oficina y en los avisos de Chat. Dentro de cada día, las 🔴 van
+primero (en Semana, Tablero, Cronograma, la TV y el resumen de los lunes de Chat;
+en Agenda, dentro de cada local). No es el punto de color de arriba: ese es el estado de la tarea
 (pendiente, atrasada, hecha); el círculo es la urgencia.
 
 ### Sobre una tarea

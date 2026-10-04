@@ -2,6 +2,7 @@ import { aTarea, agruparPorGrupo } from '../lib/agrupar.js'
 import { clasificarInstancia } from '../lib/vencimiento.js'
 import EtiquetasDependencia from './EtiquetasDependencia.jsx'
 import Urgencia from './Urgencia.jsx'
+import { pesoUrgencia } from '../lib/urgencia.js'
 
 // Vista "Tablero" de Mi agenda, al estilo Trello: una lista por departamento y
 // una tarjeta por tarea abierta (atrasadas + pendientes de los proximos 30
@@ -43,7 +44,7 @@ export default function TableroKanban({ eventos, idsVisibles, deptos, mapaLocale
       id,
       info: deptos.get(id) || { nombre: '…', color: '#8fb3bd', abreviatura: '' },
       tareas: agruparPorGrupo(tareas, grupoDeLocal)
-        .sort((a, b) => a.fechaISO.localeCompare(b.fechaISO) || a.titulo.localeCompare(b.titulo) || a.local.localeCompare(b.local))
+        .sort((a, b) => a.fechaISO.localeCompare(b.fechaISO) || pesoUrgencia(a.prioridad) - pesoUrgencia(b.prioridad) || a.titulo.localeCompare(b.titulo) || a.local.localeCompare(b.local))
     }))
     // Las colapsadas (sin tareas abiertas) van al final; dentro de cada grupo, por nombre.
     .sort((a, b) => (!a.tareas.length - !b.tareas.length) || a.info.nombre.localeCompare(b.info.nombre))

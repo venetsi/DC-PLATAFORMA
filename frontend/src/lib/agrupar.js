@@ -150,6 +150,8 @@ export function agruparPorDiaYLocal(eventos, mapaLocales) {
     if (!dia.grupos.has(tarea.local)) dia.grupos.set(tarea.local, [])
     dia.grupos.get(tarea.local).push(tarea)
   }
+  // Dentro de un local, las urgentes (🔴) primero (el orden es estable).
+  for (const dia of dias.values()) for (const lista of dia.grupos.values()) lista.sort((a, b) => (a.prioridad === 'ALTA' ? 0 : 1) - (b.prioridad === 'ALTA' ? 0 : 1))
 
   return [...dias.values()].sort((a, b) => a.fecha - b.fecha)
 }

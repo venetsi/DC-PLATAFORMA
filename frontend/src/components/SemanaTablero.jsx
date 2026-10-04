@@ -3,6 +3,7 @@ import { aTarea, agruparPorGrupo, pieDeGrupo } from '../lib/agrupar.js'
 import { clasificarInstancia } from '../lib/vencimiento.js'
 import EtiquetasDependencia from './EtiquetasDependencia.jsx'
 import Urgencia from './Urgencia.jsx'
+import { pesoUrgencia } from '../lib/urgencia.js'
 
 // Vista "Semana (L-V)" de Mi agenda con el mismo armado que el kiosko
 // (kiosko/index.html): a la izquierda las atrasadas, despues lunes a viernes
@@ -32,7 +33,7 @@ function nombreCorto(email) {
 
 // "Tarea › Local", ordenadas por tarea y local (pedido del usuario: antes se
 // agrupaba por local y el local quedaba como titulo aparte). Igual en el kiosko.
-const porTareaYLocal = (a, b) => a.titulo.localeCompare(b.titulo) || a.local.localeCompare(b.local)
+const porTareaYLocal = (a, b) => pesoUrgencia(a.prioridad) - pesoUrgencia(b.prioridad) || a.titulo.localeCompare(b.titulo) || a.local.localeCompare(b.local)
 
 // Un grupo ("P&L › GRUPO TITA") lleva al lado cuantos locales junta.
 function TareaYLocal({ t }) {

@@ -497,7 +497,7 @@
       + (ev.esGrupo ? '<span class="grupo-cuenta">×' + ev.n + '</span>' : '');
   }
   function porTareaYLocal(a, b) {
-    return String(a.titulo).localeCompare(String(b.titulo)) || String(a.nombre_local).localeCompare(String(b.nombre_local));
+    return (a.prioridad === 'ALTA' ? 0 : 1) - (b.prioridad === 'ALTA' ? 0 : 1) || String(a.titulo).localeCompare(String(b.titulo)) || String(a.nombre_local).localeCompare(String(b.nombre_local));
   }
 
   // La misma tarea el mismo dia en varios locales del mismo grupo va en una
@@ -729,13 +729,14 @@
         var k = (ev.departamento ? ev.departamento.id : '') + '|' + ev.titulo;
         var g = grupos[k] = grupos[k] || { ev: ev, n: 0, estado: 'realizada', marca: '' };
         g.n++;
+        if (ev.prioridad === 'ALTA') g.alta = true;
         if (orden[ev.estado] < orden[g.estado]) g.estado = ev.estado;
         // ⏳ gana sobre 🔗: si alguna del grupo espera, es lo que importa ver.
         var m = marcaDeps(ev);
         if (m && (!g.marca || m === '⏳ ')) g.marca = m;
       });
       var items = Object.keys(grupos).map(function (k) { return grupos[k]; })
-        .sort(function (a, b) { return orden[a.estado] - orden[b.estado] || String(a.ev.titulo).localeCompare(String(b.ev.titulo)); })
+        .sort(function (a, b) { return orden[a.estado] - orden[b.estado] || (a.alta ? 0 : 1) - (b.alta ? 0 : 1) || String(a.ev.titulo).localeCompare(String(b.ev.titulo)); })
         .map(function (g) {
           return '<div class="cal-item ' + esc(g.estado) + '">' + chipDepto(g.ev.departamento) + g.marca + icono(g.ev) + esc(g.ev.titulo) + (g.n > 1 ? ' ×' + g.n : '') + '</div>';
         }).join('');
