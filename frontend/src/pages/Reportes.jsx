@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '../store/authStore.js'
 import { reportesApi } from '../api/recursos.js'
 import SinAsignacion from './SinAsignacion.jsx'
+import { armarPorResponsable } from '../lib/reportes-responsables.js'
 
 // Tablero de cumplimiento: un mes a la vez (con los 5 anteriores para
 // comparar), solo los dias que tuvieron tareas, y el desglose por grupo ->
@@ -53,6 +54,8 @@ export default function Reportes() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
   const [abiertos, setAbiertos] = useState(() => new Set())
+  // 'responsable' (persona -> departamento) o 'departamento' (departamento -> persona).
+  const [ordenResp, setOrdenResp] = useState('responsable')
   const ultimoPedido = useRef(0)
 
   useEffect(() => {
@@ -235,6 +238,67 @@ export default function Reportes() {
               </section>
             </div>
           )}
+
+          {r.total > 0 && data.por_responsable?.length > 0 && (() => {
+            const arbol = armarPorResponsable(data.por_responsable, ordenResp)
+            const etiquetas = ordenResp === 'responsable' ? ['Responsable', 'Departamento'] : ['Departamento', 'Responsable']
+            return (
+              <section className="card tablero-seccion">
+                <div className="tablero-cab-seccion">
+                  <h3>Tareas por responsable y departamento</h3>
+                  <div role="group" aria-label="Orden del listado" className="tablero-filtros">
+                    <button className={ordenResp === 'responsable' ? 'btn btn-chico' : 'btn btn-secondary btn-chico'} aria-pressed={ordenResp === 'responsable'} onClick={() => setOrdenResp('responsable')}>Por responsable</button>
+                    <button className={ordenResp === 'departamento' ? 'btn btn-chico' : 'btn btn-secondary btn-chico'} aria-pressed={ordenResp === 'departamento'} onClick={() => setOrdenResp('departamento')}>Por departamento</button>
+                  </div>
+                </div>
+                <p className="tablero-nota" style={{ margin: '0 0 0.6rem' }}>
+                  Lo que cada {etiquetas[0].toLowerCase()} tiene a cargo en {nombreMes(mes).toLowerCase()}, abierto por {etiquetas[1].toLowerCase()} y tarea. El responsable es el de cada tarea; las que no tienen uno fijo figuran como «Equipo». Primero lo que tiene más atrasadas.
+                </p>
+                <div className="tabla-scroll">
+                  <table className="tabla-grupos">
+                    <thead><tr><th>{etiquetas[0]} / {etiquetas[1].toLowerCase()}</th><th>Tareas</th><th>Hechas</th><th>Atrasadas</th><th>Cumpl.</th></tr></thead>
+                    <tbody>
+                      {arbol.map((n1) => {
+                        const clave = `resp::${ordenResp}::${n1.clave}`
+                        const abierto = abiertos.has(clave)
+                        return (
+                          <Fragment key={clave}>
+                            <tr className="fila-grupo">
+                              <td>
+                                <button className="plegar" onClick={() => alternar(clave)} aria-expanded={abierto}>
+                                  <span aria-hidden="true">{abierto ? '▾' : '▸'}</span> {n1.nombre}
+                                </button>
+                              </td>
+                              <td>{n1.total}</td><td>{n1.hechas}</td>
+                              <td style={{ color: n1.vencidas ? 'var(--rojo)' : undefined }}>{n1.vencidas}</td>
+                              <td><span className={`pildora ${tono(n1.cumplimiento)}`}>{pct(n1.cumplimiento)}</span></td>
+                            </tr>
+                            {abierto && n1.hijos.map((n2) => (
+                              <tr key={`${clave}::${n2.clave}`} className="fila-local">
+                                <td>
+                                  {n2.nombre}
+                                  <div className="tareas-local">
+                                    {n2.tareas.map((t) => (
+                                      <span key={t.nombre} className={t.vencidas ? 'chip-mal' : 'chip-ok'} title={`${t.nombre}: ${t.hechas} hechas, ${t.vencidas} atrasadas, en ${t.locales} ${t.locales === 1 ? 'local' : 'locales'}`}>
+                                        {t.nombre}{t.vencidas ? ` · ${t.vencidas} atr.` : ''}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </td>
+                                <td>{n2.total}</td><td>{n2.hechas}</td>
+                                <td style={{ color: n2.vencidas ? 'var(--rojo)' : undefined }}>{n2.vencidas}</td>
+                                <td><span className={`pildora ${tono(n2.cumplimiento)}`}>{pct(n2.cumplimiento)}</span></td>
+                              </tr>
+                            ))}
+                          </Fragment>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )
+          })()}
         </>
       )}
     </div>

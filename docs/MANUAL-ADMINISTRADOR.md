@@ -431,6 +431,11 @@ Lo ven los MANAGER y OWNER de cada grupo (el de sus departamentos) y Dirección
   muestran.
 - **Por grupo y local**: cada grupo se abre en sus locales, con una etiqueta
   por tarea (en rojo las que tienen atrasadas). Los peores van primero.
+- **Tareas por responsable y departamento**: una fila por (responsable, departamento,
+  tarea) que arma `GET /api/reportes/tablero` (`por_responsable`, con el
+  `asignado_a` de cada instancia guardado en `cumplimiento_instancias`); el front
+  (`lib/reportes-responsables.js`) lo abre por responsable o por departamento. Sin
+  responsable fijo = «Equipo». Las compartidas se cuentan una vez, igual que el resto.
 
 **De dónde salen los datos**: de la tabla `cumplimiento_instancias` (una
 fila por tarea × local × día), que escribe el proceso de la 1:00 con los

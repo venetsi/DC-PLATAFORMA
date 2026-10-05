@@ -376,6 +376,8 @@ th, td {
 .kpi span { font-size: 0.72rem; color: var(--texto-tenue); text-transform: uppercase; letter-spacing: 0.05em; }
 .kpi b { font-size: 1.7rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .kpi small { font-size: 0.75rem; }
+.tablero-cab-seccion { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+.tablero-seccion .tablero-cab-seccion h3 { margin: 0; }
 .tablero-nota { margin: -0.4rem 0 0; font-size: 0.75rem; color: var(--texto-tenue); }
 .tablero-seccion h3 { margin: 0 0 0.75rem; font-size: 0.95rem; }
 .tablero-dos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 1rem; align-items: start; }

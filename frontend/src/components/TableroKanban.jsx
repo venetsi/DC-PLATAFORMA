@@ -29,28 +29,64 @@ function vencimiento(t, hoyISO) {
 // La misma tarea el mismo dia en varios locales del mismo grupo es UNA
 // tarjeta ("GRUPO TITA ×3"): tocarla abre el grupo (`onAbrirGrupo`) y su
 // casilla marca todas (`onMarcarGrupo`).
-export default function TableroKanban({ eventos, idsVisibles, deptos, mapaLocales, grupoDeLocal, hoyISO, puedeMarcar, onAbrir, onAbrirGrupo, onMarcar, onMarcarGrupo, marcando }) {
-  const porDepto = new Map(idsVisibles.map((id) => [id, []]))
+// Colores para las columnas de PERSONA (las de departamento usan el de cada uno).
+const COLORES_PERSONA = ['#5fa8e8', '#7cc47f', '#e0789b', '#f0a45d', '#9d8df1', '#3fb6bd', '#c9b086', '#d4a5e8']
+const SIN_RESPONSABLE = '__equipo__'
+
+// `agrupar`: 'departamento' (una lista por departamento, como siempre) o
+// 'responsable' (una lista por persona, con las tareas ordenadas por departamento
+// y fecha y la etiqueta del departamento en cada tarjeta).
+export default function TableroKanban({ eventos, idsVisibles, deptos, mapaLocales, grupoDeLocal, hoyISO, puedeMarcar, onAbrir, onAbrirGrupo, onMarcar, onMarcarGrupo, marcando, agrupar = 'departamento', nombreDePersona = nombreCorto }) {
+  const porResponsable = agrupar === 'responsable'
+  const visibles = new Set(idsVisibles)
+  const abiertas = []
   for (const ev of eventos) {
     const { estado } = clasificarInstancia(ev)
     if (estado !== 'pendiente' && estado !== 'vencida') continue
-    const lista = porDepto.get(ev.__depto)
-    if (!lista) continue
+    if (!visibles.has(ev.__depto)) continue
     const t = aTarea(ev, mapaLocales, hoyISO)
-    lista.push({ ...t, clave: `${ev.__depto}::${ev.id}`, idDepartamento: ev.__depto, departamento: deptos.get(ev.__depto)?.nombre })
+    abiertas.push({ ...t, clave: `${ev.__depto}::${ev.id}`, idDepartamento: ev.__depto, departamento: deptos.get(ev.__depto)?.nombre })
   }
-  const listas = [...porDepto.entries()]
-    .map(([id, tareas]) => ({
-      id,
-      info: deptos.get(id) || { nombre: '…', color: '#8fb3bd', abreviatura: '' },
-      tareas: agruparPorGrupo(tareas, grupoDeLocal)
-        .sort((a, b) => a.fechaISO.localeCompare(b.fechaISO) || pesoUrgencia(a.prioridad) - pesoUrgencia(b.prioridad) || a.titulo.localeCompare(b.titulo) || a.local.localeCompare(b.local))
-    }))
-    // Las colapsadas (sin tareas abiertas) van al final; dentro de cada grupo, por nombre.
-    .sort((a, b) => (!a.tareas.length - !b.tareas.length) || a.info.nombre.localeCompare(b.info.nombre))
+  const porFechaYUrgencia = (a, b) => a.fechaISO.localeCompare(b.fechaISO) || pesoUrgencia(a.prioridad) - pesoUrgencia(b.prioridad) || a.titulo.localeCompare(b.titulo) || a.local.localeCompare(b.local)
+  // Por responsable: primero el departamento, despues la fecha.
+  const porDeptoYFecha = (a, b) => String(a.departamento || '').localeCompare(String(b.departamento || '')) || porFechaYUrgencia(a, b)
+
+  let listas
+  if (!porResponsable) {
+    const porDepto = new Map(idsVisibles.map((id) => [id, []]))
+    for (const t of abiertas) porDepto.get(t.idDepartamento)?.push(t)
+    listas = [...porDepto.entries()]
+      .map(([id, tareas]) => ({
+        id,
+        info: deptos.get(id) || { nombre: '…', color: '#8fb3bd', abreviatura: '' },
+        tareas: agruparPorGrupo(tareas, grupoDeLocal).sort(porFechaYUrgencia)
+      }))
+      // Las colapsadas (sin tareas abiertas) van al final; dentro de cada grupo, por nombre.
+      .sort((a, b) => (!a.tareas.length - !b.tareas.length) || a.info.nombre.localeCompare(b.info.nombre))
+  } else {
+    const porPersona = new Map()
+    for (const t of abiertas) {
+      const clave = String(t.asignadoA || '').toLowerCase().trim() || SIN_RESPONSABLE
+      if (!porPersona.has(clave)) porPersona.set(clave, [])
+      porPersona.get(clave).push(t)
+    }
+    // Una columna por persona con tareas abiertas; "Equipo" (sin responsable
+    // fijo) al final. El agrupado por grupo de locales va DENTRO de cada persona.
+    listas = [...porPersona.entries()]
+      .map(([clave, tareas]) => ({
+        id: clave,
+        info: {
+          nombre: clave === SIN_RESPONSABLE ? 'Equipo (sin responsable fijo)' : nombreDePersona(clave),
+          color: clave === SIN_RESPONSABLE ? '#8fb3bd' : null
+        },
+        tareas: agruparPorGrupo(tareas, grupoDeLocal).sort(porDeptoYFecha)
+      }))
+      .sort((a, b) => (a.id === SIN_RESPONSABLE) - (b.id === SIN_RESPONSABLE) || a.info.nombre.localeCompare(b.info.nombre))
+      .map((l, i) => ({ ...l, info: { ...l.info, color: l.info.color || COLORES_PERSONA[i % COLORES_PERSONA.length] } }))
+  }
 
   return (
-    <div className="kanban" role="list" aria-label="Tablero por departamento">
+    <div className="kanban" role="list" aria-label={porResponsable ? 'Tablero por responsable' : 'Tablero por departamento'}>
       {listas.map((l) => !l.tareas.length ? (
         // Sin tareas abiertas: colapsada, como una lista plegada de Trello
         // (una franja angosta con el nombre), para que no ocupe una columna entera.
@@ -87,7 +123,10 @@ export default function TableroKanban({ eventos, idsVisibles, deptos, mapaLocale
                 >
                   <div className="kanban-titulo"><Urgencia prioridad={t.prioridad} />{t.titulo}</div>
                   <div className="kanban-meta">
-                    {t.local}{t.esGrupo && <span className="grupo-cuenta">×{t.tareas.length}</span>} · {persona}
+                    {porResponsable && deptos.get(t.idDepartamento) && (
+                      <span className="chip-depto" style={{ color: deptos.get(t.idDepartamento).color, background: `${deptos.get(t.idDepartamento).color}26` }} title={deptos.get(t.idDepartamento).nombre}>{deptos.get(t.idDepartamento).abreviatura}</span>
+                    )}
+                    {t.local}{t.esGrupo && <span className="grupo-cuenta">×{t.tareas.length}</span>}{!porResponsable && <> · {persona}</>}
                   </div>
                   <EtiquetasDependencia tarea={t} />
                   <div className="kanban-pie">

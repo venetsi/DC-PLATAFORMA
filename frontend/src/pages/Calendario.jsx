@@ -32,6 +32,16 @@ const VISTAS = [
   { id: 'cronograma', etiqueta: 'Cronograma' },
   { id: 'semana', etiqueta: 'Semana (L-V)' }
 ]
+// Como se ordenan las columnas del Tablero: por departamento o por responsable
+// (se recuerda en este navegador).
+const CLAVE_AGRUPAR = 'dc_plataforma_tablero_agrupar'
+function agruparGuardado() {
+  try {
+    return localStorage.getItem(CLAVE_AGRUPAR) === 'responsable' ? 'responsable' : 'departamento'
+  } catch {
+    return 'departamento'
+  }
+}
 // La ultima vista elegida se recuerda en este navegador.
 const CLAVE_VISTA = 'dc_plataforma_vista'
 function vistaGuardada() {
@@ -123,6 +133,16 @@ export default function Calendario() {
   const elegido = opciones.find((d) => d.id === idElegido)
 
   const [vista, setVistaEstado] = useState(vistaGuardada)
+  const [agruparTablero, setAgruparTableroEstado] = useState(agruparGuardado)
+  // Los nombres de las personas (para las columnas por responsable).
+  useEffect(() => {
+    if (vista === 'tablero' && agruparTablero === 'responsable' && !usuarios.length) usuariosApi.listar().then(setUsuarios).catch(() => {})
+  }, [vista, agruparTablero])
+  const nombreDePersona = (email) => usuarios.find((u) => String(u.email).toLowerCase() === email)?.nombre || String(email).split('@')[0]
+  function setAgruparTablero(v) {
+    setAgruparTableroEstado(v)
+    try { localStorage.setItem(CLAVE_AGRUPAR, v) } catch { /* sin almacenamiento: queda solo en esta pantalla */ }
+  }
   function setVista(v) {
     setVistaEstado(v)
     try { localStorage.setItem(CLAVE_VISTA, v) } catch { /* sin almacenamiento: no se recuerda */ }
@@ -487,7 +507,9 @@ export default function Calendario() {
   // Con el dedo, el arrastre de Semana no anda en la mayoria de los celulares,
   // y en Mes (FullCalendar) pide mantener apretado.
   const textoAyuda = {
-    tablero: 'Tocá una tarjeta para ver el detalle; la casilla la marca hecha (en un grupo ×N, todo el grupo). Están las atrasadas de los últimos 60 días y lo pendiente de los próximos 30, por vencimiento.',
+    tablero: agruparTablero === 'responsable'
+      ? 'Una columna por persona (y «Equipo» para lo que no tiene responsable fijo), con sus tareas por departamento y vencimiento. Tocá una tarjeta para ver el detalle; la casilla la marca hecha. Están las atrasadas de los últimos 60 días y lo pendiente de los próximos 30.'
+      : 'Tocá una tarjeta para ver el detalle; la casilla la marca hecha (en un grupo ×N, todo el grupo). Están las atrasadas de los últimos 60 días y lo pendiente de los próximos 30, por vencimiento.',
     cronograma: 'Una fila por departamento y un día por columna. Tocá una tarea para ver el detalle; ×N quiere decir que se hace en N locales.',
     semana: puedeCrear && (tactil
       ? 'Tocá una tarea para ver el detalle o cambiarle la fecha, o usá + para crear una tarea ese día. Un grupo ×N se abre para ver sus locales.'
@@ -612,7 +634,17 @@ export default function Calendario() {
       )}
 
       {vista === 'tablero' && (
+        <div className="st-nav" role="group" aria-label="Ordenar el tablero">
+          <span className="tenue">Columnas por:</span>
+          <button className={agruparTablero === 'departamento' ? 'btn btn-chico' : 'btn btn-secondary btn-chico'} aria-pressed={agruparTablero === 'departamento'} onClick={() => setAgruparTablero('departamento')}>Departamento</button>
+          <button className={agruparTablero === 'responsable' ? 'btn btn-chico' : 'btn btn-secondary btn-chico'} aria-pressed={agruparTablero === 'responsable'} onClick={() => setAgruparTablero('responsable')}>Responsable</button>
+        </div>
+      )}
+
+      {vista === 'tablero' && (
         <TableroKanban
+          agrupar={agruparTablero}
+          nombreDePersona={nombreDePersona}
           eventos={visibles}
           idsVisibles={idsVisibles}
           deptos={deptos}

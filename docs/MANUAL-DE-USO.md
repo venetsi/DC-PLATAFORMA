@@ -65,6 +65,11 @@ Cinco vistas, con los botones de arriba (la plataforma recuerda la última que u
   Los departamentos sin tareas abiertas aparecen **colapsados** y al final: una
   franja angosta con el nombre en vertical, para que el espacio quede para los que
   tienen tareas.
+  Arriba del tablero, **Columnas por: Departamento / Responsable** cambia el orden
+  (se recuerda la última elección). Con **Responsable** hay una columna por persona
+  (y una de «Equipo» para lo que no tiene responsable fijo), con sus tareas
+  ordenadas por departamento y vencimiento, y cada tarjeta lleva la etiqueta de su
+  departamento.
 - **Calendario**: el mes completo.
 - **Agenda**: la semana en curso, un día por columna, agrupado por local (o por
   grupo, ver [Tareas agrupadas por grupo de locales](#tareas-agrupadas-por-grupo-de-locales)).
@@ -291,6 +296,11 @@ El tablero de cumplimiento muestra un mes a la vez (‹ › para cambiar):
 - **Días con tareas**: solo los días que tuvieron alguna.
 - **Por grupo y local**: cada grupo se abre en sus locales, con cada tarea (en rojo
   las que tienen atrasadas).
+- **Tareas por responsable y departamento**: lo que cada persona tiene a cargo en el
+  mes, abierto por departamento y tarea; con **Por departamento** se invierte el
+  orden (departamento y, adentro, cada persona). Las tareas sin responsable fijo
+  figuran como «Equipo». Primero lo que tiene más atrasadas. Respeta los filtros de
+  departamento y grupo.
 
 Cuenta los días ya cerrados: lo de hoy aparece mañana. Si una atrasada se hace
 después, pasa a "hecha tarde".

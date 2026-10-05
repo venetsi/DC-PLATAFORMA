@@ -149,6 +149,33 @@ export default async function reportesRoutes(fastify) {
       }
     }).sort((x, y) => (x.cumplimiento ?? 101) - (y.cumplimiento ?? 101) || x.grupo.localeCompare(y.grupo))
 
+    // Por responsable y departamento -> tarea. El responsable es el de la
+    // asignacion (asignado_a); sin responsable fijo es el equipo del departamento.
+    // Una fila por (responsable, departamento, tarea): el front arma los dos
+    // ordenes (por responsable o por departamento) sin otra consulta.
+    const nombreDepto = new Map(visibles.map((d) => [d.id, d.nombre]))
+    const emails = [...new Set(delMes.map((f) => (f.asignado_a || '').toLowerCase().trim()).filter(Boolean))]
+    const personas = emails.length
+      ? await fastify.db.extUser.findMany({ where: { email: { in: emails } }, select: { email: true, nombre: true } })
+      : []
+    const nombrePersona = new Map(personas.map((p) => [p.email.toLowerCase(), p.nombre]))
+    const porResp = new Map()
+    for (const f of delMes) {
+      const email = (f.asignado_a || '').toLowerCase().trim()
+      const clave = `${email}|${f.id_departamento}|${f.nombre_tarea}`
+      if (!porResp.has(clave)) porResp.set(clave, { email, id_departamento: f.id_departamento, tarea: f.nombre_tarea, filas: [] })
+      porResp.get(clave).filas.push(f)
+    }
+    const por_responsable = [...porResp.values()].map((x) => ({
+      responsable: x.email || null,
+      nombre: x.email ? nombrePersona.get(x.email) || x.email.split('@')[0] : null,
+      id_departamento: x.id_departamento,
+      departamento: nombreDepto.get(x.id_departamento) || '—',
+      tarea: x.tarea,
+      locales: new Set(x.filas.map((f) => f.id_local_ext)).size,
+      ...contar(x.filas)
+    }))
+
     // Ultimo dia que proceso el job (CumplimientoDiario tiene fila por
     // departamento todos los dias, aunque no haya tareas) -- no el ultimo dia
     // que tuvo alguna tarea, que haria parecer que faltan datos.
@@ -164,7 +191,8 @@ export default async function reportesRoutes(fastify) {
       resumen_mes_anterior: contar(unicas.filter((f) => mesDe(f) === anterior)),
       por_mes: { meses, departamentos: porMes },
       dias,
-      grupos
+      grupos,
+      por_responsable
     }
   })
 }
