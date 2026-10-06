@@ -115,8 +115,10 @@ esAdminGlobal(usuario) = usuario.es_admin_global || usuario.esDireccion
 - `es_admin_global` es el acceso de emergencia: se copia en cada entrada por
   Tareas del `super_admin` de dcsmart. Entra aunque no esté en ningún grupo.
 - Solo Dirección / super admin: crear departamentos, **Releer Google Groups**,
-  **Documentos** (`/admin/repositorios`), y `/vincular`, `/desvincular` y
-  `/departamentos` en Chat.
+  **Documentos** (`/admin/repositorios`) y `/departamentos` en Chat. `/vincular` y
+  `/desvincular` también los puede usar el **Manager u Owner de un departamento**,
+  pero solo sobre **sus** departamentos (nunca Dirección): lo demás que cubra el
+  Space no se toca.
 - En Chat, el **Space de Dirección** opera sobre todos los departamentos para
   quien escriba desde ahí (el control es formar parte del Space).
 - El atajo de desarrollo `admin@dcsmart.app` solo funciona con el login de
@@ -570,8 +572,8 @@ todos ("modo todo").
 | `/equipo` | | rápido | Quién tiene qué y cuánto atraso |
 | `/departamentos` | | rápido, **solo admin** | Panorama de configuración (abajo) |
 | `/spaces` | `/espacios`, `/vinculos` | barra (ID 24) | Mapa de Spaces con el nombre que tienen en Chat (si Chat no lo da, el final del código): propios, propios con otros departamentos, combinados, solo webhook y sin Space. Solo lee la base. Un no admin ve solo lo del Space donde escribe |
-| `/vincular` | | barra + diálogo, **solo admin** | Qué departamento(s) cubre este Space |
-| `/desvincular` | | barra | Deja de cubrir departamentos en este Space |
+| `/vincular` | | barra + diálogo, **admin o Manager/Owner** | Qué departamento(s) cubre este Space. Manager/Owner: solo los suyos (`esVinculable` en `chat-comandos.js`) |
+| `/desvincular` | | barra, **admin o Manager/Owner** | Deja de cubrir departamentos en este Space (Manager/Owner: solo los suyos) |
 | `/marcar` | `/hecha` | barra | Da una tarea por hecha |
 | `/tomar` | | barra | La pone a tu nombre |
 | `/pasar` | | barra | Se la pasa a otra persona |

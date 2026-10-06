@@ -317,10 +317,10 @@ async function manejarComando(fastify, chatEvent) {
   // comando de texto -- reemplaza al /vincular original y a /compartir +
   // /descompartir por completo (ver dialogoVincular/vincularDepartamentos).
   if (comando === COMANDO_VINCULAR) {
-    const { departamentos, actuales, error } = await departamentosParaVincular(fastify, { space, extUser })
+    const { departamentos, actuales, ajenos, error } = await departamentosParaVincular(fastify, { space, extUser })
     if (error) return dialogoAviso(error) // el comando abre un dialogo: ver dialogoAviso
     fastify.log.info({ space, departamentos: departamentos.length, actuales: actuales.size }, 'chat: abriendo diálogo (vincular)')
-    return dialogoVincular(departamentos, { actuales })
+    return dialogoVincular(departamentos, { actuales, ajenos })
   }
 
   // /buscar pregunta algo y Gemini responde anclado SOLO en los documentos

@@ -54,8 +54,10 @@ test('textoParaTarjeta: *negrita* y `codigo` pasan a HTML de tarjeta, y lo demas
   assert.equal(textoParaTarjeta(undefined), '')
 })
 
-test('/vincular de alguien que NO es administrador: el comando devuelve un error (que la ruta muestra como dialogo)', async () => {
-  const r = await departamentosParaVincular({ db: {} }, { space: 'spaces/AAA', extUser: { email: 'nlencinas@dcmanagement.com.ar', esDireccion: false } })
-  assert.match(r.error, /Solo un administrador puede vincular/)
+test('/vincular de alguien sin permiso (ni administrador ni Manager/Owner): el comando devuelve un error (que la ruta muestra como dialogo)', async () => {
+  const db = { departamento: { findMany: async () => [{ id: 'cos', nombre: 'Costos', slug: 'costos' }] } }
+  const miembro = { email: 'x@dcmanagement.com.ar', esDireccion: false, departamentos: ['cos'], roles: { cos: 'MEMBER' } }
+  const r = await departamentosParaVincular({ db }, { space: 'spaces/AAA', extUser: miembro })
+  assert.match(r.error, /administrador, o Manager u Owner/)
   assert.equal(r.departamentos, undefined)
 })

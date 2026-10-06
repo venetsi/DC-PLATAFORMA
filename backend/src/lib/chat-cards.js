@@ -691,7 +691,7 @@ export function dialogoAviso(texto, { titulo = 'DC-PLATAFORMA' } = {}) {
 export const ACCION_VINCULAR_SUBMIT = 'vincular_submit'
 export const CAMPO_DEPARTAMENTOS_VINCULAR = 'departamentos_vincular'
 
-export function dialogoVincular(departamentos, { actuales } = {}) {
+export function dialogoVincular(departamentos, { actuales, ajenos = [] } = {}) {
   const seleccionados = actuales instanceof Set ? actuales : new Set(actuales || [])
   return {
     action: {
@@ -714,6 +714,9 @@ export function dialogoVincular(departamentos, { actuales } = {}) {
                       }))
                     }
                   },
+                  ...(ajenos.length
+                    ? [{ textParagraph: { text: textoParaTarjeta(`Este Space también cubre *${ajenos.join(', ')}*, que no podés cambiar vos: se conserva como está.`) } }]
+                    : []),
                   {
                     textParagraph: {
                       text:

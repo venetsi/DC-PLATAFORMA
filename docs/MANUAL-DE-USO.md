@@ -518,19 +518,26 @@ y te avisa. Si alguien ya la había marcado, te dice quién.
 |---|---|
 | `/buscar cuál es la política de viáticos` | Gemini responde **solo** con los documentos cargados para el departamento de **ese Space** y los generales, y dice de qué documento salió. En un Space sin vincular (o donde no podés operar) busca solo en los generales y te lo avisa; en tu chat privado con la app usa los de tus departamentos. Si tarda más de ~20 segundos, el mensaje te dice que tardó demasiado: probá de nuevo |
 
-**De administración** (Dirección)
+**Para vincular Spaces** (Manager u Owner de un departamento, y Dirección)
 
 | Comando | Qué hace |
 |---|---|
-| `/vincular` | Elegir qué departamento(s) cubre este Space |
-| `/desvincular` | Que el Space deje de cubrir departamentos |
+| `/vincular` | Elegir qué departamento(s) cubre este Space. Un Manager u Owner ve y cambia **solo los suyos**; lo que el Space ya cubre y no es suyo queda como está. Dirección vincula cualquiera |
+| `/desvincular` | Que el Space deje de cubrir departamentos. Un Manager u Owner saca solo los suyos |
+
+Si lo escribe un Miembro, un diálogo le avisa que necesita ser Manager u Owner.
+
+**De administración** (solo Dirección)
+
+| Comando | Qué hace |
+|---|---|
 | `/departamentos` | Panorama de configuración de todos los departamentos |
 | `/spaces` | Cómo están vinculados los Spaces (con su nombre en Chat) y sus combinaciones (propios, con otros departamentos, combinados) y quién no tiene Space. Si no sos administrador, ves solo lo de este Space |
 
 ### Spaces de Chat
 
 - **Vincular un Space**: crear el Space, agregar el grupo `depto-<área>@dcsmart.app`
-  y la app **DC-PLATAFORMA**, y escribir `/vincular` para elegir el departamento.
+  y la app **DC-PLATAFORMA**, y escribir `/vincular` para elegir el departamento (lo puede hacer el Manager u Owner del departamento, o Dirección).
 - **Un Space para varios departamentos**: en `/vincular` se tildan varios. Los
   comandos muestran todo junto, y cada línea dice de qué departamento es. Un
   departamento puede estar en varios Spaces.
@@ -575,8 +582,8 @@ Sí: cada local tiene su propia agenda. En Agendas, tildá solo ese local y usá
 **Cambiar cuándo**.
 
 **Mi departamento no recibe los avisos de Chat.**
-Le falta un Space vinculado. Sus atrasadas igual escalan a Dirección. Pedile a
-Dirección que escriba `/vincular` en el Space del departamento. Si el Space ya
+Le falta un Space vinculado. Sus atrasadas igual escalan a Dirección. Pedile al
+Manager u Owner del departamento (o a Dirección) que escriba `/vincular` en el Space del departamento. Si el Space ya
 estaba vinculado y dejó de recibir, puede que hayan sacado la app: el Space se
 desvincula y el resumen de los lunes de Dirección lo lista como «Con tareas pero
 sin Space donde recibir avisos». Si en cambio el aviso falló un día (por ejemplo,

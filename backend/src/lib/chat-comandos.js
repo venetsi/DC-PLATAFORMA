@@ -587,20 +587,39 @@ async function comandoMias(deps, { departamento, departamentos, modoTodo, nombre
   return bloques.join('\n') + sugerirSobreEventos([...vencidas, ...deHoy])
 }
 
+// Quien puede vincular un Space a un departamento: un administrador (a cualquiera)
+// o el MANAGER / OWNER de ese departamento (solo al suyo). Dirección queda afuera
+// para los demas: un Space vinculado a Dirección ve y opera TODOS los
+// departamentos, y eso es del administrador.
+export const TEXTO_SIN_PERMISO_VINCULAR =
+  '⚠️ Para vincular un Space tenés que ser administrador, o Manager u Owner de un departamento (y vinculás solo los tuyos).'
+
+export function esVinculable(extUser, departamento) {
+  if (esAdminGlobal(extUser)) return true
+  return departamento.slug !== SLUG_DIRECCION && puede(extUser, 'editar', departamento.id)
+}
+
 // Lista + estado actual para el formulario (checkbox) de /vincular. Al
 // reves que los demas "pendientesParaX": no exige que quien pregunta ya
 // pueda operar en este Space -- ESTE comando es justamente el que define
 // quien va a poder despues. Solo exige ser administrador.
 export async function departamentosParaVincular(deps, { space, extUser }) {
   const { db } = deps
-  if (!esAdminGlobal(extUser)) {
-    return { error: '⚠️ Solo un administrador puede vincular este Space a un departamento.' }
-  }
   if (!space) return { error: '⚠️ No pude identificar este Space.' }
 
-  const departamentos = await db.departamento.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } })
+  // Un administrador ve todos los departamentos; un Manager u Owner, solo los suyos.
+  const todos = await db.departamento.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } })
+  const departamentos = todos.filter((d) => esVinculable(extUser, d))
+  if (!departamentos.length) return { error: TEXTO_SIN_PERMISO_VINCULAR }
+
   const actual = await departamentosDelSpace(db, space)
-  return { departamentos, actuales: new Set(actual.map((d) => d.id)) }
+  const permitidos = new Set(departamentos.map((d) => d.id))
+  return {
+    departamentos,
+    actuales: new Set(actual.filter((d) => permitidos.has(d.id)).map((d) => d.id)),
+    // Lo que el Space ya cubre y esta persona no puede cambiar: se muestra, no se toca.
+    ajenos: actual.filter((d) => !permitidos.has(d.id)).map((d) => d.nombre)
+  }
 }
 
 // Fija de una sola vez la lista COMPLETA de departamentos que cubre este
@@ -620,13 +639,21 @@ export async function departamentosParaVincular(deps, { space, extUser }) {
 // entero en cada envio del formulario en vez de a mano de a uno.
 export async function vincularDepartamentos(deps, { space, extUser, idsDepartamentos }) {
   const { db, log = console } = deps
-  if (!esAdminGlobal(extUser)) {
-    return '⚠️ Solo un administrador puede vincular este Space a un departamento.'
-  }
   if (!space) return '⚠️ No pude identificar este Space.'
 
-  const ids = [...new Set((Array.isArray(idsDepartamentos) ? idsDepartamentos : [idsDepartamentos]).filter(Boolean))]
+  // Un administrador cambia cualquier cosa; un Manager u Owner, solo sus
+  // departamentos: los que ya cubre el Space y no son suyos se conservan tal cual,
+  // y lo tildado que no es suyo se ignora (el formulario viene del cliente).
+  const todos = await db.departamento.findMany({ where: { activo: true } })
+  const vinculables = new Set(todos.filter((d) => esVinculable(extUser, d)).map((d) => d.id))
+  if (!vinculables.size) return TEXTO_SIN_PERMISO_VINCULAR
+
   const actual = await departamentosDelSpace(db, space)
+  const tildados = (Array.isArray(idsDepartamentos) ? idsDepartamentos : [idsDepartamentos]).filter(Boolean)
+  const ids = [...new Set([
+    ...tildados.filter((id) => vinculables.has(id)),
+    ...actual.filter((d) => !vinculables.has(d.id)).map((d) => d.id)
+  ])]
   const dueñoActual = actual.find((d) => d.chat_space_name === space) ?? null
 
   if (!ids.length) {
@@ -1682,12 +1709,33 @@ export async function marcarPagos(deps, { email, ids }) {
 // app del Space (REMOVED_FROM_SPACE tambien limpia), pero eso ademas silencia
 // los comandos -- con esto el Space deja de recibir los recordatorios y sigue
 // pudiendo consultar.
+// Un Manager u Owner saca de este Space solo SUS departamentos; lo demas que cubra
+// el Space no se toca.
+async function desvincularLosPropios(deps, { space, extUser }) {
+  const { db, log = console } = deps
+  if (!space) return '⚠️ No pude identificar este Space.'
+  const todos = await db.departamento.findMany({ where: { activo: true } })
+  const mios = new Set(todos.filter((d) => esVinculable(extUser, d)).map((d) => d.id))
+  if (!mios.size) return '⚠️ Para desvincular un Space tenés que ser administrador, o Manager u Owner de un departamento.'
+
+  const actual = await departamentosDelSpace(db, space)
+  const aSacar = actual.filter((d) => mios.has(d.id))
+  if (!aSacar.length) return 'Este Space no cubre ninguno de tus departamentos -- no hay nada que desvincular.'
+
+  await db.departamentoCompartidoEnSpace.deleteMany({ where: { chat_space_name: space, id_departamento: { in: aSacar.map((d) => d.id) } } })
+  for (const d of aSacar) {
+    if (d.chat_space_name === space) await db.departamento.update({ where: { id: d.id }, data: { chat_space_name: null } })
+  }
+  log.info?.({ space, sacados: aSacar.map((d) => d.slug) }, 'chat: space desvinculado de sus departamentos por su Manager/Owner')
+  const nombres = (lista) => lista.map((d) => `*${d.nombre}*`).join(', ')
+  const quedan = actual.filter((d) => !mios.has(d.id))
+  return `✅ Listo. Este Space ya no cubre ${nombres(aSacar)}.` + (quedan.length ? `\nSigue cubriendo ${nombres(quedan)}, que no podés cambiar vos.` : '') + '\nPara volver a activarlo, escribí `/vincular`.'
+}
+
 async function comandoDesvincular(deps, { space, extUser }) {
   const { db, log = console } = deps
 
-  if (!esAdminGlobal(extUser)) {
-    return '⚠️ Solo un administrador puede desvincular este Space.'
-  }
+  if (!esAdminGlobal(extUser)) return desvincularLosPropios(deps, { space, extUser })
   if (!space) return '⚠️ No pude identificar este Space.'
 
   const actual = await db.departamento.findUnique({ where: { chat_space_name: space } })
