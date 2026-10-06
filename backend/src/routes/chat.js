@@ -35,6 +35,7 @@ import {
   dialogoPago,
   dialogoTildarPagos,
   dialogoVincular,
+  dialogoAviso,
   cerrarDialogo,
   ACCION_MARCAR,
   ACCION_VINCULAR,
@@ -269,10 +270,10 @@ async function manejarComando(fastify, chatEvent) {
   const comando = resolverComando({ comandoId, texto })
   if (comando === COMANDO_ASIGNAR || comando === COMANDO_DERIVAR || comando === COMANDO_APUNTAR) {
     const { departamento, departamentos, pendientes, porFallback, modoTodo, error } = await pendientesParaAsignar(fastify, { space, extUser })
-    if (error) return mensajeNuevo({ text: error })
+    if (error) return dialogoAviso(error) // el comando abre un dialogo: ver dialogoAviso
     // Pasar a otra persona es editar: MANAGER u OWNER (el Space de Direccion puede todo).
     if (comando === COMANDO_DERIVAR && !modoTodo && !departamentos.some((d) => puede(extUser, 'editar', d.id))) {
-      return mensajeNuevo({ text: '⚠️ Pasarle una tarea a otra persona lo puede hacer un MANAGER u OWNER del grupo del departamento. Si la querés hacer vos, usá /asignar.' })
+      return dialogoAviso('⚠️ Pasarle una tarea a otra persona lo puede hacer un MANAGER u OWNER del grupo del departamento. Si la querés hacer vos, usá /asignar.')
     }
     fastify.log.info(
       { comando, departamento: departamento.slug, pendientes: pendientes.length, porFallback, modoTodo },
@@ -289,7 +290,7 @@ async function manejarComando(fastify, chatEvent) {
   // el bloque de arriba con pendientesParaAsignar.
   if (comando === COMANDO_TILDAR) {
     const { departamento, departamentos, pendientes, porFallback, modoTodo, resumen, error } = await pendientesParaTildar(fastify, { space, extUser })
-    if (error) return mensajeNuevo({ text: error })
+    if (error) return dialogoAviso(error) // el comando abre un dialogo: ver dialogoAviso
     fastify.log.info(
       { departamento: departamento.slug, pendientes: pendientes.length, porFallback, modoTodo },
       'chat: abriendo diálogo (tildar)'
@@ -302,7 +303,7 @@ async function manejarComando(fastify, chatEvent) {
   // chat-comandos.js) por local o por el email de quien pregunta.
   if (comando === COMANDO_PAGO) {
     const { local, pendientes, tareas, personas, error } = await pagosParaVincular(fastify, { argumento: argumentoDeComando(texto) })
-    if (error) return mensajeNuevo({ text: error })
+    if (error) return dialogoAviso(error) // el comando abre un dialogo: ver dialogoAviso
     fastify.log.info({ local: local.nombre, pendientes: pendientes.length }, 'chat: abriendo diálogo (pago)')
     return dialogoPago(pendientes, tareas, personas, { local })
   }
@@ -317,7 +318,7 @@ async function manejarComando(fastify, chatEvent) {
   // /descompartir por completo (ver dialogoVincular/vincularDepartamentos).
   if (comando === COMANDO_VINCULAR) {
     const { departamentos, actuales, error } = await departamentosParaVincular(fastify, { space, extUser })
-    if (error) return mensajeNuevo({ text: error })
+    if (error) return dialogoAviso(error) // el comando abre un dialogo: ver dialogoAviso
     fastify.log.info({ space, departamentos: departamentos.length, actuales: actuales.size }, 'chat: abriendo diálogo (vincular)')
     return dialogoVincular(departamentos, { actuales })
   }

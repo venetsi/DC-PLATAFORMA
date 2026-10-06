@@ -30,3 +30,32 @@ test('Privado: la frase le habla al responsable, y "no aplica" se dice como tal'
   assert.match(texto, /^Ya podés hacer <b>Reporte &lt;ventas&gt; — TIAMO<\/b> \(atrasada desde el /)
   assert.match(texto, /Cierre de caja \(Tesorería\) quedó como «no aplica» \(lruiz\)\.$/)
 })
+
+// ── Avisos dentro de un dialogo (2026-10-06) ─────────────────────────────────
+// Los comandos que abren un dialogo no pueden contestar con un mensaje de texto:
+// Chat lo muestra como "error en el servidor". /vincular de alguien que no es
+// administrador era el caso real.
+import { dialogoAviso, textoParaTarjeta } from './chat-cards.js'
+import { departamentosParaVincular } from './chat-comandos.js'
+
+test('dialogoAviso: es un dialogo (action.navigations), no un mensaje, y lleva el texto', () => {
+  const r = dialogoAviso('⚠️ Solo un administrador puede vincular este Space.')
+  assert.ok(Array.isArray(r.action.navigations))
+  assert.equal(r.hostAppDataAction, undefined)
+  const widget = r.action.navigations[0].pushCard.sections[0].widgets[0]
+  assert.match(widget.textParagraph.text, /Solo un administrador puede vincular/)
+})
+
+test('textoParaTarjeta: *negrita* y `codigo` pasan a HTML de tarjeta, y lo demas se escapa', () => {
+  assert.equal(textoParaTarjeta('Usá `/vincular` y *esto*'), 'Usá <b>/vincular</b> y <b>esto</b>')
+  assert.equal(textoParaTarjeta('a < b & c > d'), 'a &lt; b &amp; c &gt; d')
+  assert.equal(textoParaTarjeta('<script>x</script>'), '&lt;script&gt;x&lt;/script&gt;')
+  assert.equal(textoParaTarjeta('linea 1\nlinea 2'), 'linea 1<br>linea 2')
+  assert.equal(textoParaTarjeta(undefined), '')
+})
+
+test('/vincular de alguien que NO es administrador: el comando devuelve un error (que la ruta muestra como dialogo)', async () => {
+  const r = await departamentosParaVincular({ db: {} }, { space: 'spaces/AAA', extUser: { email: 'nlencinas@dcmanagement.com.ar', esDireccion: false } })
+  assert.match(r.error, /Solo un administrador puede vincular/)
+  assert.equal(r.departamentos, undefined)
+})

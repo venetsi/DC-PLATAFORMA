@@ -652,6 +652,42 @@ export function cardVincular(departamentosDisponibles) {
 // forma de agregar, sacar, o cambiar el dueño (ver vincularDepartamentos en
 // chat-comandos.js). A diferencia de los demas dialogos, el value de cada
 // item es directamente el id del departamento, no una tarea codificada.
+// Aviso (error, falta de permiso, "no hay nada") como DIALOGO.
+//
+// Los comandos /vincular, /asignar, /derivar, /apuntar, /tildar, /pago y
+// /tildarpagos estan registrados en la consola de Chat para abrir un dialogo: Chat
+// espera como respuesta un dialogo (action.navigations). Cuando se les contestaba
+// con un mensaje de texto -- por ejemplo "Solo un administrador puede vincular" --
+// Chat lo mostraba como un error del servidor ("intente nuevamente"), sin leer el
+// texto (2026-10-06: /vincular de alguien que no es administrador). Por eso el
+// aviso va dentro de un dialogo.
+//
+// Los textos de los comandos usan el formato de mensajes de Chat (*negrita*,
+// `codigo`); una tarjeta usa HTML basico, asi que se convierte.
+export function textoParaTarjeta(texto) {
+  const seguro = String(texto ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return seguro
+    .replace(/`([^`\n]+)`/g, '<b>$1</b>')
+    .replace(/\*([^*\n]+)\*/g, '<b>$1</b>')
+    .replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,:;!?]|$)/g, '$1<i>$2</i>')
+    .replace(/\n/g, '<br>')
+}
+
+export function dialogoAviso(texto, { titulo = 'DC-PLATAFORMA' } = {}) {
+  return {
+    action: {
+      navigations: [
+        {
+          pushCard: {
+            header: { title: titulo },
+            sections: [{ widgets: [{ textParagraph: { text: textoParaTarjeta(texto) } }] }]
+          }
+        }
+      ]
+    }
+  }
+}
+
 export const ACCION_VINCULAR_SUBMIT = 'vincular_submit'
 export const CAMPO_DEPARTAMENTOS_VINCULAR = 'departamentos_vincular'
 
