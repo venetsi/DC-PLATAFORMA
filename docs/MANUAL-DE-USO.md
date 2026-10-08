@@ -35,24 +35,36 @@ plataforma te reconoce igual y entrás con tu cuenta nueva.
 
 ## Qué podés hacer según tu rol
 
+Hay dos reglas simples:
+
+- **Ver**: cualquier persona de la organización puede **ver** la agenda y las tareas de
+  **cualquier** departamento (en Mi agenda, en Chat y en las pantallas de oficina), sin
+  poder cambiarlas.
+- **Modificar**: solo quienes **son del departamento** (están en su grupo de Google)
+  modifican sus tareas. Las de otro departamento las ves, pero no las tocás.
+
 Tu rol sale del grupo de Google de cada departamento. Si estás en varios grupos,
 tenés un rol en cada uno.
 
 | Rol en el grupo | Qué puede hacer en ese departamento |
 |---|---|
-| **Miembro** (MEMBER) | Ver agendas y tareas. Marcarlas hechas o "no aplica", tomarlas y dejar notas |
-| **Manager** (MANAGER) | Todo lo anterior + crear y editar tareas, moverlas de día, pasarlas a otra persona, ver los reportes |
+| **Miembro** (MEMBER) | **Todo lo de las tareas de su departamento**: marcarlas hechas o "no aplica", tomarlas, dejar notas, crearlas y editarlas, moverlas de día, pasarlas a otra persona |
+| **Manager** (MANAGER) | Todo lo anterior + ver los reportes de cumplimiento |
 | **Owner** (OWNER) | Todo lo anterior + desactivar y eliminar tareas, y configurar los avisos del departamento |
 | **Dirección** | Quien está en `depto-direccion@` ve y gestiona **todos** los departamentos, sin restricción |
 
 Si pasás el mouse sobre tu email, arriba a la derecha, ves tu rol en cada
-departamento. Lo que tu rol no permite directamente no aparece en pantalla.
+departamento. Lo que no podés hacer no aparece en pantalla.
 
 ## Mi agenda
 
-Es la pantalla principal. Si estás en varios departamentos, arranca mostrando
-**todos juntos**: cada tarea lleva una etiqueta de color con su departamento (ADM,
-AUD, TES…) y arriba está la referencia. Con el selector de arriba ves uno solo.
+Es la pantalla principal. **Siempre arranca con tus propios departamentos**, y vos podés
+**sumar los de otros** (ver es de toda la organización): con el selector de arriba
+(**Mis departamentos ▾**) elegís **con casillas qué agendas ver**, igual que en las
+pantallas de oficina: una, varias o todas (**Las mías**, **Todas** y **Ninguna** tildan
+o destildan de un golpe). Si ves más de una, cada tarea lleva una etiqueta de color con
+su departamento (ADM, AUD, TES…) y arriba está la referencia. Tu elección se recuerda en
+ese navegador.
 
 Cinco vistas, con los botones de arriba (la plataforma recuerda la última que usaste):
 
@@ -157,13 +169,13 @@ e historial (quién la marcó, notas, cambios de fecha). Desde ahí, según tu r
 - **No aplica**: para cuando esa vez no correspondía (local cerrado, feriado, mes
   sin movimiento). Pide el motivo. No cuenta ni como hecha ni como atrasada, y
   tampoco se puede deshacer.
-- **Cambiar fecha** (Manager y Owner): mueve **solo esa ocurrencia** a otro día. No
+- **Cambiar fecha** (quienes son del departamento): mueve **solo esa ocurrencia** a otro día. No
   cambia el resto de la agenda ni otros locales. Si la tarea está compartida con
   otro departamento, se mueve en los dos.
-- **Editar** (Manager y Owner): cambiar el nombre de la tarea (en todos sus
+- **Editar** (quienes son del departamento): cambiar el nombre de la tarea (en todos sus
   locales), el responsable en ese local, o la frecuencia en ese local.
 
-### Mover y crear desde el calendario (Manager y Owner)
+### Mover y crear desde el calendario (quienes son del departamento)
 
 - En **Semana** o **Calendario**, **arrastrá** una tarea pendiente o atrasada a otro día
   para moverla. En Semana también podés arrastrar desde **Atrasadas** para
@@ -192,10 +204,11 @@ Con **Solo las que tengo asignadas** ves únicamente las que están a tu nombre.
 Acá se ven y se gestionan todas las tareas de cada departamento: dónde se hace
 (toda la empresa, un grupo de locales, o locales sueltos), cuándo, quién es
 responsable, cuándo es la próxima y si hay atrasadas. Las que necesitan atención
-aparecen primero. A la izquierda elegís el departamento; **Buscar** filtra por
+aparecen primero. A la izquierda tildás los departamentos que querés ver: arranca en los tuyos y podés
+sumar otros (**Los míos** y **Todos** te llevan de una a cada selección); **Buscar** filtra por
 tarea, local o grupo.
 
-Siendo Miembro la ves en modo lectura. Siendo Manager u Owner:
+De los departamentos que no son tuyos la ves en modo lectura. De los tuyos:
 
 - **+ Nueva tarea**: se crea en un solo paso. Completás qué, dónde, cuándo,
   quién y, si querés, la **urgencia** (🔴 o 🟢), y una frase abajo te dice exactamente qué se va a crear antes de
@@ -346,7 +359,7 @@ sola.
      pantalla de conexión.
 4. Revisá que el código y el equipo ("pedida hace 1 min desde Chrome en Android
    TV") sean los de la TV que tenés adelante.
-5. Elegí qué agendas muestra (una o varias), **qué vista** (Semana, Tablero o
+5. Elegí qué agendas muestra (arrancan tildadas las tuyas; sumá otras si querés), **qué vista** (Semana, Tablero o
    Calendario), ponele un nombre (por ejemplo, *TV Tesorería*) y tocá **Conectar**.
 
 **Listo:** en unos segundos la TV deja el QR y pasa sola a la agenda. Queda conectada
@@ -357,9 +370,8 @@ Cosas a tener en cuenta:
 - El código dura 10 minutos. Si nadie lo usa, la TV muestra uno nuevo sola.
 - Si el código que ves en el celular no es el de tu TV, tocá **No reconozco esta
   pantalla**: se rechaza y la TV pide otro código.
-- Cualquiera que vea una agenda la puede poner en una TV, y la TV muestra lo que
-  **vos** podés ver: si dejás de ver un departamento, la TV deja de mostrarlo. Por eso
-  conectala solo si tenés la pantalla adelante.
+- Cualquiera puede poner la agenda de cualquier departamento en una TV (ver es de toda
+  la organización). Por eso conectala solo si tenés la pantalla adelante.
 - Si una TV conectada vuelve a mostrar el QR, la desconectaron (o quien la conectó ya
   no ve esas agendas): conectala de nuevo con estos mismos pasos.
 
@@ -497,11 +509,13 @@ tarea: con una parte alcanza, y si hay varias parecidas te pregunta cuál.
 | `/asignar` | `/tomar` con formulario | Miembro |
 | `/nota cierre: hablé con el proveedor` | Deja un comentario en el historial | Miembro |
 | `/apuntar` | `/nota` con formulario | Miembro |
-| `/pasar cierre: juan@dcsmart.app` | Se la pasa a otra persona | Manager |
-| `/derivar` | `/pasar` con formulario | Manager |
+| `/pasar cierre: juan@dcsmart.app` | Se la pasa a otra persona | Miembro |
+| `/derivar` | `/pasar` con formulario | Miembro |
 
-`/marcar` y `/tildar` son los únicos que dan la tarea por hecha: `/tomar` y `/pasar`
-solo cambian quién se encarga. Si la tarea espera a otra sin hacer, se marca igual
+Todos estos comandos funcionan **solo sobre las tareas de tu departamento** (en un Space
+que cubre varios, ves las de todos pero modificás las tuyas; el Space de Dirección es la
+excepción). `/marcar` y `/tildar` son los únicos que dan la tarea por hecha: `/tomar` y
+`/pasar` solo cambian quién se encarga. Si la tarea espera a otra sin hacer, se marca igual
 y te avisa. Si alguien ya la había marcado, te dice quién.
 
 **Pagos de dcsmart**
@@ -518,14 +532,12 @@ y te avisa. Si alguien ya la había marcado, te dice quién.
 |---|---|
 | `/buscar cuál es la política de viáticos` | Gemini responde **solo** con los documentos cargados para el departamento de **ese Space** y los generales, y dice de qué documento salió. En un Space sin vincular (o donde no podés operar) busca solo en los generales y te lo avisa; en tu chat privado con la app usa los de tus departamentos. Si tarda más de ~20 segundos, el mensaje te dice que tardó demasiado: probá de nuevo |
 
-**Para vincular Spaces** (Manager u Owner de un departamento, y Dirección)
+**Para vincular Spaces** (cualquier persona)
 
 | Comando | Qué hace |
 |---|---|
-| `/vincular` | Elegir qué departamento(s) cubre este Space. Un Manager u Owner ve y cambia **solo los suyos**; lo que el Space ya cubre y no es suyo queda como está. Dirección vincula cualquiera |
-| `/desvincular` | Que el Space deje de cubrir departamentos. Un Manager u Owner saca solo los suyos |
-
-Si lo escribe un Miembro, un diálogo le avisa que necesita ser Manager u Owner.
+| `/vincular` | Elegir qué departamento(s) cubre este Space. **Cualquiera puede agregar** un departamento (menos Dirección, que es de los administradores); **sacar** uno también (Dirección solo la saca un administrador: se conserva y el formulario te lo avisa) |
+| `/desvincular` | Que el Space deje de cubrir departamentos (todos menos Dirección, que solo la saca un administrador) |
 
 **De administración** (solo Dirección)
 
@@ -537,7 +549,7 @@ Si lo escribe un Miembro, un diálogo le avisa que necesita ser Manager u Owner.
 ### Spaces de Chat
 
 - **Vincular un Space**: crear el Space, agregar el grupo `depto-<área>@dcsmart.app`
-  y la app **DC-PLATAFORMA**, y escribir `/vincular` para elegir el departamento (lo puede hacer el Manager u Owner del departamento, o Dirección).
+  y la app **DC-PLATAFORMA**, y escribir `/vincular` para elegir el departamento (lo puede hacer cualquiera).
 - **Un Space para varios departamentos**: en `/vincular` se tildan varios. Los
   comandos muestran todo junto, y cada línea dice de qué departamento es. Un
   departamento puede estar en varios Spaces.
@@ -561,9 +573,12 @@ departamentos y te lo aclara.
 No: marcar hecha y "no aplica" son definitivos, por eso piden confirmación. Si fue
 un error, avisale a Dirección.
 
-**No veo Reportes (o no puedo crear tareas).**
-Tu rol en el grupo es Miembro. Si necesitás más, pedile al Owner de tu grupo que te
-haga Manager.
+**No veo Reportes.**
+Los reportes de cumplimiento los ven los Manager y Owner del grupo. Si los necesitás,
+pedile al Owner de tu grupo que te haga Manager.
+
+**No puedo marcar ni editar una tarea.**
+Es de otro departamento: la ves, pero solo la modifican quienes son de ese departamento.
 
 **No puedo entrar.**
 No estás en ningún grupo `depto-*`. Pedí que te agreguen; en unos 15 minutos entrás.
@@ -582,8 +597,8 @@ Sí: cada local tiene su propia agenda. En Agendas, tildá solo ese local y usá
 **Cambiar cuándo**.
 
 **Mi departamento no recibe los avisos de Chat.**
-Le falta un Space vinculado. Sus atrasadas igual escalan a Dirección. Pedile al
-Manager u Owner del departamento (o a Dirección) que escriba `/vincular` en el Space del departamento. Si el Space ya
+Le falta un Space vinculado. Sus atrasadas igual escalan a Dirección. Escribí
+`/vincular` en el Space del departamento (o pedile a alguien del equipo). Si el Space ya
 estaba vinculado y dejó de recibir, puede que hayan sacado la app: el Space se
 desvincula y el resumen de los lunes de Dirección lo lista como «Con tareas pero
 sin Space donde recibir avisos». Si en cambio el aviso falló un día (por ejemplo,

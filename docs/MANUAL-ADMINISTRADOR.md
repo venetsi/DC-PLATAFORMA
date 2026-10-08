@@ -90,18 +90,24 @@ pero dcsmart todavía puede mandar el viejo en el ticket.
 
 Cada persona tiene, en cada departamento, el **rol que tiene en su grupo**
 `depto-<slug>@` (MEMBER, MANAGER u OWNER). Se cambia en Google Groups o en la
-consola de admin y rige en unos 15 minutos. Decidido el 27/09/2026:
+consola de admin y rige en unos 15 minutos. **Decidido el 08/10/2026** (reemplaza lo del 27/09):
 
-| Acción (en ese departamento) | MEMBER | MANAGER | OWNER |
-|---|---|---|---|
-| Ver agendas y tareas (Mi agenda, Mis tareas, Agendas, Chat) | ✅ | ✅ | ✅ |
-| Marcar hecha / No aplica; en Chat `/marcar`, `/tildar`, `/tomar`, `/nota` | ✅ | ✅ | ✅ |
-| Crear y editar tareas, cambiar agenda y responsable, duplicar | ❌ | ✅ | ✅ |
-| Mover una tarea de día (arrastrar o Cambiar fecha) | ❌ | ✅ | ✅ |
-| Pasar una tarea a otra persona (`/pasar`, `/derivar`) | ❌ | ✅ | ✅ |
-| Ver Reportes | ❌ | ✅ | ✅ |
-| Desactivar y eliminar tareas | ❌ | ❌ | ✅ |
-| Avisos del departamento (webhook, umbrales) | ❌ | ❌ | ✅ |
+- **Ver** es de toda la organización: cualquier persona activa ve la agenda y las tareas de
+  **cualquier** departamento (Mi agenda, Agendas, Chat, pantallas de oficina), solo lectura.
+  Para entrar a la plataforma igual hay que estar en algún grupo `depto-*`.
+- **Modificar** es solo de quienes son del departamento (cualquier rol de su grupo). La
+  excepción es el Space de Dirección: ahí cualquier persona activa de ese Space opera todo.
+
+| Acción (en ese departamento) | De otro depto. | MEMBER | MANAGER | OWNER |
+|---|---|---|---|---|
+| Ver agendas y tareas (Mi agenda, Mis tareas, Agendas, Chat, TV) | ✅ | ✅ | ✅ | ✅ |
+| Marcar hecha / No aplica; en Chat `/marcar`, `/tildar`, `/tomar`, `/nota` | ❌ | ✅ | ✅ | ✅ |
+| Crear y editar tareas, cambiar agenda y responsable, duplicar | ❌ | ✅ | ✅ | ✅ |
+| Mover una tarea de día (arrastrar o Cambiar fecha) | ❌ | ✅ | ✅ | ✅ |
+| Pasar una tarea a otra persona (`/pasar`, `/derivar`) | ❌ | ✅ | ✅ | ✅ |
+| Ver Reportes | ❌ | ❌ | ✅ | ✅ |
+| Desactivar y eliminar tareas | ❌ | ❌ | ❌ | ✅ |
+| Avisos del departamento (webhook, umbrales) | ❌ | ❌ | ❌ | ✅ |
 
 **Dirección y super admin, sin restricción**:
 
@@ -116,9 +122,9 @@ esAdminGlobal(usuario) = usuario.es_admin_global || usuario.esDireccion
   Tareas del `super_admin` de dcsmart. Entra aunque no esté en ningún grupo.
 - Solo Dirección / super admin: crear departamentos, **Releer Google Groups**,
   **Documentos** (`/admin/repositorios`) y `/departamentos` en Chat. `/vincular` y
-  `/desvincular` también los puede usar el **Manager u Owner de un departamento**,
-  pero solo sobre **sus** departamentos (nunca Dirección): lo demás que cubra el
-  Space no se toca.
+  `/desvincular` **no están bloqueados**: cualquier persona activa puede **agregar y sacar**
+  un departamento de un Space, excepto Dirección (solo administradores, porque un Space de
+  Dirección opera todos los departamentos), que se conserva aunque se destilde.
 - En Chat, el **Space de Dirección** opera sobre todos los departamentos para
   quien escriba desde ahí (el control es formar parte del Space).
 - El atajo de desarrollo `admin@dcsmart.app` solo funciona con el login de
@@ -195,9 +201,9 @@ todas las pantallas y sus miembros dejan de tenerlo entre sus departamentos.
 ## 4. Agendas (`/agendas`)
 
 Reemplaza a la vieja pantalla "Tareas" (`/admin/tareas` redirige acá). Entra
-cualquier usuario con departamento: un MEMBER la ve en modo lectura; crear y
-editar pide MANAGER; desactivar, eliminar y los avisos del departamento, OWNER
-(ver §1).
+cualquier usuario con departamento: ve todos los departamentos en modo lectura; crear y
+editar es de quienes son del departamento; desactivar, eliminar y los avisos del
+departamento, OWNER (ver §1).
 
 ### La pantalla
 
@@ -381,7 +387,7 @@ que una vencida de fin de semana no quede sin mostrarse. Sábado y domingo la vi
 arranca en la semana siguiente (el kiosko, en cambio, sigue mostrando la
 semana en curso aunque sea fin de semana).
 
-**Semana y Calendario, para MANAGER y OWNER**:
+**Semana y Calendario, para quienes son del departamento**:
 
 - **Arrastrar** una tarea pendiente o atrasada a otro día = Cambiar fecha de
   esa ocurrencia, con un aviso de **Deshacer** (15 segundos). En Semana se
@@ -396,11 +402,11 @@ esté pendiente o atrasada:
 - **Marcar hecha** (MEMBER) — definitivo, con confirmación.
 - **No aplica** (MEMBER) — con motivo obligatorio; no cuenta ni como hecha ni
   como atrasada. Definitivo.
-- **Cambiar fecha** (MANAGER) — mueve **solo esa ocurrencia** a otro día (no
+- **Cambiar fecha** (del departamento) — mueve **solo esa ocurrencia** a otro día (no
   toca el resto de la serie ni otros locales). Si la tarea está compartida, se
   mueve también en los otros departamentos. Queda en el historial:
   *REPROGRAMADA de <fecha> a <fecha> por <email>*.
-- **Editar** (MANAGER del departamento dueño) — nombre de la tarea (en todos
+- **Editar** (del departamento dueño) — nombre de la tarea (en todos
   sus locales), responsable y frecuencia de ese local.
 
 Mi agenda muestra "Actualizando…" mientras carga, y volver a algo ya visto es
@@ -572,8 +578,8 @@ todos ("modo todo").
 | `/equipo` | | rápido | Quién tiene qué y cuánto atraso |
 | `/departamentos` | | rápido, **solo admin** | Panorama de configuración (abajo) |
 | `/spaces` | `/espacios`, `/vinculos` | barra (ID 24) | Mapa de Spaces con el nombre que tienen en Chat (si Chat no lo da, el final del código): propios, propios con otros departamentos, combinados, solo webhook y sin Space. Solo lee la base. Un no admin ve solo lo del Space donde escribe |
-| `/vincular` | | barra + diálogo, **admin o Manager/Owner** | Qué departamento(s) cubre este Space. Manager/Owner: solo los suyos (`esVinculable` en `chat-comandos.js`) |
-| `/desvincular` | | barra, **admin o Manager/Owner** | Deja de cubrir departamentos en este Space (Manager/Owner: solo los suyos) |
+| `/vincular` | | barra + diálogo, **cualquiera** | Qué departamento(s) cubre este Space. Agregar y sacar: cualquiera menos Dirección (solo admin) (`puedeAgregarDepartamento` / `puedeQuitarDepartamento` en `chat-comandos.js`) |
+| `/desvincular` | | barra, **cualquiera** | Saca del Space todos los departamentos menos Dirección (solo admin) |
 | `/marcar` | `/hecha` | barra | Da una tarea por hecha |
 | `/tomar` | | barra | La pone a tu nombre |
 | `/pasar` | | barra | Se la pasa a otra persona |
@@ -589,9 +595,11 @@ todos ("modo todo").
 | `/tildarpagos` | | barra + diálogo | Marca varios pagos como resueltos |
 | `/buscar` | | barra | Pregunta libre, respondida por Gemini (§8) |
 
-Los de acción siguen el rol del grupo (§1): marcar, tildar, tomar y anotar
-alcanzan con MEMBER; `/pasar` y `/derivar` piden MANAGER u OWNER. Desde el Space
-de Dirección, todo.
+Los de lectura los puede usar cualquier persona activa sobre los departamentos del Space.
+Los de acción (marcar, tildar, tomar, anotar, pasar) funcionan **solo sobre las tareas de
+los departamentos de la persona** (MEMBER o más; §1); en un Space que cubre varios
+departamentos se ven todas pero se modifican las propias. Desde el Space de Dirección,
+todo.
 
 Si alguien escribe desde una cuenta sin acceso, Chat le dice cuál cuenta
 detectó y qué hacer: *"No encuentro a X en la plataforma…"* (no está en

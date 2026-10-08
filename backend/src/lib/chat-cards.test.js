@@ -54,10 +54,12 @@ test('textoParaTarjeta: *negrita* y `codigo` pasan a HTML de tarjeta, y lo demas
   assert.equal(textoParaTarjeta(undefined), '')
 })
 
-test('/vincular de alguien sin permiso (ni administrador ni Manager/Owner): el comando devuelve un error (que la ruta muestra como dialogo)', async () => {
-  const db = { departamento: { findMany: async () => [{ id: 'cos', nombre: 'Costos', slug: 'costos' }] } }
+test('/vincular: cualquier persona activa recibe el formulario (ya no se bloquea); el aviso queda para cuando no hay departamentos', async () => {
   const miembro = { email: 'x@dcmanagement.com.ar', esDireccion: false, departamentos: ['cos'], roles: { cos: 'MEMBER' } }
+  const db = { departamento: { findMany: async () => [{ id: 'cos', nombre: 'Costos', slug: 'costos' }], findUnique: async () => null }, departamentoCompartidoEnSpace: { findMany: async () => [] } }
   const r = await departamentosParaVincular({ db }, { space: 'spaces/AAA', extUser: miembro })
-  assert.match(r.error, /administrador, o Manager u Owner/)
-  assert.equal(r.departamentos, undefined)
+  assert.equal(r.error, undefined)
+  assert.deepEqual(r.departamentos.map((d) => d.id), ['cos'])
+  const vacio = await departamentosParaVincular({ db: { departamento: { findMany: async () => [], findUnique: async () => null }, departamentoCompartidoEnSpace: { findMany: async () => [] } } }, { space: 'spaces/AAA', extUser: miembro })
+  assert.match(vacio.error, /No hay departamentos para vincular/)
 })

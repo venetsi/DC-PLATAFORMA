@@ -19,8 +19,12 @@ export default function Agendas() {
   const { esAdminGlobal, departamentos: propios } = useAuthStore()
   const { puede, enAlguno, filtrar } = usePermisos()
   const puedeConfigurar = enAlguno('administrar')
-  const verTodos = esAdminGlobal || propios.length > 1
-  const [idDepto, setIdDepto] = useState(verTodos ? '' : propios[0]?.id || '')
+  // Por defecto, los departamentos propios; se pueden sumar otros (ver es de toda la
+  // organizacion). null = todos (si la persona no es de ninguno).
+  const idsPropios = propios.map((d) => d.id)
+  const [elegidos, setElegidos] = useState(idsPropios.length ? idsPropios : null)
+  const idDepto = elegidos && elegidos.length === 1 ? elegidos[0] : ''
+  const claveElegidos = elegidos === null ? 'todos' : elegidos.join(',')
   const [data, setData] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
@@ -40,7 +44,14 @@ export default function Agendas() {
     const pedido = ++ultimoPedido.current
     setCargando(true)
     try {
-      const r = await agendasApi.listar({ departamento: idDepto, inactivas: verInactivas })
+      let r
+      if (elegidos === null) r = await agendasApi.listar({ inactivas: verInactivas })
+      else if (!elegidos.length) r = { departamentos: data?.departamentos || [], tareas: [] }
+      else {
+        // Uno por departamento elegido, en paralelo, y se juntan.
+        const rs = await Promise.all(elegidos.map((id) => agendasApi.listar({ departamento: id, inactivas: verInactivas })))
+        r = { departamentos: rs[0].departamentos, tareas: rs.flatMap((x) => x.tareas) }
+      }
       if (pedido === ultimoPedido.current) { setData(r); setError('') }
     } catch (err) {
       if (pedido === ultimoPedido.current) setError(err.response?.data?.error || 'No se pudieron cargar las agendas')
@@ -50,7 +61,7 @@ export default function Agendas() {
   }
   const cargarConfig = () => (puedeConfigurar ? departamentosApi.listar().then(setDeptosConfig) : Promise.resolve())
 
-  useEffect(() => { cargar() }, [idDepto, verInactivas])
+  useEffect(() => { cargar() }, [claveElegidos, verInactivas])
   useEffect(() => {
     localesApi.listar().then(setLocales)
     usuariosApi.listar().then(setUsuarios)
@@ -124,7 +135,18 @@ export default function Agendas() {
     await cargar()
   }
 
-  const titulo = idDepto ? nombreDepto(idDepto) : 'Todos los departamentos'
+  const todosLosIds = deptos.map((d) => d.id)
+  const estaElegido = (id) => elegidos === null || elegidos.includes(id)
+  function alternarDepto(id) {
+    const base = elegidos ?? todosLosIds
+    setElegidos(base.includes(id) ? base.filter((x) => x !== id) : [...base, id])
+  }
+  const sonLosPropios = elegidos !== null && idsPropios.length > 0 && elegidos.length === idsPropios.length && idsPropios.every((id) => elegidos.includes(id))
+  const titulo = elegidos === null || elegidos.length === todosLosIds.length && todosLosIds.length > 0 ? 'Todos los departamentos'
+    : !elegidos.length ? 'Ningún departamento elegido'
+    : idDepto ? nombreDepto(idDepto)
+    : sonLosPropios ? 'Mis departamentos'
+    : `${elegidos.length} departamentos`
 
   return (
     <div className="agendas">
@@ -138,13 +160,12 @@ export default function Agendas() {
 
       <div className="agendas-grid">
         <nav className="agendas-deptos" aria-label="Departamentos">
-          {verTodos && (
-            <button className={idDepto === '' ? 'depto sel' : 'depto'} onClick={() => setIdDepto('')}>
-              <span>Todos</span><span className="tenue">{deptos.reduce((s, d) => s + d.tareas, 0)}</span>
-            </button>
-          )}
+          <div className="agendas-deptos-acciones">
+            {idsPropios.length > 0 && !sonLosPropios && <button type="button" className="btn btn-secondary btn-chico" onClick={() => setElegidos(idsPropios)}>Los míos</button>}
+            <button type="button" className="btn btn-secondary btn-chico" onClick={() => setElegidos(null)}>Todos</button>
+          </div>
           {deptos.map((d) => (
-            <button key={d.id} className={idDepto === d.id ? 'depto sel' : 'depto'} onClick={() => setIdDepto(d.id)}>
+            <button key={d.id} className={estaElegido(d.id) ? 'depto sel' : 'depto'} aria-pressed={estaElegido(d.id)} onClick={() => alternarDepto(d.id)} title="Sumar o sacar de lo que ves">
               <span>{d.nombre}</span><span className="tenue">{d.tareas}</span>
             </button>
           ))}
@@ -183,7 +204,7 @@ export default function Agendas() {
               onCreada={async (r) => {
                 setPanel(null)
                 avisar(mensajeDeCreacion(r), r.errores.length ? 'mal' : 'ok')
-                if (idDepto && idDepto !== r.tarea.id_departamento) setIdDepto(r.tarea.id_departamento)
+                if (elegidos && !elegidos.includes(r.tarea.id_departamento)) setElegidos([...elegidos, r.tarea.id_departamento])
                 else await cargar()
                 setAbierta(r.tarea.id)
               }}

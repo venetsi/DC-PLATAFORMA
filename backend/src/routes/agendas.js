@@ -40,7 +40,8 @@ async function localesDelAlcance(db, alcance) {
 export default async function agendasRoutes(fastify) {
   async function visiblesPara(usuario) {
     return fastify.db.departamento.findMany({
-      where: { activo: true, ...(esAdminGlobal(usuario) ? {} : { id: { in: departamentosDe(usuario) } }) },
+      // Ver las agendas es de toda la organizacion (solo lectura); editar se chequea aparte.
+      where: { activo: true },
       select: { id: true, nombre: true, slug: true, id_calendar_google: true },
       orderBy: { nombre: 'asc' }
     })

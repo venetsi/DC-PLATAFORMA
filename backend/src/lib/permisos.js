@@ -28,19 +28,21 @@ export const DEV_ADMIN_EMAIL = 'admin@dcsmart.app'
 // Roles del Google Group, de menor a mayor.
 export const NIVEL_ROL = { MEMBER: 1, MANAGER: 2, OWNER: 3 }
 
-// Rol minimo que pide cada accion (decision del usuario, 2026-09-27):
-//   MEMBER  -> ve agendas y tareas de sus grupos y las marca (hecha, no
-//              aplica, tomar, nota).
-//   MANAGER -> ademas crea y edita tareas y agendas (incluye moverlas de dia y
-//              pasarlas a otra persona) y ve los reportes.
-//   OWNER   -> todo lo de sus grupos: ademas desactiva/elimina tareas y
-//              configura los avisos del departamento.
+// Que puede hacer cada quien (decision del usuario, 2026-10-08):
+//   VER      -> cualquier persona activa de la organizacion ve la agenda y las
+//               tareas de CUALQUIER departamento (solo lectura).
+//   MEMBER   -> quienes son del departamento lo modifican todo en lo suyo: marcan
+//               (hecha, no aplica, tomar, nota) y tambien crean y editan tareas y
+//               agendas, las mueven de dia y las pasan a otra persona.
+//   MANAGER  -> ademas ve los reportes de cumplimiento.
+//   OWNER    -> ademas desactiva/elimina tareas y configura los avisos del
+//               departamento (lo irreversible y la configuracion).
 // Crear departamentos, releer los grupos y los repositorios de documentos
 // siguen siendo solo de Direccion / admin.
 export const ACCIONES = {
-  ver: 'MEMBER',
+  ver: 'TODOS',
   marcar: 'MEMBER',
-  editar: 'MANAGER',
+  editar: 'MEMBER',
   reportes: 'MANAGER',
   administrar: 'OWNER'
 }
@@ -97,6 +99,8 @@ export function rolEn(usuario, idDepartamento) {
 export function puede(usuario, accion, idDepartamento) {
   const minimo = ACCIONES[accion]
   if (!minimo) throw new Error(`accion de permiso desconocida: ${accion}`)
+  // Ver no depende del departamento: cualquier persona activa ve todo.
+  if (accion === 'ver') return !!usuario
   const rol = rolEn(usuario, idDepartamento)
   return !!rol && NIVEL_ROL[rol] >= NIVEL_ROL[minimo]
 }
@@ -104,6 +108,7 @@ export function puede(usuario, accion, idDepartamento) {
 // Ids de los departamentos propios donde puede hacer `accion`. Para un admin
 // devuelve null = "todos" (el llamador decide como listar todos).
 export function departamentosCon(usuario, accion) {
-  if (esAdminGlobal(usuario)) return null
+  // Admin, y cualquiera para VER: null = todos.
+  if (esAdminGlobal(usuario) || accion === 'ver') return null
   return departamentosDe(usuario).filter((id) => puede(usuario, accion, id))
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { pantallasApi } from '../api/recursos.js'
+import { useAuthStore } from '../store/authStore.js'
 
 // Pantallas de TV (kiosko). Una TV sin conectar abre tv.dcsmart.app y muestra
 // un QR con un codigo; el QR trae a esta pantalla con ?codigo=, y desde aca
@@ -85,6 +86,7 @@ function ElegirDepartamentos({ opciones, seleccion, onCambio }) {
 }
 
 function ConectarPantalla({ codigoInicial, onListo, onCerrar }) {
+  const idsPropios = useAuthStore((st) => st.departamentos).map((d) => d.id)
   const [codigo, setCodigo] = useState(codigoInicial)
   const [pedido, setPedido] = useState(null) // respuesta de GET /pantallas/conexion/:codigo + recibido
   const [error, setError] = useState('')
@@ -103,7 +105,9 @@ function ConectarPantalla({ codigoInicial, onListo, onCerrar }) {
     try {
       const r = await pantallasApi.conexion(limpio)
       setPedido({ ...r, recibido: Date.now() })
-      setSeleccion(new Set(r.departamentos.length === 1 ? [r.departamentos[0].id] : []))
+      // Por defecto, los departamentos propios (o el unico que haya); se pueden sumar otros.
+      const propios = r.departamentos.filter((d) => idsPropios.includes(d.id)).map((d) => d.id)
+      setSeleccion(new Set(propios.length ? propios : r.departamentos.length === 1 ? [r.departamentos[0].id] : []))
       setNombre('')
     } catch (err) {
       setPedido(null)

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { departamentosDelSpace, vincularDepartamentos, departamentosParaVincular, ejecutarComando, esVinculable, TEXTO_SIN_PERMISO_VINCULAR } from './chat-comandos.js'
+import { departamentosDelSpace, vincularDepartamentos, departamentosParaVincular, ejecutarComando, puedeAgregarDepartamento, puedeQuitarDepartamento, TEXTO_SIN_DEPARTAMENTOS_PARA_VINCULAR } from './chat-comandos.js'
 
 // Base falsa con lo justo que usan /vincular y departamentosDelSpace.
 function baseFalsa(departamentos, compartidos = []) {
@@ -70,98 +70,85 @@ test('/vincular: sin tildes, un Space combinado sin dueño queda sin nada', asyn
   assert.equal(db.deptos[0].chat_space_name, 'spaces/AUD')
 })
 
-// ── Manager / Owner de un departamento (2026-10-06) ──────────────────────────
-// Vinculan y desvinculan SOLO lo suyo; Dirección y el resto son del administrador.
+// ── Vincular sin bloquear a nadie (2026-10-08) ────────────────────────────────
+// AGREGAR un departamento a un Space: cualquier persona activa, salvo Dirección.
+// SACARLO: administrador o Manager/Owner de ese departamento.
 
-const gerente = (rol, ...ids) => ({ email: 'g@x', departamentos: ids, roles: Object.fromEntries(ids.map((id) => [id, rol])), esDireccion: false })
-const miembro = gerente('MEMBER', 'cos')
+const persona = (rol, ...ids) => ({ email: 'g@x', departamentos: ids, roles: Object.fromEntries(ids.map((id) => [id, rol])), esDireccion: false })
+const miembro = persona('MEMBER', 'cos')
 const baseDeptos = () => baseFalsa([
   { id: 'cos', nombre: 'Costos', slug: 'costos' },
   { id: 'aud', nombre: 'Auditoría', slug: 'auditoria' },
   { id: 'dir', nombre: 'Dirección', slug: 'direccion' }
 ])
 
-test('esVinculable: administrador todo; Manager/Owner lo suyo; Miembro nada; Dirección nunca para quien no es administrador', () => {
+test('puedeAgregar / puedeQuitar: cualquiera agrega y saca cualquier departamento, menos Dirección (solo administradores)', () => {
   const cos = { id: 'cos', slug: 'costos' }
+  const aud = { id: 'aud', slug: 'auditoria' }
   const dir = { id: 'dir', slug: 'direccion' }
-  assert.ok(esVinculable(admin, cos) && esVinculable(admin, dir))
-  assert.ok(esVinculable(gerente('MANAGER', 'cos'), cos))
-  assert.ok(esVinculable(gerente('OWNER', 'cos'), cos))
-  assert.ok(!esVinculable(gerente('OWNER', 'cos'), { id: 'aud', slug: 'auditoria' }))
-  assert.ok(!esVinculable(miembro, cos))
-  // aunque figure como Owner de un departamento llamado Dirección sin ser Direccion de verdad
-  assert.ok(!esVinculable(gerente('OWNER', 'dir'), dir))
+  assert.ok(puedeAgregarDepartamento(admin, dir) && puedeQuitarDepartamento(admin, dir))
+  for (const u of [miembro, persona('MANAGER', 'cos'), persona('OWNER', 'aud'), persona('MEMBER')]) {
+    assert.ok(puedeAgregarDepartamento(u, cos) && puedeAgregarDepartamento(u, aud))
+    assert.ok(puedeQuitarDepartamento(u, cos) && puedeQuitarDepartamento(u, aud))
+    assert.ok(!puedeAgregarDepartamento(u, dir) && !puedeQuitarDepartamento(u, dir))
+  }
+  assert.ok(!puedeAgregarDepartamento(persona('OWNER', 'dir'), dir))
 })
 
-test('/vincular (formulario): un Owner ve SOLO sus departamentos; un Miembro recibe el aviso de permiso', async () => {
+test('/vincular (formulario): cualquier persona ve todos los departamentos menos Dirección; el administrador, todos', async () => {
   const db = baseDeptos()
-  const r = await departamentosParaVincular(deps(db), { space: 'spaces/X', extUser: gerente('OWNER', 'cos') })
-  assert.deepEqual(r.departamentos.map((d) => d.id), ['cos'])
   const m = await departamentosParaVincular(deps(db), { space: 'spaces/X', extUser: miembro })
-  assert.equal(m.error, TEXTO_SIN_PERMISO_VINCULAR)
+  assert.deepEqual(m.departamentos.map((d) => d.id), ['aud', 'cos'])
+  assert.equal(m.error, undefined)
   const a = await departamentosParaVincular(deps(db), { space: 'spaces/X', extUser: admin })
   assert.equal(a.departamentos.length, 3)
+  const vacio = await departamentosParaVincular(deps(baseFalsa([])), { space: 'spaces/X', extUser: miembro })
+  assert.equal(vacio.error, TEXTO_SIN_DEPARTAMENTOS_PARA_VINCULAR)
 })
 
-test('/vincular: un Manager vincula su departamento a un Space', async () => {
+test('/vincular: un Miembro vincula cualquier departamento a un Space', async () => {
   const db = baseDeptos()
-  const r = await vincularDepartamentos(deps(db), { space: 'spaces/COSTOS', extUser: gerente('MANAGER', 'cos'), idsDepartamentos: ['cos'] })
-  assert.match(r, /queda vinculado a \*Costos\*/)
-  assert.equal(db.deptos.find((d) => d.id === 'cos').chat_space_name, 'spaces/COSTOS')
+  const r = await vincularDepartamentos(deps(db), { space: 'spaces/INFORMES', extUser: miembro, idsDepartamentos: ['aud', 'cos'] })
+  assert.match(r, /queda vinculado a \*Auditoría\*, \*Costos\*/)
+  assert.deepEqual((await departamentosDelSpace(db, 'spaces/INFORMES')).map((d) => d.id), ['aud', 'cos'])
 })
 
-test('/vincular: lo tildado que NO es suyo (formulario adulterado, o Dirección) se ignora', async () => {
+test('/vincular: Dirección no se vincula sin ser administrador, aunque el formulario la mande', async () => {
   const db = baseDeptos()
-  const r = await vincularDepartamentos(deps(db), { space: 'spaces/COSTOS', extUser: gerente('OWNER', 'cos'), idsDepartamentos: ['cos', 'aud', 'dir'] })
+  const r = await vincularDepartamentos(deps(db), { space: 'spaces/COSTOS', extUser: persona('OWNER', 'cos'), idsDepartamentos: ['cos', 'dir'] })
   assert.match(r, /\*Costos\*/)
-  assert.doesNotMatch(r, /Auditoría|Dirección/)
-  assert.equal(db.deptos.find((d) => d.id === 'aud').chat_space_name, null)
+  assert.doesNotMatch(r, /Dirección/)
   assert.equal(db.deptos.find((d) => d.id === 'dir').chat_space_name, null)
+  // El administrador si puede.
+  await vincularDepartamentos(deps(db), { space: 'spaces/DIR', extUser: admin, idsDepartamentos: ['dir'] })
+  assert.equal(db.deptos.find((d) => d.id === 'dir').chat_space_name, 'spaces/DIR')
 })
 
-test('/vincular: lo que el Space ya cubre y no es suyo se conserva; el solo puede agregar o sacar lo suyo', async () => {
+test('/vincular: cualquiera destilda y saca un departamento; Dirección se conserva (solo la saca un administrador)', async () => {
   const db = baseFalsa([
     { id: 'cos', nombre: 'Costos', slug: 'costos' },
-    { id: 'aud', nombre: 'Auditoría', slug: 'auditoria', chat_space_name: 'spaces/AUD' }
-  ])
-  const owner = gerente('OWNER', 'cos')
-  // Agrega Costos al Space de Auditoría: Auditoría sigue de dueño.
-  await vincularDepartamentos(deps(db), { space: 'spaces/AUD', extUser: owner, idsDepartamentos: ['cos'] })
-  assert.deepEqual((await departamentosDelSpace(db, 'spaces/AUD')).map((d) => d.id), ['aud', 'cos'])
-  assert.equal(db.deptos.find((d) => d.id === 'aud').chat_space_name, 'spaces/AUD')
-  // Destilda Costos: se saca solo Costos, Auditoría sigue.
-  await vincularDepartamentos(deps(db), { space: 'spaces/AUD', extUser: owner, idsDepartamentos: [] })
-  assert.deepEqual((await departamentosDelSpace(db, 'spaces/AUD')).map((d) => d.id), ['aud'])
-  // El formulario le muestra lo que no puede cambiar.
-  const form = await departamentosParaVincular(deps(db), { space: 'spaces/AUD', extUser: owner })
-  assert.deepEqual(form.ajenos, ['Auditoría'])
+    { id: 'aud', nombre: 'Auditoría', slug: 'auditoria', chat_space_name: 'spaces/AUD' },
+    { id: 'dir', nombre: 'Dirección', slug: 'direccion' }
+  ], [{ chat_space_name: 'spaces/AUD', id_departamento: 'cos' }, { chat_space_name: 'spaces/AUD', id_departamento: 'dir' }])
+  // Un Miembro destilda todo: salen Costos y Auditoría; Dirección se conserva.
+  await vincularDepartamentos(deps(db), { space: 'spaces/AUD', extUser: miembro, idsDepartamentos: [] })
+  assert.deepEqual((await departamentosDelSpace(db, 'spaces/AUD')).map((d) => d.id), ['dir'])
+  const form = await departamentosParaVincular(deps(db), { space: 'spaces/AUD', extUser: miembro })
+  assert.deepEqual(form.ajenos, ['Dirección'])
+  // El administrador si la saca.
+  await vincularDepartamentos(deps(db), { space: 'spaces/AUD', extUser: admin, idsDepartamentos: [] })
+  assert.deepEqual((await departamentosDelSpace(db, 'spaces/AUD')).map((d) => d.id), [])
 })
 
-test('/vincular: un Miembro no vincula nada aunque mande el formulario', async () => {
-  const db = baseDeptos()
-  const r = await vincularDepartamentos(deps(db), { space: 'spaces/X', extUser: miembro, idsDepartamentos: ['cos'] })
-  assert.equal(r, TEXTO_SIN_PERMISO_VINCULAR)
-  assert.equal(db.deptos.find((d) => d.id === 'cos').chat_space_name, null)
-})
-
-test('/desvincular: un Manager saca solo SU departamento; el administrador saca todo; un Miembro no puede', async () => {
+test('/desvincular: cualquiera saca los departamentos del Space salvo Dirección, que solo saca un administrador', async () => {
   const hacer = (db, extUser) => ejecutarComando({ db, log: { info() {}, warn() {}, error() {} } }, { comandoId: 6, texto: '/desvincular', space: 'spaces/AUD', extUser, email: 'x@x' })
-  // Manager de Costos en un Space compartido Auditoría (dueño) + Costos
-  let db = baseFalsa([{ id: 'cos', nombre: 'Costos', slug: 'costos' }, { id: 'aud', nombre: 'Auditoría', slug: 'auditoria', chat_space_name: 'spaces/AUD' }], [{ chat_space_name: 'spaces/AUD', id_departamento: 'cos' }])
-  const r = await hacer(db, gerente('MANAGER', 'cos'))
-  assert.match(r, /ya no cubre \*Costos\*/)
-  assert.match(r, /Sigue cubriendo \*Auditoría\*/)
-  assert.deepEqual((await departamentosDelSpace(db, 'spaces/AUD')).map((d) => d.id), ['aud'])
-  // Un Manager de Costos NO puede desvincular un Space que solo cubre Auditoría
-  const r2 = await hacer(db, gerente('MANAGER', 'cos'))
-  assert.match(r2, /no cubre ninguno de tus departamentos/)
-  assert.equal(db.deptos.find((d) => d.id === 'aud').chat_space_name, 'spaces/AUD')
-  // El dueño propio: se le saca el vinculo
-  db = baseFalsa([{ id: 'cos', nombre: 'Costos', slug: 'costos', chat_space_name: 'spaces/AUD' }])
-  await hacer(db, gerente('OWNER', 'cos'))
-  assert.equal(db.deptos[0].chat_space_name, null)
-  // Miembro
-  db = baseFalsa([{ id: 'cos', nombre: 'Costos', slug: 'costos', chat_space_name: 'spaces/AUD' }])
-  assert.match(await hacer(db, miembro), /tenés que ser administrador/)
-  assert.equal(db.deptos[0].chat_space_name, 'spaces/AUD')
+  let db = baseFalsa([{ id: 'cos', nombre: 'Costos', slug: 'costos' }, { id: 'aud', nombre: 'Auditoría', slug: 'auditoria', chat_space_name: 'spaces/AUD' }, { id: 'dir', nombre: 'Dirección', slug: 'direccion' }],
+    [{ chat_space_name: 'spaces/AUD', id_departamento: 'cos' }, { chat_space_name: 'spaces/AUD', id_departamento: 'dir' }])
+  const r = await hacer(db, miembro)
+  assert.match(r, /ya no cubre \*Auditoría\*, \*Costos\*/)
+  assert.match(r, /Sigue cubriendo \*Dirección\*, que solo un administrador puede sacar/)
+  assert.deepEqual((await departamentosDelSpace(db, 'spaces/AUD')).map((d) => d.id), ['dir'])
+  assert.match(await hacer(db, miembro), /ningún departamento que puedas sacar/)
+  await hacer(db, admin)
+  assert.deepEqual((await departamentosDelSpace(db, 'spaces/AUD')).map((d) => d.id), [])
 })

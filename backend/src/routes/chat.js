@@ -75,7 +75,8 @@ import {
   notaPorInstanceId,
   marcarVarias,
   personasActivas,
-  puedeOperarEnChat,
+  puedeModificarTarea,
+  avisoSoloDelDepartamento,
   departamentosDelSpace,
   departamentosParaVincular,
   vincularDepartamentos,
@@ -271,9 +272,10 @@ async function manejarComando(fastify, chatEvent) {
   if (comando === COMANDO_ASIGNAR || comando === COMANDO_DERIVAR || comando === COMANDO_APUNTAR) {
     const { departamento, departamentos, pendientes, porFallback, modoTodo, error } = await pendientesParaAsignar(fastify, { space, extUser })
     if (error) return dialogoAviso(error) // el comando abre un dialogo: ver dialogoAviso
-    // Pasar a otra persona es editar: MANAGER u OWNER (el Space de Direccion puede todo).
-    if (comando === COMANDO_DERIVAR && !modoTodo && !departamentos.some((d) => puede(extUser, 'editar', d.id))) {
-      return dialogoAviso('⚠️ Pasarle una tarea a otra persona lo puede hacer un MANAGER u OWNER del grupo del departamento. Si la querés hacer vos, usá /asignar.')
+    // Modificar una tarea (tambien pasarla a otra persona) es de quienes son del
+    // departamento; el Space de Direccion puede todo. Los dialogos solo listan lo modificable.
+    if (comando === COMANDO_DERIVAR && !pendientes.length) {
+      return dialogoAviso('⚠️ No hay tareas pendientes de tus departamentos para pasar. Solo las personas de cada departamento pueden modificar sus tareas.')
     }
     fastify.log.info(
       { comando, departamento: departamento.slug, pendientes: pendientes.length, porFallback, modoTodo },
@@ -519,10 +521,10 @@ async function departamentoParaMarcar(fastify, space, extUser, params) {
     // Un Space es semi-publico dentro de la organizacion: que alguien lo vea no
     // significa que pueda cerrar tareas de ese departamento. Excepto el Space de
     // Dirección, y los Spaces compartidos con /compartir: ahi el control de
-    // acceso es la membresia del Space en si (ver puedeOperarEnChat), no
+    // acceso es la membresia del Space en si (ver puedeModificarTarea), no
     // pertenecer puntualmente al departamento dueño.
     if (!enAmbito.id_calendar_google) return { error: '⚠️ Este Space no está vinculado a ningún departamento.' }
-    if (!puedeOperarEnChat(extUser, ambito)) return { error: `⚠️ No tenés permiso para marcar tareas de ${enAmbito.nombre}.` }
+    if (!puedeModificarTarea(extUser, enAmbito, ambito)) return { error: avisoSoloDelDepartamento(enAmbito) }
     return { departamento: enAmbito }
   }
 

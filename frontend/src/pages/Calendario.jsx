@@ -61,7 +61,17 @@ const TABLERO_ADELANTE = 30
 const COLOR_ESTADO = { pendiente: '#e0b83f', vencida: '#e05c3f', realizada: '#3fb66a', no_aplica: '#6b7686' }
 
 // Valor del selector que junta todos los departamentos de la persona.
-const TODOS = ''
+// Las agendas que se ven (se eligen con casillas, como en las pantallas de oficina):
+// la ultima eleccion se recuerda en este navegador. null = todas.
+const CLAVE_AGENDAS = 'dc_plataforma_agendas_elegidas'
+function agendasGuardadas() {
+  try {
+    const v = JSON.parse(localStorage.getItem(CLAVE_AGENDAS))
+    return Array.isArray(v) ? v : null
+  } catch {
+    return null
+  }
+}
 // Separador del id de evento en FullCalendar: el mismo id de instancia puede
 // repetirse entre calendarios de departamentos distintos.
 const SEP = '::'
@@ -125,12 +135,32 @@ export default function Calendario() {
   const { puede, filtrar } = usePermisos()
 
   const [todosDeptos, setTodosDeptos] = useState([])
-  // Direccion y admin eligen entre todos; el resto, entre los suyos.
-  const opciones = esAdminGlobal ? todosDeptos : propios
-  const [idElegido, setIdElegido] = useState(esAdminGlobal || propios.length > 1 ? TODOS : propios[0]?.id || TODOS)
-  const idsVisibles = idElegido === TODOS ? opciones.map((d) => d.id) : [idElegido]
+  // Cualquier persona puede VER la agenda de cualquier departamento (solo lectura:
+  // modificar es de quienes son del departamento). Mientras carga la lista, los suyos.
+  const opciones = todosDeptos.length ? todosDeptos : propios
+  const idsPropios = propios.filter((p) => opciones.some((d) => d.id === p.id)).map((p) => p.id)
+  const [elegidasGuardadas, setElegidasEstado] = useState(agendasGuardadas)
+  // Lo guardado puede no servir (otra persona, un departamento que ya no ve): si no
+  // coincide con nada de lo que hoy puede ver, se muestran todas.
+  const elegidas = elegidasGuardadas && (!elegidasGuardadas.length || !opciones.length || elegidasGuardadas.some((id) => opciones.some((d) => d.id === id)))
+    ? elegidasGuardadas
+    : null
+  // Sin una eleccion guardada: lo propio (si es de algun departamento) o todo.
+  const porDefecto = idsPropios.length ? idsPropios : opciones.map((d) => d.id)
+  const idsVisibles = elegidas ? opciones.filter((d) => elegidas.includes(d.id)).map((d) => d.id) : porDefecto
+  const sonLosPropios = idsPropios.length > 0 && idsVisibles.length === idsPropios.length && idsVisibles.every((id) => idsPropios.includes(id))
+  function elegirAgendas(ids) {
+    setElegidasEstado(ids)
+    try { localStorage.setItem(CLAVE_AGENDAS, JSON.stringify(ids)) } catch { /* sin almacenamiento: queda solo en esta pantalla */ }
+  }
+  function alternarAgenda(id) {
+    const actuales = new Set(idsVisibles)
+    if (actuales.has(id)) actuales.delete(id)
+    else actuales.add(id)
+    elegirAgendas(opciones.filter((d) => actuales.has(d.id)).map((d) => d.id))
+  }
   const varios = idsVisibles.length > 1
-  const elegido = opciones.find((d) => d.id === idElegido)
+  const elegido = idsVisibles.length === 1 ? opciones.find((d) => d.id === idsVisibles[0]) : null
 
   const [vista, setVistaEstado] = useState(vistaGuardada)
   const [agruparTablero, setAgruparTableroEstado] = useState(agruparGuardado)
@@ -545,10 +575,39 @@ export default function Calendario() {
             <span>Agenda</span>
             <span className="agenda-guion" aria-hidden="true">—</span>
             {opciones.length > 1 ? (
-              <select value={idElegido} onChange={(e) => setIdElegido(e.target.value)} style={{ fontSize: '1rem', padding: '0.3rem 2rem 0.3rem 0.6rem' }} aria-label="Departamento">
-                <option value={TODOS}>{esAdminGlobal ? 'Todos los departamentos' : 'Todos mis departamentos'}</option>
-                {opciones.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-              </select>
+              <details className="selector-agendas">
+                <summary className="btn btn-secondary" aria-label="Elegir qué agendas ver">
+                  {idsVisibles.length === opciones.length
+                    ? 'Todos los departamentos'
+                    : sonLosPropios && idsPropios.length > 1 ? 'Mis departamentos'
+                    : idsVisibles.length === 1 ? opciones.find((d) => d.id === idsVisibles[0])?.nombre
+                    : idsVisibles.length === 0 ? 'Ninguna agenda'
+                    : `${idsVisibles.length} de ${opciones.length} agendas`}
+                  <span aria-hidden="true"> ▾</span>
+                </summary>
+                <div className="selector-agendas-panel" role="group" aria-label="Agendas">
+                  <div className="selector-agendas-acciones">
+                    {idsPropios.length > 0 && idsPropios.length < opciones.length && (
+                      <button type="button" className="btn btn-secondary btn-chico" onClick={() => elegirAgendas(idsPropios)}>Las mías</button>
+                    )}
+                    <button type="button" className="btn btn-secondary btn-chico" onClick={() => elegirAgendas(opciones.map((d) => d.id))}>Todas</button>
+                    <button type="button" className="btn btn-secondary btn-chico" onClick={() => elegirAgendas([])}>Ninguna</button>
+                  </div>
+                  <div className="pantalla-deptos">
+                    {opciones.map((d) => {
+                      const info = deptos.get(d.id)
+                      const marcada = idsVisibles.includes(d.id)
+                      return (
+                        <label key={d.id} className={`pantalla-depto${marcada ? ' sel' : ''}`}>
+                          <input type="checkbox" checked={marcada} onChange={() => alternarAgenda(d.id)} />
+                          {info && <span className="chip-depto" style={{ color: info.color, background: `${info.color}26` }} title={d.nombre}>{info.abreviatura}</span>}
+                          <span>{d.nombre}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              </details>
             ) : (
               opciones[0]?.nombre || ''
             )}
@@ -581,6 +640,9 @@ export default function Calendario() {
         </div>
       </div>
 
+      {opciones.length > 0 && !idsVisibles.length && (
+        <p className="aviso aviso-mal" role="status">Elegí al menos una agenda (arriba, en el selector) para ver sus tareas.</p>
+      )}
       {textoAyuda && <p className="tenue" style={{ margin: '0 0 0.6rem' }}>{textoAyuda}</p>}
       {mensaje && (
         <div className={`aviso aviso-${mensaje.tono}`} role="status" style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
@@ -770,7 +832,7 @@ export default function Calendario() {
           <div className="modal-ancho" onClick={(e) => e.stopPropagation()}>
             <NuevaTarea
               departamentos={editables}
-              idDepartamentoInicial={idElegido !== TODOS ? idElegido : editables[0]?.id}
+              idDepartamentoInicial={idsVisibles.length === 1 ? idsVisibles[0] : editables[0]?.id}
               locales={locales}
               grupos={grupos}
               usuariosDe={usuariosDe}

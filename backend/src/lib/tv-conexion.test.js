@@ -83,13 +83,14 @@ test('muestra los departamentos que el dueño sigue viendo, en orden', async () 
   assert.deepEqual(r.departamentos.map((d) => d.nombre), ['RRHH', 'Tesorería'])
 })
 
-test('si el dueño deja de ver un departamento, la TV deja de mostrarlo', async () => {
+test('ver es de toda la organizacion (2026-10-08): la TV muestra los departamentos aunque el dueño no sea de ellos', async () => {
   const r = await resolverPantalla(baseSimulada({ membresias: [miembro('d-tes')] }), 'tok')
-  assert.deepEqual(r.departamentos.map((d) => d.id), ['d-tes'])
+  assert.deepEqual(r.departamentos.map((d) => d.id), ['d-rrhh', 'd-tes'])
+  const sinGrupo = await resolverPantalla(baseSimulada({ membresias: [] }), 'tok')
+  assert.deepEqual(sinGrupo.departamentos.map((d) => d.id), ['d-rrhh', 'd-tes'])
 })
 
-test('sin ningun departamento visible, dueño inactivo o pantalla desconectada: null (vuelve al QR)', async () => {
-  assert.equal(await resolverPantalla(baseSimulada({ membresias: [] }), 'tok'), null)
+test('dueño inactivo o pantalla desconectada: null (vuelve al QR)', async () => {
   assert.equal(await resolverPantalla(baseSimulada({ duenio: { email: 'a@x.com', activo: false }, membresias: [miembro('d-tes')] }), 'tok'), null)
   assert.equal(await resolverPantalla(baseSimulada({ pantalla: { activa: false }, membresias: [miembro('d-tes')] }), 'tok'), null)
   assert.equal(await resolverPantalla(baseSimulada({ membresias: [miembro('d-tes')] }), 'otro-token'), null)

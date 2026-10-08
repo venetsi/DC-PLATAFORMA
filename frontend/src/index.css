@@ -694,6 +694,14 @@ th, td {
 .pantalla-form fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
 .pantalla-form legend { font-size: 0.78rem; color: var(--texto-tenue); margin-bottom: 0.45rem; padding: 0; }
 .pantalla-form .campo input { padding: 0.5rem 0.6rem; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.14); background: var(--bg-0); color: var(--texto); max-width: 26rem; }
+/* Selector de agendas de Mi agenda (casillas, como las pantallas de oficina). */
+.selector-agendas { position: relative; display: inline-block; }
+.selector-agendas > summary { list-style: none; cursor: pointer; font-size: 1rem; padding: 0.3rem 0.8rem; display: inline-flex; align-items: center; gap: 0.2rem; }
+.selector-agendas > summary::-webkit-details-marker { display: none; }
+.selector-agendas-panel { position: absolute; z-index: 30; top: calc(100% + 0.35rem); left: 0; width: min(92vw, 36rem); background: var(--bg-1); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 0.7rem; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); font-weight: 400; font-size: 0.9rem; }
+.selector-agendas-acciones { display: flex; gap: 0.4rem; margin-bottom: 0.55rem; }
+
+.agendas-deptos-acciones { display: flex; gap: 0.4rem; margin-bottom: 0.4rem; }
 .pantalla-deptos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); gap: 0.4rem; }
 .pantalla-depto { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.65rem; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; cursor: pointer; font-size: 0.9rem; }
 .pantalla-depto:hover { border-color: rgba(255, 255, 255, 0.25); }

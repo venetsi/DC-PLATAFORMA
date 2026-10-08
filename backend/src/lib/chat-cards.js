@@ -715,7 +715,7 @@ export function dialogoVincular(departamentos, { actuales, ajenos = [] } = {}) {
                     }
                   },
                   ...(ajenos.length
-                    ? [{ textParagraph: { text: textoParaTarjeta(`Este Space también cubre *${ajenos.join(', ')}*, que no podés cambiar vos: se conserva como está.`) } }]
+                    ? [{ textParagraph: { text: textoParaTarjeta(`Este Space también cubre *${ajenos.join(', ')}*: solo un administrador puede sacarlo, así que se conserva aunque lo destildes.`) } }]
                     : []),
                   {
                     textParagraph: {

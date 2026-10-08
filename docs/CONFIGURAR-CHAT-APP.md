@@ -126,8 +126,8 @@ En **Google Chat API → Configuration → sección "Comandos"**, agregar uno po
 | `13` | `resumen` | **rápido** | Cómo viene el departamento |
 | `14` | `equipo` | **rápido** | Quién tiene qué |
 | `15` | `departamentos` | **rápido** | Panorama de los 11 (solo admin) |
-| `5` | `vincular` | barra + **Diálogo** | Checkbox de qué departamento(s) cubre este Space (admin; el Manager/Owner de un departamento, solo los suyos). Si no tiene permiso, el aviso sale **como diálogo**: un mensaje de texto hace que Chat muestre un error del servidor |
-| `6` | `desvincular` | barra | Dejar de recibir los recordatorios acá (admin; Manager/Owner, solo sus departamentos) |
+| `5` | `vincular` | barra + **Diálogo** | Checkbox de qué departamento(s) cubre este Space (cualquiera agrega, salvo Dirección; sacar: admin o Manager/Owner del departamento). Si no tiene permiso, el aviso sale **como diálogo**: un mensaje de texto hace que Chat muestre un error del servidor |
+| `6` | `desvincular` | barra | Dejar de recibir los recordatorios acá (saca los departamentos que la persona puede quitar: admin todos, Manager/Owner los suyos) |
 | `18` | `marcar` | barra | Dar una tarea por hecha |
 | `7` | `tomar` | barra | Poner una tarea a mi nombre |
 | `8` | `pasar` | barra | Pasarle una tarea a otra persona |

@@ -265,31 +265,25 @@ function unDia(fechaISO, dias) {
   return new Date(Date.UTC(a, m - 1, d + dias)).toISOString().slice(0, 10)
 }
 
-// Puede operar en Chat dentro de este Space: es de alguno de los
-// departamentos que el Space cubre (el dueño, o los que se agregaron con
-// /compartir), o es admin (mismo criterio que el resto de la app, ver
-// permisos.js). Dirección es la excepcion, y a proposito NO por pertenecer a
-// ese departamento sino por escribir desde SU Space: el usuario eligio de
-// forma explicita que el control de acceso sea "quien este en el grupo que
-// cree y vincule a Dirección", no "quien tenga Dirección en su ficha" -- así
-// que ni siquiera hace falta ser de Dirección para operar ahí, alcanza con
-// ser un ExtUser activo. Ver [[dcsmart_tareas_plataforma]] 2026-08-26.
+// VER en Chat: cualquier persona activa ve las tareas de los departamentos que
+// cubre el Space (/hoy, /atrasadas, /tarea, las tarjetas...).
 //
-// `departamentos` es el array COMPLETO que cubre el Space (dueño +
-// compartidos, ver departamentosDelSpace) -- no un departamento suelto, para
-// que un Space compartido entre 2-3 equipos deje operar a cualquiera de
-// ellos, no solo al dueño original.
-export function puedeOperarEnChat(usuario, departamentos) {
-  if (!usuario) return false
-  if (departamentos.some((d) => d?.slug === SLUG_DIRECCION)) return true
-  return departamentos.some((d) => puede(usuario, 'ver', d?.id))
+// MODIFICAR (marcar, tomar, pasar, anotar): solo quien es del departamento de la
+// tarea (rol en su Google Group). Excepcion, decidida por el usuario: un Space que
+// cubre Dirección -- ahi cualquier persona activa de ese Space opera todo, no por
+// pertenecer a Dirección sino por escribir desde SU Space (ver
+// [[dcsmart_tareas_plataforma]] 2026-08-26, reconfirmada 2026-10-08).
+//
+// `ambito` es el array COMPLETO de departamentos que cubre el Space (dueño +
+// compartidos), para reconocer si incluye a Dirección.
+export function puedeModificarTarea(usuario, departamento, ambito = []) {
+  if (!usuario || !departamento) return false
+  if (ambito.some((d) => d?.slug === SLUG_DIRECCION)) return true
+  return puede(usuario, 'marcar', departamento.id)
 }
 
-// Pasar una tarea a OTRA persona es editar (MANAGER u OWNER del grupo de ese
-// departamento). Marcar, tomar y anotar alcanzan con ser MEMBER, y eso ya lo
-// garantiza el ambito del Space. El Space de Direccion (modo todo) puede todo.
-const AVISO_SIN_PERMISO_PASAR = (departamento) =>
-  `⚠️ Pasarle una tarea a otra persona lo puede hacer un MANAGER u OWNER del grupo de ${departamento.nombre}. Si la querés hacer vos, usá \`/tomar\`.`
+export const avisoSoloDelDepartamento = (departamento) =>
+  `⚠️ Solo las personas de *${departamento.nombre}* pueden modificar sus tareas. Podés verlas, pero no cambiarlas.`
 
 // Todos los departamentos que cubre un Space: el dueño (chat_space_name) +
 // los que se agregaron con /compartir. Array vacio si el Space no esta
@@ -331,11 +325,12 @@ export async function departamentosDelSpace(db, space) {
 // alguien de Dirección escribe en un Space sin vincular, cae por fallback a
 // SU propio departamento (Dirección) pero con porFallback=true -- eso NO
 // activa modo todo, a proposito: el privilegio es del Space dedicado, no de
-// pertenecer a Dirección (ver puedeOperarEnChat).
+// pertenecer a Dirección (ver puedeModificarTarea).
 async function resolverDepartamento(db, { space, extUser }) {
   if (space) {
     const delEspacio = await departamentosDelSpace(db, space)
-    if (delEspacio.length && puedeOperarEnChat(extUser, delEspacio)) {
+    // Cualquiera ve lo que cubre el Space (modificar se chequea por tarea).
+    if (delEspacio.length) {
       const [dueño, ...compartidos] = delEspacio
       // En un Space sin dueño el "principal" es solo el primero de la lista:
       // no activa el modo todo aunque sea Dirección (ver esModoTodo).
@@ -587,16 +582,23 @@ async function comandoMias(deps, { departamento, departamentos, modoTodo, nombre
   return bloques.join('\n') + sugerirSobreEventos([...vencidas, ...deHoy])
 }
 
-// Quien puede vincular un Space a un departamento: un administrador (a cualquiera)
-// o el MANAGER / OWNER de ese departamento (solo al suyo). Dirección queda afuera
-// para los demas: un Space vinculado a Dirección ve y opera TODOS los
-// departamentos, y eso es del administrador.
-export const TEXTO_SIN_PERMISO_VINCULAR =
-  '⚠️ Para vincular un Space tenés que ser administrador, o Manager u Owner de un departamento (y vinculás solo los tuyos).'
+// Vincular un Space a un departamento NO se bloquea (pedido del 2026-10-08):
+//  - AGREGAR un departamento a un Space lo puede hacer cualquier persona activa
+//    de la plataforma, a cualquier departamento. La unica excepcion es Dirección:
+//    un Space vinculado a Dirección ve y opera TODOS los departamentos, y eso es
+//    del administrador.
+//  - SACAR un departamento de un Space (destildarlo o /desvincular) tambien: cualquier
+//    persona activa, con la misma excepcion de Dirección (pedido del 2026-10-08).
+export const TEXTO_SIN_DEPARTAMENTOS_PARA_VINCULAR = '⚠️ No hay departamentos para vincular.'
 
-export function esVinculable(extUser, departamento) {
+export function puedeAgregarDepartamento(extUser, departamento) {
   if (esAdminGlobal(extUser)) return true
-  return departamento.slug !== SLUG_DIRECCION && puede(extUser, 'editar', departamento.id)
+  return departamento.slug !== SLUG_DIRECCION
+}
+
+export function puedeQuitarDepartamento(extUser, departamento) {
+  // Igual que agregar (2026-10-08): cualquier persona activa, salvo Dirección.
+  return puedeAgregarDepartamento(extUser, departamento)
 }
 
 // Lista + estado actual para el formulario (checkbox) de /vincular. Al
@@ -607,18 +609,17 @@ export async function departamentosParaVincular(deps, { space, extUser }) {
   const { db } = deps
   if (!space) return { error: '⚠️ No pude identificar este Space.' }
 
-  // Un administrador ve todos los departamentos; un Manager u Owner, solo los suyos.
   const todos = await db.departamento.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } })
-  const departamentos = todos.filter((d) => esVinculable(extUser, d))
-  if (!departamentos.length) return { error: TEXTO_SIN_PERMISO_VINCULAR }
+  const departamentos = todos.filter((d) => puedeAgregarDepartamento(extUser, d))
+  if (!departamentos.length) return { error: TEXTO_SIN_DEPARTAMENTOS_PARA_VINCULAR }
 
   const actual = await departamentosDelSpace(db, space)
-  const permitidos = new Set(departamentos.map((d) => d.id))
+  const visibles = new Set(departamentos.map((d) => d.id))
   return {
     departamentos,
-    actuales: new Set(actual.filter((d) => permitidos.has(d.id)).map((d) => d.id)),
-    // Lo que el Space ya cubre y esta persona no puede cambiar: se muestra, no se toca.
-    ajenos: actual.filter((d) => !permitidos.has(d.id)).map((d) => d.nombre)
+    actuales: new Set(actual.filter((d) => visibles.has(d.id)).map((d) => d.id)),
+    // Lo que el Space ya cubre y esta persona no puede sacar: se conserva aunque lo destilde.
+    ajenos: actual.filter((d) => !puedeQuitarDepartamento(extUser, d)).map((d) => d.nombre)
   }
 }
 
@@ -641,18 +642,18 @@ export async function vincularDepartamentos(deps, { space, extUser, idsDepartame
   const { db, log = console } = deps
   if (!space) return '⚠️ No pude identificar este Space.'
 
-  // Un administrador cambia cualquier cosa; un Manager u Owner, solo sus
-  // departamentos: los que ya cubre el Space y no son suyos se conservan tal cual,
-  // y lo tildado que no es suyo se ignora (el formulario viene del cliente).
+  // Lo tildado se agrega (salvo Dirección, que es del administrador); lo que el
+  // Space ya cubre y esta persona no puede sacar se conserva aunque lo destilde.
+  // El formulario viene del cliente: se vuelve a validar aca.
   const todos = await db.departamento.findMany({ where: { activo: true } })
-  const vinculables = new Set(todos.filter((d) => esVinculable(extUser, d)).map((d) => d.id))
-  if (!vinculables.size) return TEXTO_SIN_PERMISO_VINCULAR
+  const agregables = new Set(todos.filter((d) => puedeAgregarDepartamento(extUser, d)).map((d) => d.id))
+  if (!agregables.size) return TEXTO_SIN_DEPARTAMENTOS_PARA_VINCULAR
 
   const actual = await departamentosDelSpace(db, space)
   const tildados = (Array.isArray(idsDepartamentos) ? idsDepartamentos : [idsDepartamentos]).filter(Boolean)
   const ids = [...new Set([
-    ...tildados.filter((id) => vinculables.has(id)),
-    ...actual.filter((d) => !vinculables.has(d.id)).map((d) => d.id)
+    ...tildados.filter((id) => agregables.has(id)),
+    ...actual.filter((d) => !puedeQuitarDepartamento(extUser, d)).map((d) => d.id)
   ])]
   const dueñoActual = actual.find((d) => d.chat_space_name === space) ?? null
 
@@ -829,7 +830,7 @@ function ahoraISO() {
   return new Date().toISOString()
 }
 
-async function comandoMarcar(deps, { departamentos, modoTodo, email, argumento }) {
+async function comandoMarcar(deps, { departamentos, modoTodo, email, extUser, argumento }) {
   const { gcal } = deps
   const hoyISO = hoyEnArgentina()
   const operables = await instanciasOperables(gcal, departamentos, hoyISO)
@@ -837,6 +838,7 @@ async function comandoMarcar(deps, { departamentos, modoTodo, email, argumento }
   if (!r.una) return pedirPrecision(r, operables, { modoTodo: departamentos.length > 1 })
 
   const { evento, rotulo: nombre, departamento } = r.una
+  if (!puedeModificarTarea(extUser, departamento, departamentos)) return avisoSoloDelDepartamento(departamento)
   const etiqueta = departamentos.length > 1 ? `*${nombre}* (${departamento.nombre})` : `*${nombre}*`
 
   const { evento: eventoFresco, yaEstaba, avisos } = await marcarInstanciaYPropagar(deps, {
@@ -862,7 +864,7 @@ async function comandoMarcar(deps, { departamentos, modoTodo, email, argumento }
   return `✅ ${etiqueta} marcada por ${email}.${sufijo}` + sugerir(`/tarea ${nombre}`)
 }
 
-async function comandoTomar(deps, { departamentos, modoTodo, email, argumento }) {
+async function comandoTomar(deps, { departamentos, modoTodo, email, extUser, argumento }) {
   const { gcal } = deps
   const hoyISO = hoyEnArgentina()
   const operables = await instanciasOperables(gcal, departamentos, hoyISO)
@@ -870,6 +872,7 @@ async function comandoTomar(deps, { departamentos, modoTodo, email, argumento })
   if (!r.una) return pedirPrecision(r, operables, { modoTodo: departamentos.length > 1 })
 
   const { evento, rotulo: nombre, hecha, departamento } = r.una
+  if (!puedeModificarTarea(extUser, departamento, departamentos)) return avisoSoloDelDepartamento(departamento)
   if (hecha) return `*${nombre}* ya está hecha, no hace falta tomarla.`
 
   const actual = evento.extendedProperties?.private?.asignado_a
@@ -906,8 +909,8 @@ async function comandoPasar(deps, { departamentos, modoTodo, email, extUser, arg
   if (!r.una) return pedirPrecision(r, operables, { modoTodo: departamentos.length > 1 })
 
   const { evento, rotulo: nombre, hecha, departamento } = r.una
+  if (!puedeModificarTarea(extUser, departamento, departamentos)) return avisoSoloDelDepartamento(departamento)
   if (hecha) return `*${nombre}* ya está hecha, no hace falta pasarla.`
-  if (!modoTodo && !puede(extUser, 'editar', departamento.id)) return AVISO_SIN_PERMISO_PASAR(departamento)
 
   await gcal.marcarInstancia({
     calendarId: departamento.id_calendar_google,
@@ -927,7 +930,7 @@ async function comandoPasar(deps, { departamentos, modoTodo, email, extUser, arg
   return `➡️ ${etiqueta} queda a nombre de ${persona.nombre} (${emailDestino}).${aviso}` + sugerir(`/nota ${nombre}: `)
 }
 
-async function comandoNota(deps, { departamentos, modoTodo, email, argumento }) {
+async function comandoNota(deps, { departamentos, modoTodo, email, extUser, argumento }) {
   const { gcal } = deps
   const { tarea, resto: nota } = partirArgumento(argumento)
 
@@ -943,6 +946,7 @@ async function comandoNota(deps, { departamentos, modoTodo, email, argumento }) 
   if (!r.una) return pedirPrecision(r, operables, { modoTodo: departamentos.length > 1 })
 
   const { evento, rotulo: nombre, departamento } = r.una
+  if (!puedeModificarTarea(extUser, departamento, departamentos)) return avisoSoloDelDepartamento(departamento)
   await gcal.marcarInstancia({
     calendarId: departamento.id_calendar_google,
     instanceId: evento.id,
@@ -1304,12 +1308,13 @@ async function departamentoDeTareaCodificada(db, valorCodificado, { space, extUs
 
   const { departamento: contexto, compartidos, porFallback, sinDueño } = await resolverDepartamento(db, { space, extUser })
   const modoTodo = esModoTodo(contexto, porFallback, sinDueño)
-  const ambitoIds = [contexto?.id, ...compartidos.map((d) => d.id)]
-  if (!modoTodo && !ambitoIds.includes(idDepartamento)) return { instanceId: null }
+  const ambito = [contexto, ...compartidos].filter(Boolean)
+  if (!modoTodo && !ambito.some((d) => d.id === idDepartamento)) return { instanceId: null }
 
   const departamento = await db.departamento.findUnique({ where: { id: idDepartamento } })
   if (!departamento?.activo || !departamento.id_calendar_google) return { instanceId: null }
-  return { departamento, instanceId, modoTodo }
+  // `puedeModificar`: solo quien es del departamento (o el Space de Dirección).
+  return { departamento, instanceId, modoTodo, puedeModificar: modoTodo || puedeModificarTarea(extUser, departamento, ambito) }
 }
 
 // Semaforo + contadores, MISMO criterio que el kiosko (routes/tv.js#estado_general):
@@ -1338,7 +1343,7 @@ export async function pendientesParaAsignar(deps, { space, extUser }) {
   const operables = await instanciasOperables(gcal, departamentos, hoyISO)
   const varios = departamentos.length > 1
   const pendientes = operables
-    .filter((o) => !o.hecha)
+    .filter((o) => !o.hecha && puedeModificarTarea(extUser, o.departamento, departamentos))
     .sort((a, b) => String(a.fechaISO).localeCompare(String(b.fechaISO)))
     .map((o) => {
       const deQuien = varios ? ` — ${o.departamento.nombre}` : ''
@@ -1361,8 +1366,9 @@ export async function pendientesParaAsignar(deps, { space, extUser }) {
 // llega del formulario no decide permisos por si solo.
 export async function tomarPorInstanceId(deps, { space, extUser, email, instanceId: valorCodificado }) {
   const { db, gcal, log = console } = deps
-  const { departamento, instanceId } = await departamentoDeTareaCodificada(db, valorCodificado, { space, extUser })
+  const { departamento, instanceId, puedeModificar } = await departamentoDeTareaCodificada(db, valorCodificado, { space, extUser })
   if (!departamento) return '⚠️ No pude identificar la tarea (o ya no tenés acceso a ese departamento).'
+  if (!puedeModificar) return avisoSoloDelDepartamento(departamento)
 
   const instancia = await gcal.leerInstancia({ calendarId: departamento.id_calendar_google, instanceId })
   if (!instancia) return '⚠️ Esa tarea ya no existe.'
@@ -1399,9 +1405,9 @@ export async function personasActivas(deps) {
 // del lado del servidor, el formulario no decide nada por si solo.
 export async function pasarPorInstanceId(deps, { space, extUser, email, instanceId: valorCodificado, emailDestino }) {
   const { db, gcal, log = console } = deps
-  const { departamento, instanceId, modoTodo } = await departamentoDeTareaCodificada(db, valorCodificado, { space, extUser })
+  const { departamento, instanceId, puedeModificar } = await departamentoDeTareaCodificada(db, valorCodificado, { space, extUser })
   if (!departamento) return '⚠️ No pude identificar la tarea (o ya no tenés acceso a ese departamento).'
-  if (!modoTodo && !puede(extUser, 'editar', departamento.id)) return AVISO_SIN_PERMISO_PASAR(departamento)
+  if (!puedeModificar) return avisoSoloDelDepartamento(departamento)
 
   const destino = normalizarEmail(emailDestino)
   if (!destino) return '⚠️ Elegí a quién le pasás la tarea.'
@@ -1435,8 +1441,9 @@ export async function pasarPorInstanceId(deps, { space, extUser, email, instance
 // Agrega una nota a una instancia por su id (viene del dialogo de /apuntar).
 export async function notaPorInstanceId(deps, { space, extUser, email, instanceId: valorCodificado, nota }) {
   const { db, gcal, log = console } = deps
-  const { departamento, instanceId } = await departamentoDeTareaCodificada(db, valorCodificado, { space, extUser })
+  const { departamento, instanceId, puedeModificar } = await departamentoDeTareaCodificada(db, valorCodificado, { space, extUser })
   if (!departamento) return '⚠️ No pude identificar la tarea (o ya no tenés acceso a ese departamento).'
+  if (!puedeModificar) return avisoSoloDelDepartamento(departamento)
 
   const textoNota = String(nota || '').trim()
   if (!textoNota) return '⚠️ La nota llegó vacía.'
@@ -1483,7 +1490,7 @@ export async function pendientesParaTildar(deps, { space, extUser }) {
   const varios = departamentos.length > 1
 
   const pendientes = operables
-    .filter((o) => !o.hecha && (o.vencida || o.fechaISO === hoyISO))
+    .filter((o) => !o.hecha && (o.vencida || o.fechaISO === hoyISO) && puedeModificarTarea(extUser, o.departamento, departamentos))
     .map((o) => ({ ...o, dias: o.vencida ? diasHabilesVencida(o.evento, { hoyISO }) : 0 }))
     .sort((a, b) => b.dias - a.dias)
     .map((o) => {
@@ -1520,9 +1527,13 @@ export async function marcarVarias(deps, { space, extUser, email, instanceIds })
   for (const valor of valores) {
     let nombre = null
     try {
-      const { departamento, instanceId } = await departamentoDeTareaCodificada(db, valor, { space, extUser })
+      const { departamento, instanceId, puedeModificar } = await departamentoDeTareaCodificada(db, valor, { space, extUser })
       if (!departamento) {
         fallidas.push('una tarea (ya no tenés acceso a su departamento)')
+        continue
+      }
+      if (!puedeModificar) {
+        fallidas.push(`una tarea de ${departamento.nombre} (solo las personas de ese departamento la pueden marcar)`)
         continue
       }
       const previa = await gcal.leerInstancia({ calendarId: departamento.id_calendar_google, instanceId })
@@ -1709,18 +1720,18 @@ export async function marcarPagos(deps, { email, ids }) {
 // app del Space (REMOVED_FROM_SPACE tambien limpia), pero eso ademas silencia
 // los comandos -- con esto el Space deja de recibir los recordatorios y sigue
 // pudiendo consultar.
-// Un Manager u Owner saca de este Space solo SUS departamentos; lo demas que cubra
-// el Space no se toca.
+// Quien no es administrador saca de este Space solo los departamentos que puede
+// quitar (de los que es Manager u Owner); lo demas que cubra el Space no se toca.
 async function desvincularLosPropios(deps, { space, extUser }) {
   const { db, log = console } = deps
   if (!space) return '⚠️ No pude identificar este Space.'
   const todos = await db.departamento.findMany({ where: { activo: true } })
-  const mios = new Set(todos.filter((d) => esVinculable(extUser, d)).map((d) => d.id))
-  if (!mios.size) return '⚠️ Para desvincular un Space tenés que ser administrador, o Manager u Owner de un departamento.'
+  const mios = new Set(todos.filter((d) => puedeQuitarDepartamento(extUser, d)).map((d) => d.id))
+  if (!mios.size) return '⚠️ No hay departamentos para sacar.'
 
   const actual = await departamentosDelSpace(db, space)
   const aSacar = actual.filter((d) => mios.has(d.id))
-  if (!aSacar.length) return 'Este Space no cubre ninguno de tus departamentos -- no hay nada que desvincular.'
+  if (!aSacar.length) return 'Este Space no cubre ningún departamento que puedas sacar (Dirección solo la saca un administrador).'
 
   await db.departamentoCompartidoEnSpace.deleteMany({ where: { chat_space_name: space, id_departamento: { in: aSacar.map((d) => d.id) } } })
   for (const d of aSacar) {
@@ -1729,7 +1740,7 @@ async function desvincularLosPropios(deps, { space, extUser }) {
   log.info?.({ space, sacados: aSacar.map((d) => d.slug) }, 'chat: space desvinculado de sus departamentos por su Manager/Owner')
   const nombres = (lista) => lista.map((d) => `*${d.nombre}*`).join(', ')
   const quedan = actual.filter((d) => !mios.has(d.id))
-  return `✅ Listo. Este Space ya no cubre ${nombres(aSacar)}.` + (quedan.length ? `\nSigue cubriendo ${nombres(quedan)}, que no podés cambiar vos.` : '') + '\nPara volver a activarlo, escribí `/vincular`.'
+  return `✅ Listo. Este Space ya no cubre ${nombres(aSacar)}.` + (quedan.length ? `\nSigue cubriendo ${nombres(quedan)}, que solo un administrador puede sacar.` : '') + '\nPara volver a activarlo, escribí `/vincular`.'
 }
 
 async function comandoDesvincular(deps, { space, extUser }) {
