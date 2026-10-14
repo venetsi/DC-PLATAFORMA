@@ -67,7 +67,7 @@
   .valor.amarillo { color: var(--amarillo); }
   .valor.rojo { color: var(--rojo); }
 
-  #semana { flex: 1; display: grid; grid-template-columns: 0.8fr repeat(5, 1fr); gap: 14px; min-height: 0; }
+  #semana { flex: 1 1 0; display: grid; grid-template-columns: 0.8fr repeat(5, 1fr); gap: 14px; min-height: 0; }
   .dia-col { background: var(--bg-1); border-radius: 14px; padding: 16px 18px; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
   .dia-col.hoy { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal) inset; }
   .dia-nombre { font-size: 15px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--gold); margin-bottom: 2px; }
@@ -108,13 +108,14 @@
 
   /* Proxima semana: a proposito mas chica y menos llamativa que la semana
      actual -- es un vistazo a futuro, no algo que reclame atencion ahora. */
-  #proxima-semana-wrap { margin-top: 14px; }
+  #proxima-semana-wrap { margin-top: 14px; flex: 0 1 auto; max-height: 24%; min-height: 0; display: flex; flex-direction: column; }
   #proxima-semana-wrap .titulo-proxima { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--texto-tenue); margin-bottom: 6px; }
-  #proxima-semana { display: grid; grid-template-columns: 0.8fr repeat(5, 1fr); gap: 10px; }
-  #proxima-semana .mini-col { background: transparent; border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; padding: 8px 10px; min-height: 0; }
+  #proxima-semana { display: grid; grid-template-columns: 0.8fr repeat(5, 1fr); grid-template-rows: minmax(0, 1fr); gap: 10px; flex: 1; min-height: 0; }
+  #proxima-semana .mini-col { background: transparent; border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; padding: 8px 10px; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
   #proxima-semana .mini-col.hueco { visibility: hidden; }
   #proxima-semana .mini-dia { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-tenue); margin-bottom: 4px; opacity: 0.85; }
-  #proxima-semana .mini-tareas { list-style: none; margin: 0; padding: 0; font-size: 11px; color: var(--texto-tenue); opacity: 0.8; line-height: 1.6; }
+  #proxima-semana .mini-tareas { list-style: none; margin: 0; padding: 0; font-size: 11px; color: var(--texto-tenue); opacity: 0.8; line-height: 1.6; flex: 1; min-height: 0; overflow: hidden; }
+  #proxima-semana .mini-tareas .mas { opacity: 1; }
   #proxima-semana .mini-tareas li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
   #proxima-semana .mini-sub { display: block; font-size: 10px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; }
   #proxima-semana .mini-sub .dep { font-weight: 700; }
@@ -574,6 +575,25 @@
     return '<ul class="tarea-bullets">' + itemsHtml + '</ul>';
   }
 
+  // Una linea por tarea y dia: "🔴 CMV ×7". Es lo que usan el Calendario y la
+  // proxima semana, donde el detalle por local no entra y no hace falta.
+  var ORDEN_ESTADO = { vencida: 0, pendiente: 1, realizada: 2 };
+  function agruparPorTarea(lista) {
+    var grupos = {};
+    lista.forEach(function (ev) {
+      var k = (ev.departamento ? ev.departamento.id : '') + '|' + ev.titulo;
+      var g = grupos[k] = grupos[k] || { ev: ev, n: 0, estado: 'realizada', marca: '' };
+      g.n++;
+      if (ev.prioridad === 'ALTA') g.alta = true;
+      if (ORDEN_ESTADO[ev.estado] < ORDEN_ESTADO[g.estado]) g.estado = ev.estado;
+      // ⏳ gana sobre 🔗: si alguna del grupo espera, es lo que importa ver.
+      var m = marcaDeps(ev);
+      if (m && (!g.marca || m === '⏳ ')) g.marca = m;
+    });
+    return Object.keys(grupos).map(function (k) { return grupos[k]; })
+      .sort(function (a, b) { return ORDEN_ESTADO[a.estado] - ORDEN_ESTADO[b.estado] || (a.alta ? 0 : 1) - (b.alta ? 0 : 1) || String(a.ev.titulo).localeCompare(String(b.ev.titulo)); });
+  }
+
   function pintarSemana(eventos, atrasadas) {
     var columnas = construirColumnasVacias();
     var porFecha = {};
@@ -603,8 +623,9 @@
   }
 
   // Mas chica y menos llamativa a proposito (ver CSS #proxima-semana): un
-  // vistazo a lo que viene, sin agrupar por local ni marcar estado -- todavia
-  // no es "hoy", no reclama la misma atencion que la semana actual.
+  // vistazo a lo que viene, una linea por tarea ("CMV x7") como en el
+  // Calendario. Tiene un tope de alto: la semana actual tiene prioridad y lo que
+  // no entra se resume como "+N mas".
   function pintarProximaSemana(eventos) {
     var lunesQueViene = lunesDeEstaSemana();
     lunesQueViene.setDate(lunesQueViene.getDate() + 7);
@@ -627,18 +648,16 @@
     var htmlHueco = '<div class="mini-col hueco"></div>';
     var htmlDias = cols.map(function (col) {
       var itemsHtml = col.items.length
-        ? agruparPorGrupo(col.items.slice()).map(function (ev) {
-            var d = ev.dependencia;
-            var dep = d && d.espera && d.espera.length ? '<span class="dep espera">⏳ ' + esc(resumenDeps(d.espera)) + '</span>'
-              : d && d.la_espera && d.la_espera.length ? '<span class="dep frena">🔗 ' + esc(resumenDeps(d.la_espera)) + '</span>' : '';
-            return '<li>' + chipDepto(ev.departamento) + tareaYLocal(ev)
-              + '<span class="mini-sub">' + esc(personaDe(ev)) + (dep ? ' · ' + dep : '') + '</span></li>';
+        ? agruparPorTarea(col.items).map(function (g) {
+            return '<li>' + chipDepto(g.ev.departamento) + g.marca + icono(g.ev) + esc(g.ev.titulo) + (g.n > 1 ? ' ×' + g.n : '') + '</li>';
           }).join('')
         : '<li class="mini-vacio">Sin tareas</li>';
       return '<div class="mini-col"><div class="mini-dia">' + col.nombre + '</div><ul class="mini-tareas">' + itemsHtml + '</ul></div>';
     }).join('');
 
-    document.getElementById('proxima-semana').innerHTML = htmlHueco + htmlDias;
+    var cont = document.getElementById('proxima-semana');
+    cont.innerHTML = htmlHueco + htmlDias;
+    cont.querySelectorAll('.mini-tareas').forEach(recortar);
   }
 
   // En una TV no se puede deslizar: lo que no entra en una caja se saca del
@@ -718,25 +737,12 @@
     var tramo = data.tramo || {};
     var porFecha = {};
     (data.items || []).forEach(function (ev) { (porFecha[ev.fecha] = porFecha[ev.fecha] || []).push(ev); });
-    var orden = { vencida: 0, pendiente: 1, realizada: 2 };
     var dias = [];
     for (var f = tramo.desde; f && f <= tramo.hasta; f = sumarDiaISO(f)) dias.push(f);
     var titulo = tramo.mes ? new Date(tramo.mes + '-01T00:00:00').toLocaleDateString('es-AR', { month: 'long', year: 'numeric' }) : '';
     titulo = titulo.charAt(0).toUpperCase() + titulo.slice(1); // "Septiembre de 2026"
     var celdas = dias.map(function (fecha) {
-      var grupos = {};
-      (porFecha[fecha] || []).forEach(function (ev) {
-        var k = (ev.departamento ? ev.departamento.id : '') + '|' + ev.titulo;
-        var g = grupos[k] = grupos[k] || { ev: ev, n: 0, estado: 'realizada', marca: '' };
-        g.n++;
-        if (ev.prioridad === 'ALTA') g.alta = true;
-        if (orden[ev.estado] < orden[g.estado]) g.estado = ev.estado;
-        // ⏳ gana sobre 🔗: si alguna del grupo espera, es lo que importa ver.
-        var m = marcaDeps(ev);
-        if (m && (!g.marca || m === '⏳ ')) g.marca = m;
-      });
-      var items = Object.keys(grupos).map(function (k) { return grupos[k]; })
-        .sort(function (a, b) { return orden[a.estado] - orden[b.estado] || (a.alta ? 0 : 1) - (b.alta ? 0 : 1) || String(a.ev.titulo).localeCompare(String(b.ev.titulo)); })
+      var items = agruparPorTarea(porFecha[fecha] || [])
         .map(function (g) {
           return '<div class="cal-item ' + esc(g.estado) + '">' + chipDepto(g.ev.departamento) + g.marca + icono(g.ev) + esc(g.ev.titulo) + (g.n > 1 ? ' ×' + g.n : '') + '</div>';
         }).join('');
