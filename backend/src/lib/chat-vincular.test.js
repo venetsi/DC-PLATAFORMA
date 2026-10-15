@@ -43,7 +43,7 @@ test('/vincular: departamentos que ya tienen su Space quedan como compartidos y 
   const respuesta = await vincularDepartamentos(deps(db), { space: 'spaces/MIX', extUser: admin, idsDepartamentos: ['aud', 'rep'] })
   assert.match(respuesta, /^✅ Listo\. Este Space queda vinculado a \*Auditoría\*, \*Reportes\*\./)
   assert.match(respuesta, /Es un Space combinado/)
-  assert.match(respuesta, /El recordatorio diario de cada uno sigue llegando a su propio Space/)
+  assert.match(respuesta, /Cada uno sigue recibiendo lo suyo también en su propio Space/)
   // Nadie perdio su Space propio.
   assert.equal(db.deptos.find((d) => d.id === 'aud').chat_space_name, 'spaces/AUD')
   assert.equal(db.deptos.find((d) => d.id === 'rep').chat_space_name, 'spaces/INF')
@@ -57,7 +57,7 @@ test('/vincular: si uno de los tildados no tiene Space, ese pasa a ser el dueño
   ])
   const respuesta = await vincularDepartamentos(deps(db), { space: 'spaces/MIX', extUser: admin, idsDepartamentos: ['aud', 'cos'] })
   assert.match(respuesta, /El recordatorio diario y el resumen de los lunes de \*Costos\* llegan acá/)
-  assert.match(respuesta, /Con \*Auditoría\* se pueden usar los comandos y botones acá/)
+  assert.match(respuesta, /También llegan acá los avisos de \*Auditoría\*/)
   assert.equal(db.deptos.find((d) => d.id === 'cos').chat_space_name, 'spaces/MIX')
   assert.deepEqual((await departamentosDelSpace(db, 'spaces/MIX')).map((d) => d.id), ['cos', 'aud'])
 })

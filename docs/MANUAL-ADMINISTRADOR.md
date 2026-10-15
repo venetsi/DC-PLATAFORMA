@@ -632,8 +632,12 @@ por departamento (tareas de la semana, atrasadas, % de la semana pasada y rankin
 de atrasadas por responsable). Las tareas compartidas no se cuentan dos veces en
 el % general ni en el ranking. Un Space **combinado** (sin dueño: solo
 departamentos compartidos que ya tienen su propio Space, ver `/vincular`)
-recibe una sola tarjeta con todos ellos (`cardSemanalCombinada`); un Space propio
-con otros tildados recibe solo la de su departamento. El escalamiento a Dirección sale igual que
+recibe una sola tarjeta con todos ellos (`cardSemanalCombinada`), y lo mismo un
+Space propio con otros tildados (decidido el 15/10/2026: cualquier Space vinculado a
+varios departamentos recibe lo de todos, además de lo que cada uno recibe en su Space
+propio; el dueño no recibe su tarjeta repetida). El recordatorio diario y el aviso
+«Ya podés hacerla» también salen a cada Space donde el departamento está vinculado
+(`copiasEnOtrosSpaces` en `avisosChat.js`, `spacesDe` en `avisos-dependencias.js`). El escalamiento a Dirección sale igual que
 cualquier otro día, después del resumen. Si el lunes es feriado, el resumen sale
 igual ese día. Probarlo sin esperar al lunes: `AVISO_MODO=semanal` (con
 `AVISO_DRY_RUN=1` para no postear).

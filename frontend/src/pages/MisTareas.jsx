@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuthStore } from '../store/authStore.js'
 import { instanciasApi, localesApi, departamentosApi } from '../api/recursos.js'
 import { infoDepartamentos } from '../lib/colores-depto.js'
+import { marcarEnLocal } from '../lib/marca-local.js'
 import AgendaAgrupada from '../components/AgendaAgrupada.jsx'
 import SinAsignacion from './SinAsignacion.jsx'
 
@@ -11,6 +12,7 @@ import SinAsignacion from './SinAsignacion.jsx'
 // acá se reusa el mismo AgendaAgrupada que la otra pantalla.
 export default function MisTareas() {
   const departamento = useAuthStore((s) => s.departamento)
+  const usuario = useAuthStore((s) => s.usuario)
   const [data, setData] = useState(null)
   const [mapaLocales, setMapaLocales] = useState(new Map())
   const [soloMias, setSoloMias] = useState(false)
@@ -49,17 +51,24 @@ export default function MisTareas() {
     await cargar()
   }
 
+  // Se ve hecha al instante; el servidor tarda varios segundos. Si lo rechaza,
+  // vuelve a lo que habia.
   async function marcar(instanceId, idDepto) {
+    const antes = data
+    if (antes) setData({ ...antes, items: marcarEnLocal(antes.items, { idDepto: null, instanceId, email: usuario?.email }) })
     setMarcando(instanceId)
     try {
       const r = await instanciasApi.marcar(instanceId, idDepto || departamento.id)
       // El aviso va DESPUÉS de marcar, no un confirm() antes: la decisión fue
       // avisar sin bloquear, y un modal de confirmación es bloqueo con otro nombre.
       setAviso(r?.avisos?.length ? r.avisos : null)
-      await cargar()
+    } catch (err) {
+      setData(antes)
+      throw err
     } finally {
       setMarcando(null)
     }
+    cargar().catch(() => {})
   }
 
   async function reprogramar(instanceId, idDepto, fecha, motivo) {

@@ -265,3 +265,58 @@ test('series por terminar: si no se pueden leer, Direccion se entera en vez de c
   const r = await correr(opciones)
   assert.ok(r.errores_armado?.some?.((e) => /Series por terminar/.test(e.departamento)) || JSON.stringify(r).includes('Series por terminar'))
 })
+
+// ── Spaces que cubren varios departamentos (2026-10-15) ──────────────────────
+// Un Space vinculado a varios departamentos recibe lo de TODOS: el recordatorio
+// diario, el resumen del lunes y, mas abajo, el aviso de tareas liberadas.
+
+test('diario: un Space propio con otro departamento vinculado recibe los avisos de los dos', async () => {
+  const { opciones, enviados } = armar({
+    departamentos: [costos, reportes, direccion],
+    eventos: { ...conAtrasada(costos), ...conAtrasada(reportes) },
+    compartidos: [{ chat_space_name: costos.chat_space_name, id_departamento: 'rep' }]
+  })
+  await correr(opciones)
+  const enSpaceDeCostos = enviados.filter((m) => m.space === costos.chat_space_name).map((m) => m.etiqueta)
+  assert.ok(enSpaceDeCostos.includes('costos') && enSpaceDeCostos.some((e) => e.startsWith('reportes')), enSpaceDeCostos.join(' | '))
+  assert.equal(enviados.some((m) => m.etiqueta === 'reportes' && m.space === reportes.chat_space_name), true, 'Reportes sigue recibiendo en su Space')
+})
+
+test('diario: un Space combinado sin dueño recibe el recordatorio de cada departamento que cubre', async () => {
+  const { opciones, enviados } = armar({
+    departamentos: [costos, reportes, direccion],
+    eventos: { ...conAtrasada(costos), ...conAtrasada(reportes) },
+    compartidos: [{ chat_space_name: 'spaces/MIX', id_departamento: 'cos' }, { chat_space_name: 'spaces/MIX', id_departamento: 'rep' }]
+  })
+  await correr(opciones)
+  assert.equal(enviados.filter((m) => m.space === 'spaces/MIX').length, 2)
+  // Y cada uno conserva el de su Space propio.
+  assert.equal(enviados.some((m) => m.etiqueta === 'costos' && m.space === costos.chat_space_name), true)
+})
+
+test('diario: sin Spaces compartidos todo sale como antes', async () => {
+  const { opciones, enviados } = armar({ departamentos: [costos, reportes, direccion], eventos: { ...conAtrasada(costos), ...conAtrasada(reportes) } })
+  await correr(opciones)
+  assert.equal(enviados.filter((m) => m.etiqueta === 'costos' || m.etiqueta === 'reportes').length, 2)
+})
+
+test('semanal: un Space propio con otro departamento recibe UNA tarjeta con los dos, y el dueño no la recibe repetida', async () => {
+  const { opciones, enviados } = armar({
+    departamentos: [costos, reportes, direccion],
+    eventos: { ...conAtrasada(costos), ...conAtrasada(reportes) },
+    compartidos: [{ chat_space_name: costos.chat_space_name, id_departamento: 'rep' }],
+    env: { AVISO_MODO: 'semanal' }
+  })
+  await correr(opciones)
+  const enSpaceDeCostos = enviados.filter((m) => m.space === costos.chat_space_name)
+  assert.equal(enSpaceDeCostos.length, 1, enSpaceDeCostos.map((m) => m.etiqueta).join(' | '))
+  assert.match(enSpaceDeCostos[0].etiqueta, /combinado/)
+  assert.equal(enviados.some((m) => m.etiqueta === 'costos (semanal)'), false)
+  assert.equal(enviados.some((m) => m.etiqueta === 'reportes (semanal)'), true, 'Reportes recibe su tarjeta en su Space')
+})
+
+test('semanal: un Space propio sin otros departamentos recibe su tarjeta de siempre', async () => {
+  const { opciones, enviados } = armar({ departamentos: [costos, direccion], eventos: conAtrasada(costos), env: { AVISO_MODO: 'semanal' } })
+  await correr(opciones)
+  assert.equal(enviados.some((m) => m.etiqueta === 'costos (semanal)'), true)
+})

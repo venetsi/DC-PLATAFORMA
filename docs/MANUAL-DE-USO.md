@@ -398,7 +398,7 @@ siempre el estado al momento, sin que nadie tenga que avisar.
 | Cuándo | Qué es | Quién lo recibe |
 |---|---|---|
 | **Martes a viernes, 8:00** | **Recordatorio diario**: lo que vence hoy y lo atrasado, con botón **Marcar hecha** | El Space de cada departamento |
-| **Lunes, 8:00** | **Tu semana**: en lugar del recordatorio de ese día. Las atrasadas con botón y la semana día por día | El Space de cada departamento (un Space *combinado* recibe una sola tarjeta con varios departamentos) |
+| **Lunes, 8:00** | **Tu semana**: en lugar del recordatorio de ese día. Las atrasadas con botón y la semana día por día | El Space de cada departamento. Un Space vinculado a varios departamentos recibe una sola tarjeta con todos |
 | **Lunes, 8:00** | **Resumen por departamento**: tareas de la semana, atrasadas, % de cumplimiento de la semana pasada y quiénes tienen más atrasadas | Dirección |
 | **Lunes a viernes, 8:00** | **Escalamiento**: lo que lleva muchos días hábiles atrasado, en un solo mensaje agrupado por departamento | Dirección (se **suma** al aviso del departamento, no lo reemplaza) |
 | **Cuando se marca la última tarea que otra esperaba** | **«Ya podés hacerla»**, con botón **Marcar hecha** | El Space del departamento que esperaba y, en privado, su responsable (hoy el privado solo le llega a quien ya usó la app de Chat) |
@@ -465,9 +465,9 @@ Los lunes a las 8, en lugar del recordatorio diario, cada Space recibe **Tu sema
 Al marcar una atrasada, la tarjeta se actualiza en su lugar. Un departamento sin
 tareas en la semana ni atrasadas no recibe nada. Si no se pudo leer la agenda de
 algún departamento, el resumen de Dirección lo dice («No pude leer la agenda
-de…») en vez de mostrarlo como «sin tareas». Un **Space combinado** (ver
-[Spaces de Chat](#spaces-de-chat)) recibe una sola tarjeta con todos sus
-departamentos.
+de…») en vez de mostrarlo como «sin tareas». Un Space vinculado a
+varios departamentos (ver [Spaces de Chat](#spaces-de-chat)) recibe una sola
+tarjeta con todos ellos.
 
 Dirección recibe además un **resumen por departamento**: cuántas tareas tiene cada
 uno esa semana y cuántas atrasadas, el % de cumplimiento de la semana pasada (el
@@ -553,14 +553,15 @@ y te avisa. Si alguien ya la había marcado, te dice quién.
 - **Un Space para varios departamentos**: en `/vincular` se tildan varios. Los
   comandos muestran todo junto, y cada línea dice de qué departamento es. Un
   departamento puede estar en varios Spaces.
-  - Si alguno de los tildados no tiene Space propio, este pasa a ser el suyo:
-    recibe su recordatorio diario y su resumen de los lunes. Con el resto se
-    usan los comandos y botones.
+  - **Cada Space recibe los avisos de todos los departamentos que tiene
+    vinculados**: el recordatorio diario, el **resumen de los lunes** (una sola
+    tarjeta con todos juntos, cada línea con la etiqueta de su departamento) y
+    el aviso «Ya podés hacerla». Cada departamento sigue recibiendo lo suyo
+    también en su Space propio.
+  - Si alguno de los tildados no tiene Space propio, este pasa a ser el suyo.
   - Si todos ya tienen su propio Space (por ejemplo, un Space de gente de
-    Auditoría y de Informes), queda como **Space combinado**: el **resumen de
-    los lunes** llega con todos juntos, cada línea con la etiqueta de su
-    departamento, y el recordatorio diario sigue yendo al Space propio de
-    cada uno.
+    Auditoría y de Informes), queda como **Space combinado** (sin dueño), y
+    recibe lo mismo.
 - **El Space de Dirección** ve y opera todos los departamentos. Equivale a
   administración: conviene cuidar a quién se agrega.
 

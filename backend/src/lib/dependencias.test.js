@@ -409,3 +409,28 @@ test('aviso: un 403 al postear NO desvincula el Space (queda como fallido y se i
   assert.deepEqual([r.liberadas, r.spaces, r.fallidos], [1, 0, 1])
   assert.equal(llamadasADesvincular.length, 0, 'no se toco chat_space_name')
 })
+
+test('aviso: sale en el Space propio y en cada otro Space donde el departamento esta vinculado', async () => {
+  const { deps, estados, porId } = escenario()
+  estados['cmv|2026-10-01'] = { estado: 'REALIZADA' }
+  porId.reporte.tarea.departamento.chat_space_name = 'spaces/AUD'
+  deps.db.departamentoCompartidoEnSpace = { findMany: async () => [{ chat_space_name: 'spaces/MIX' }, { chat_space_name: 'spaces/AUD' }] }
+  const posteos = []
+  deps.chat = { postearEnSpace: async (space) => { posteos.push(space) }, idDeChatPorEmail: async () => null, buscarMensajeDirecto: async () => null }
+  delete process.env.AVISO_DRY_RUN
+  const r = await avisarLiberadas(deps, { idAsignacion: 'cierre', fechaISO: '2026-10-02', emailUsuario: 'reporte@dcsmart.app' })
+  assert.deepEqual(posteos.sort(), ['spaces/AUD', 'spaces/MIX'])
+  assert.deepEqual([r.spaces, r.sin_space, r.fallidos], [2, 0, 0])
+})
+
+test('aviso: un departamento sin Space propio pero vinculado a uno compartido igual recibe el aviso', async () => {
+  const { deps, estados } = escenario()
+  estados['cmv|2026-10-01'] = { estado: 'REALIZADA' }
+  deps.db.departamentoCompartidoEnSpace = { findMany: async () => [{ chat_space_name: 'spaces/MIX' }] }
+  const posteos = []
+  deps.chat = { postearEnSpace: async (space) => { posteos.push(space) }, idDeChatPorEmail: async () => null, buscarMensajeDirecto: async () => null }
+  delete process.env.AVISO_DRY_RUN
+  const r = await avisarLiberadas(deps, { idAsignacion: 'cierre', fechaISO: '2026-10-02', emailUsuario: 'reporte@dcsmart.app' })
+  assert.deepEqual(posteos, ['spaces/MIX'])
+  assert.deepEqual([r.spaces, r.sin_space], [1, 0])
+})

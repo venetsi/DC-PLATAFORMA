@@ -709,11 +709,11 @@ export async function vincularDepartamentos(deps, { space, extUser, idsDepartame
   const conOtroSpace = compartidosNuevos.filter((d) => d.chat_space_name && d.chat_space_name !== space)
   if (nuevoDueño) {
     lineas.push(`• El recordatorio diario y el resumen de los lunes de *${nuevoDueño.nombre}* llegan acá.`)
-    if (compartidosNuevos.length) lineas.push(`• Con ${nombres(compartidosNuevos)} se pueden usar los comandos y botones acá; sus avisos van a su propio Space.`)
+    if (compartidosNuevos.length) lineas.push(`• También llegan acá los avisos de ${nombres(compartidosNuevos)} (el recordatorio diario, el resumen de los lunes y «Ya podés hacerla»), y los comandos y botones funcionan para todos.`)
   } else {
     // Space combinado: sin dueño (ver jobs/avisosChat.js).
-    lineas.push('• Es un Space combinado: el resumen de los lunes llega acá con todos juntos, y los comandos y botones funcionan para todos.')
-    if (conOtroSpace.length) lineas.push(`• El recordatorio diario de cada uno sigue llegando a su propio Space.`)
+    lineas.push('• Es un Space combinado: el recordatorio diario de cada uno y el resumen de los lunes (con todos juntos) llegan acá, y los comandos y botones funcionan para todos.')
+    if (conOtroSpace.length) lineas.push(`• Cada uno sigue recibiendo lo suyo también en su propio Space.`)
   }
   return lineas.join('\n') + notaDireccion
 }

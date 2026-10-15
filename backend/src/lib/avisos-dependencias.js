@@ -35,6 +35,14 @@ function filaDe(liberada) {
   }
 }
 
+// El Space propio del departamento y los demas donde esta vinculado.
+async function spacesDe(db, departamento) {
+  const filas = db.departamentoCompartidoEnSpace
+    ? await db.departamentoCompartidoEnSpace.findMany({ where: { id_departamento: departamento.id }, select: { chat_space_name: true } })
+    : []
+  return [...new Set([departamento.chat_space_name, ...filas.map((f) => f.chat_space_name)].filter(Boolean))]
+}
+
 // NUNCA tira: el marcado ya se aplico y un aviso que falla no puede
 // convertirlo en un error para quien marco.
 export async function avisarLiberadas(deps, { idAsignacion, fechaISO, estado = 'REALIZADA', emailUsuario = null }) {
@@ -75,20 +83,30 @@ export async function avisarLiberadas(deps, { idAsignacion, fechaISO, estado = '
       porDepartamento.get(departamento.id).filas.push(filaDe(liberada))
     }
     for (const { departamento, filas } of porDepartamento.values()) {
+      // Su Space propio y todos los Spaces donde esta vinculado (/vincular).
+      let spaces = []
+      try {
+        spaces = await spacesDe(db, departamento)
+      } catch (err) {
+        log.warn?.({ err: err.message, departamento: departamento.slug }, 'dependencias: no se pudieron leer los Spaces vinculados')
+        spaces = departamento.chat_space_name ? [departamento.chat_space_name] : []
+      }
       // Sin Space no hay donde postear: antes se saltaba sin dejar rastro y
       // el aviso se perdia en silencio. Ahora se cuenta y se loguea.
-      if (!departamento.chat_space_name) {
+      if (!spaces.length) {
         resultado.sin_space++
         log.warn?.({ departamento: departamento.slug, filas: filas.length }, 'dependencias: el departamento no tiene Space vinculado, el aviso de tareas liberadas no salio')
         continue
       }
-      try {
-        if (await postear(departamento.chat_space_name, cardLiberadas({ departamento, filas, prerequisito, hoyISO, urlApp }), departamento.nombre)) resultado.spaces++
-      } catch (err) {
-        resultado.fallidos++
-        // Un Space inaccesible (403/404) NO se desvincula aca: ver el comentario
-        // de crearTransporteChatApp. La baja la da REMOVED_FROM_SPACE.
-        log.warn?.({ err: err.message, departamento: departamento.slug }, 'dependencias: no se pudo avisar en el Space')
+      for (const space of spaces) {
+        try {
+          if (await postear(space, cardLiberadas({ departamento, filas, prerequisito, hoyISO, urlApp }), departamento.nombre)) resultado.spaces++
+        } catch (err) {
+          resultado.fallidos++
+          // Un Space inaccesible (403/404) NO se desvincula aca: ver el comentario
+          // de crearTransporteChatApp. La baja la da REMOVED_FROM_SPACE.
+          log.warn?.({ err: err.message, departamento: departamento.slug }, 'dependencias: no se pudo avisar en el Space')
+        }
       }
     }
 

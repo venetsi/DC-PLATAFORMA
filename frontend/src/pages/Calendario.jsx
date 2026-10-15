@@ -19,6 +19,7 @@ import { clasificarInstancia, hoyEnArgentina } from '../lib/vencimiento.js'
 import { usePermisos } from '../lib/permisos.js'
 import { infoDepartamentos } from '../lib/colores-depto.js'
 import { fechaHumana } from '../lib/agenda-texto.js'
+import { marcarEnLocal } from '../lib/marca-local.js'
 import { todasLasEtiquetas } from '../lib/dependencias.js'
 import { useMedia, CONSULTA_CELULAR, CONSULTA_TACTIL } from '../lib/pantalla.js'
 
@@ -131,6 +132,7 @@ function fechaDe(ev) {
 // dia vacio para crear una tarea ahi.
 export default function Calendario() {
   const propios = useAuthStore((s) => s.departamentos)
+  const usuario = useAuthStore((s) => s.usuario)
   const esAdminGlobal = useAuthStore((s) => s.esAdminGlobal)
   const { puede, filtrar } = usePermisos()
 
@@ -213,6 +215,9 @@ export default function Calendario() {
   // que una respuesta atrasada pisara a la ultima.
   const cache = useRef(new Map())
   const ultimoPedido = useRef(0)
+  // Lo que hay en pantalla, para leerlo desde funciones asincronas sin quedarse con una copia vieja.
+  const eventosActuales = useRef([])
+  eventosActuales.current = eventos
 
   useEffect(() => {
     localesApi.listar().then(setLocales)
@@ -232,18 +237,27 @@ export default function Calendario() {
   const claveSeleccion = idsVisibles.join(',')
 
   // `mantener`: despues de marcar/mover se refresca sin vaciar la pantalla.
-  async function cargar(desde, hasta, { forzar = false, mantener = false } = {}) {
+  // `sinDependencias`: lectura rapida (lo lento es evaluar las dependencias); las
+  // etiquetas "espera a..." que ya estaban en pantalla se conservan hasta que
+  // llega la lectura completa.
+  async function cargar(desde, hasta, { forzar = false, mantener = false, sinDependencias = false } = {}) {
     if (!idsVisibles.length) return
     const clave = `${claveSeleccion}|${desde}|${hasta}`
     const pedido = ++ultimoPedido.current
+    const etiquetasPrevias = new Map()
+    if (sinDependencias) {
+      for (const e of eventosActuales.current) {
+        if (e.espera_a || e.lista_por || e.la_espera) etiquetasPrevias.set(`${e.__depto}${SEP}${e.id}`, { espera_a: e.espera_a, lista_por: e.lista_por, la_espera: e.la_espera })
+      }
+    }
     const enCache = cache.current.get(clave)
     if (enCache && !forzar) setEventos(enCache)
     else if (!enCache && !mantener) setEventos([]) // nunca mostrar lo de OTRA seleccion mientras carga
     setCargando(true)
     try {
       const porDepto = await Promise.all(idsVisibles.map((id) =>
-        instanciasApi.listarRango({ departamento: id, desde, hasta })
-          .then(({ items }) => items.map((ev) => ({ ...ev, __depto: id })))
+        instanciasApi.listarRango({ departamento: id, desde, hasta, conDependencias: !sinDependencias })
+          .then(({ items }) => items.map((ev) => ({ ...ev, __depto: id, ...(sinDependencias ? etiquetasPrevias.get(`${id}${SEP}${ev.id}`) : null) })))
           // Un departamento sin calendario (o sin permiso) no tumba a los demas.
           .catch(() => [])
       ))
@@ -258,9 +272,13 @@ export default function Calendario() {
   }
   // Despues de marcar, mover o crear: todo lo cacheado quedo viejo (una tarea
   // puede estar en varias selecciones), asi que se descarta entero.
-  function recargar() {
+  // En dos tiempos: primero la lectura rapida (sin dependencias) y despues la
+  // completa, que corrige las etiquetas "espera a..." sin bloquear la pantalla.
+  // Devuelve cuando termina la rapida; la completa sigue por detras.
+  async function recargar() {
     cache.current.clear()
-    return cargar(rango.desde, rango.hasta, { forzar: true, mantener: true })
+    await cargar(rango.desde, rango.hasta, { forzar: true, mantener: true, sinDependencias: true })
+    cargar(rango.desde, rango.hasta, { forzar: true, mantener: true }).catch(() => {})
   }
 
   useEffect(() => {
@@ -293,15 +311,22 @@ export default function Calendario() {
     setTimeout(() => setMensaje((m) => (m?.texto === texto ? null : m)), deshacer ? 15000 : 8000)
   }
 
+  // La tarea se ve hecha al instante; el servidor tarda varios segundos (varias
+  // llamadas a Calendar). Si lo rechaza, vuelve a lo que habia y se avisa.
   async function marcar(instanceId, idDepto) {
+    const antes = eventosActuales.current
+    setEventos(marcarEnLocal(antes, { idDepto, instanceId, email: usuario?.email }))
     setMarcando(instanceId)
     try {
       const r = await instanciasApi.marcar(instanceId, idDepto)
       setAviso(r?.avisos?.length ? r.avisos : null)
-      await recargar()
+    } catch (err) {
+      setEventos(antes)
+      throw err
     } finally {
       setMarcando(null)
     }
+    recargar().catch(() => {})
   }
 
   async function noAplica(instanceId, idDepto, motivo) {
@@ -507,11 +532,15 @@ export default function Calendario() {
       // De a una: cada marca propaga a las copias de otros departamentos.
       for (const t of abiertas) {
         setMarcando(t.id)
+        const antes = eventosActuales.current
+        setEventos(marcarEnLocal(antes, { idDepto: t.idDepartamento, instanceId: t.id, email: usuario?.email }))
         try {
           const r = await instanciasApi.marcar(t.id, t.idDepartamento)
           if (r?.avisos?.length) avisos.push(...r.avisos)
         } catch {
           fallidas++
+          // Solo esta vuelve atras: las anteriores ya se marcaron de verdad.
+          setEventos((actuales) => actuales.map((e) => (e.id === t.id && e.__depto === t.idDepartamento ? antes.find((x) => x.id === e.id && x.__depto === e.__depto) || e : e)))
         }
       }
     } finally {
@@ -520,7 +549,7 @@ export default function Calendario() {
     setAviso(avisos.length ? avisos : null)
     if (fallidas) avisar(`No se ${fallidas === 1 ? 'pudo marcar 1' : `pudieron marcar ${fallidas}`} de ${abiertas.length}. Probá de nuevo.`, { tono: 'mal' })
     else if (!una) avisar(`Marcadas las ${abiertas.length} de "${titulo}".`)
-    await recargar()
+    recargar().catch(() => {})
   }
 
   // La casilla del Tablero: marcar no se puede deshacer, asi que se confirma.
@@ -531,7 +560,7 @@ export default function Calendario() {
       ? `"${t.titulo} — ${t.local}" espera a ${todasLasEtiquetas(t.esperaA, t.local)}, que todavía no está hecha. ¿Marcarla igual? No se puede deshacer.`
       : `¿Marcar "${t.titulo} — ${t.local}" como hecha? No se puede deshacer.`
     if (!window.confirm(pregunta)) return
-    marcar(t.id, t.idDepartamento)
+    marcar(t.id, t.idDepartamento).catch(() => avisar('No se pudo marcar la tarea. Probá de nuevo.', { tono: 'mal' }))
   }
 
   // Con el dedo, el arrastre de Semana no anda en la mayoria de los celulares,

@@ -49,8 +49,8 @@ export function textoDeSpaces(mapa, { completo, nombres = new Map() }) {
   const ve = (s) => (s.dueño?.slug === SLUG_DIRECCION ? ' · 👁️ ve todo' : '')
   const grupos = [
     ['propio', '💬 *Space propio* — recibe sus recordatorios y su resumen del lunes'],
-    ['con_compartidos', '🤝 *Space propio con otros departamentos* — el dueño recibe los avisos; el resto lo usa para comandos y botones'],
-    ['combinado', '🧩 *Space combinado* — sin dueño: el resumen del lunes llega con todos juntos; el recordatorio diario va al Space propio de cada uno']
+    ['con_compartidos', '🤝 *Space propio con otros departamentos* — recibe los avisos de todos los que cubre (cada uno también en su Space propio)'],
+    ['combinado', '🧩 *Space combinado* — sin dueño: recibe el recordatorio diario de cada uno y el resumen del lunes con todos juntos (cada uno también en su Space propio)']
   ]
   l.push(completo ? '*Spaces vinculados*' : '*Este Space*', '')
   let hay = false

@@ -85,12 +85,25 @@ function armarDiario({ depto, items, umbrales, hoyISO, ahora, nombreLocal, urlAp
   return { baldes, mensajes }
 }
 
+// El mismo mensaje del departamento, para cada otro Space donde esta vinculado.
+// El destino es una copia con ESE Space (y sin webhook: el webhook es del Space
+// propio, no se repite).
+export function copiasEnOtrosSpaces(depto, mensajes, compartidos) {
+  const extras = [...new Set(compartidos.filter((c) => c.id_departamento === depto.id && c.chat_space_name && c.chat_space_name !== depto.chat_space_name).map((c) => c.chat_space_name))]
+  return extras.flatMap((space) => mensajes.map((m) => ({
+    ...m,
+    etiqueta: `${m.etiqueta} → …${String(space).slice(-5)}`,
+    destino: { ...depto, chat_space_name: space, chat_webhook_url: null }
+  })))
+}
+
 function armarSemanal({ depto, datos, umbrales, hoyISO, ahora, nombreLocal, grupoLocal, urlApp }) {
   const baldes = clasificarParaAviso(datos.items, { umbrales, hoyISO, referencia: ahora })
   const mensajes = []
   if (datos.total || datos.vencidas.length) {
     mensajes.push({
       etiqueta: `${depto.slug} (semanal)`,
+      semanalDe: depto.id,
       destino: depto,
       texto: mensajeSemanal(depto, datos, nombreLocal, { hoyISO, grupoLocal }),
       card: cardSemanal(depto, datos, nombreLocal, { hoyISO, grupoLocal, urlApp })
@@ -185,6 +198,19 @@ export async function correr({
   const erroresLectura = []
   const erroresArmado = []
 
+  // Los Spaces donde cada departamento esta vinculado ademas de su Space propio
+  // (/vincular). Un Space que cubre varios departamentos recibe lo de TODOS ellos
+  // (pedido del usuario, 2026-10-15): el recordatorio diario, el resumen del
+  // lunes y el aviso "Ya podes hacerla". Si no se puede leer, cada departamento
+  // sigue recibiendo lo suyo en su Space propio.
+  let compartidos = []
+  try {
+    compartidos = await prisma.departamentoCompartidoEnSpace.findMany({ select: { chat_space_name: true, id_departamento: true } })
+  } catch (err) {
+    erroresArmado.push({ departamento: 'Spaces combinados', error: err.message })
+    console.error(`[avisos] no se pudieron leer los Spaces compartidos: ${err.message}`)
+  }
+
   for (const depto of departamentos) {
     const umbrales = resolverUmbrales(depto)
     if (umbrales.ajustado) configuracionAjustada.push(depto.slug)
@@ -216,6 +242,9 @@ export async function correr({
 
     const { baldes } = armado
     mensajes.push(...armado.mensajes)
+    // Recordatorio diario: tambien a cada otro Space donde el departamento esta
+    // vinculado (el del lunes sale en una sola tarjeta por Space, mas abajo).
+    if (!semanalHoy) mensajes.push(...copiasEnOtrosSpaces(depto, armado.mensajes, compartidos))
     vencidasTotales += baldes.vencidas.length
     if (semanalHoy) {
       const datos = leido
@@ -241,10 +270,12 @@ export async function correr({
   // la de su departamento -- decision del usuario. El recordatorio diario va
   // siempre solo al Space propio de cada uno.
   let combinados = []
-  if (semanalHoy) {
+  if (semanalHoy && !erroresArmado.some((e) => e.departamento === 'Spaces combinados')) {
     try {
-      combinados = espaciosCombinados(departamentos, await prisma.departamentoCompartidoEnSpace.findMany({ select: { chat_space_name: true, id_departamento: true } }))
-        .filter((c) => !c.dueño)
+      // Sin dueño: siempre. Con dueño: solo si cubre 2 o mas (con un solo
+      // departamento no hay nada que juntar y sale su tarjeta de siempre).
+      combinados = espaciosCombinados(departamentos, compartidos)
+        .filter((c) => !c.dueño || c.departamentos.length > 1)
       if (combinados.length) {
         const info = infoDepartamentos(await prisma.departamento.findMany({ where: { activo: true }, select: { id: true, nombre: true } }))
         const nuevos = []
@@ -261,6 +292,12 @@ export async function correr({
           })
         }
         mensajes.push(...nuevos)
+        // El dueño de un Space combinado no recibe ademas SU tarjeta ahi: ya va
+        // dentro de la combinada.
+        const conDueño = new Set(combinados.filter((c) => c.dueño).map((c) => c.space))
+        for (let i = mensajes.length - 1; i >= 0; i--) {
+          if (mensajes[i].semanalDe && conDueño.has(mensajes[i].destino.chat_space_name)) mensajes.splice(i, 1)
+        }
       }
     } catch (err) {
       erroresArmado.push({ departamento: 'Spaces combinados', error: err.message })

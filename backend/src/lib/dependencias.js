@@ -203,6 +203,9 @@ async function evaluarEspera(leer, asignacion, prerequisitos, fecha, { hechaAhor
   const listas = []
   const noVerificadas = []
   if (!prerequisitos.length) return { espera, listas, noVerificadas }
+  // Cada calendario se lee una sola vez por pedido (ver lectorDeInstancias);
+  // pedirlos todos juntos evita esperarlos uno detras del otro (~1 s cada uno).
+  await Promise.all([asignacion, ...prerequisitos].map((a) => leer(a)))
   const fechasA = (await leer(asignacion)).map((i) => i.fecha)
   const tramoIncierto = leer.fallo?.(asignacion)
   for (const prerequisito of prerequisitos) {
@@ -360,6 +363,12 @@ export async function liberadasPor(deps, { idAsignacion, fechaISO, estado = 'REA
   const prerequisito = filas[0].prerequisito
   const hechaAhora = { idAsignacion, fecha: fechaISO, estado, por: emailUsuario, en: ahora.toISOString() }
   const leer = lectorDeInstancias(gcal, { desde: correrDias(fechaISO, -VENTANA_DIAS), hasta: correrDias(fechaISO, VENTANA_DIAS) }, log, { esperaReintentoMs: deps.esperaReintentoMs })
+  // Todas las agendas que se van a necesitar, de una vez (cada calendario se lee
+  // una sola vez por pedido): antes se esperaban una detras de la otra.
+  await Promise.all([
+    prerequisito,
+    ...filas.flatMap((f) => [f.asignacion, ...f.asignacion.dependencias.map((d) => d.prerequisito)])
+  ].map((a) => leer(a)))
   const fechasP = (await leer(prerequisito)).map((i) => i.fecha)
   if (!fechasP.includes(fechaISO)) fechasP.push(fechaISO)
   fechasP.sort()
