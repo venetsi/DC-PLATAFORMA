@@ -5,7 +5,7 @@ hacer, en qué local, cuándo, quién la tiene, y si ya se hizo. Todo vive en Go
 Calendar y se opera desde la plataforma o desde Google Chat.
 
 > Este manual es el que ves en **Ayuda** dentro de la plataforma. Se actualiza
-> cada vez que cambia algo. Actualizado el 04/10/2026.
+> cada vez que cambia algo. Actualizado el 15/10/2026.
 
 **Direcciones:**
 
