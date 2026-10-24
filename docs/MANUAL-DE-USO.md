@@ -246,7 +246,7 @@ Siendo Owner, además:
 - Los **avisos de tu departamento** (webhook de Chat y cuántos días hábiles de
   atraso disparan cada aviso).
 
-Las agendas se crean por 6 meses y **no se renuevan solas**: Dirección recibe por Chat un aviso cuando una serie está por terminar (30 días antes), para volver a agendarla. Las de fechas exactas terminan en su última fecha.
+Las agendas se crean por 3 meses y **no se renuevan solas**: Dirección recibe por Chat un aviso cuando una serie está por terminar (30 días antes), para volver a agendarla. Las de fechas exactas terminan en su última fecha.
 
 ### Tareas que dependen de otra
 

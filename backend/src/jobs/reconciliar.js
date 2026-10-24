@@ -4,8 +4,8 @@
 //    nunca events.delete) la recurrencia de cualquier TareaAsignacion que
 //    apunte a ese local -- sin perder el historial ya generado.
 // 2. RENOVACION: extiende el horizonte de las series que estan por agotarse.
-//    Desde que las recurrencias se crean acotadas a 6 meses (ver
-//    lib/recurrencia.js), sin esto una tarea activa se apagaria sola a los 6
+//    Desde que las recurrencias se crean acotadas a 3 meses (ver
+//    lib/recurrencia.js), sin esto una tarea activa se apagaria sola a los 3
 //    meses y desapareceria del kiosko y del checklist SIN ningun error a la vista.
 //
 // Ver docs/superpowers/plans.
@@ -16,7 +16,7 @@ import { cerrarSerie } from '../lib/cerrar-serie.js'
 
 // Cuando al UNTIL le quedan menos de estos dias, se renueva. Con el job
 // corriendo cada 6h hay muchisimo margen: no hace falta apurar el limite.
-const DIAS_ANTES_DE_RENOVAR = 60
+const DIAS_ANTES_DE_RENOVAR = 30
 
 function untilSuffix(fechaISO) {
   return `UNTIL=${fechaISO.replaceAll('-', '')}T000000Z`

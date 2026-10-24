@@ -2,14 +2,14 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { MESES_DE_HORIZONTE, horizontePorDefecto, construirRecurrence, leerRecurrence, primeraFecha, diaHabilDelMes, untilDe, conUntil } from './recurrencia.js'
 
-test('el horizonte por defecto es de 6 meses', () => {
-  assert.equal(MESES_DE_HORIZONTE, 6)
-  assert.equal(horizontePorDefecto('2026-09-27'), '2027-03-27')
+test('el horizonte por defecto es de 3 meses', () => {
+  assert.equal(MESES_DE_HORIZONTE, 3)
+  assert.equal(horizontePorDefecto('2026-09-27'), '2026-12-27')
 })
 
-test('una serie sin vigencia_hasta termina a los 6 meses de su inicio', () => {
+test('una serie sin vigencia_hasta termina a los 3 meses de su inicio', () => {
   const [regla] = construirRecurrence('SEMANAL', { dias_semana: [1, 4] }, null, '2026-09-27')
-  assert.equal(regla, 'RRULE:FREQ=WEEKLY;BYDAY=MO,TH;UNTIL=20270327T000000Z')
+  assert.equal(regla, 'RRULE:FREQ=WEEKLY;BYDAY=MO,TH;UNTIL=20261227T000000Z')
 })
 
 test('dia habil N: el N-esimo lunes-a-viernes del mes, sin contar feriados', () => {
@@ -27,14 +27,14 @@ test('dia habil N: el N-esimo lunes-a-viernes del mes, sin contar feriados', () 
 
 test('dia habil N: la regla, la primera fecha y la lectura de vuelta', () => {
   const [regla] = construirRecurrence('DIA_HABIL', { dia_habil: 10 }, null, '2026-09-28')
-  assert.equal(regla, 'RRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=10;UNTIL=20270328T000000Z')
+  assert.equal(regla, 'RRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=10;UNTIL=20261228T000000Z')
   // El 10 de septiembre (el 14/9) ya paso: arranca en octubre.
   assert.equal(primeraFecha('DIA_HABIL', { dia_habil: 10 }, '2026-09-28'), '2026-10-14')
   // El mismo dia cuenta.
   assert.equal(primeraFecha('DIA_HABIL', { dia_habil: 10 }, '2026-10-14'), '2026-10-14')
   assert.deepEqual(leerRecurrence([regla], '2026-10-14'), {
     vigencia_desde: '2026-10-14',
-    vigencia_hasta: '2027-03-28',
+    vigencia_hasta: '2026-12-28',
     recurrencia_tipo: 'DIA_HABIL',
     recurrencia_config: { dia_habil: 10 }
   })

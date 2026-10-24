@@ -14,9 +14,9 @@ const DIAS_ISO_A_RRULE = { 1: 'MO', 2: 'TU', 3: 'WE', 4: 'TH', 5: 'FR', 6: 'SA',
 // formulario de agenda no ofrece fecha de fin, en la practica TODAS lo eran.
 // El horizonte se renueva solo desde jobs/reconciliar.js mientras la
 // asignacion siga activa, asi que acotarlo no apaga nada por sorpresa.
-// 6 meses desde 2026-09-27 (antes 12, a pedido del usuario). Las series ya
-// creadas conservan su UNTIL y pasan a 6 meses cuando el job las renueva.
-export const MESES_DE_HORIZONTE = 6
+// 3 meses desde 2026-10-24 (antes 6, y antes 12, a pedido del usuario). Las series ya
+// creadas conservan su UNTIL y pasan al horizonte nuevo cuando el job las renueva.
+export const MESES_DE_HORIZONTE = 3
 
 // Todo mes tiene al menos 20 días de lunes a viernes: con un número mayor,
 // BYSETPOS salteaba los meses cortos en silencio.
@@ -36,7 +36,7 @@ function untilSuffix(vigenciaHasta) {
 // `vigenciaDesde` es opcional y solo se usa para calcular el horizonte por
 // defecto cuando no vino un `vigenciaHasta` explicito.
 export function construirRecurrence(tipo, config, vigenciaHasta, vigenciaDesde) {
-  // FECHAS lleva sus fechas explicitas: el horizonte de 6 meses no corresponde.
+  // FECHAS lleva sus fechas explicitas: el horizonte de 3 meses no corresponde.
   if (tipo === 'FECHAS') {
     const fechas = fechasVigentes(config, vigenciaDesde, vigenciaHasta)
     // La primera es el inicio del evento; el resto, un RDATE. Una sola fecha

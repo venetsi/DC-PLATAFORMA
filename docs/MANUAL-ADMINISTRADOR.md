@@ -243,10 +243,11 @@ departamento, OWNER (ver §1).
 
 Abajo, una frase dice exactamente qué se va a crear. **Crear y agendar**
 crea la tarea, una asignación por local y los eventos en Calendar. Las
-series se agendan por 6 meses y se renuevan solas mientras la tarea siga
-activa: `reconciliar` las extiende a hoy + 6 meses cuando les quedan menos de
-60 días. Las creadas antes del 27/09/2026 (a 12 meses) conservan su fecha de
-fin hasta esa primera renovación.
+series se agendan por 3 meses (desde el 24/10/2026; antes eran 6) y se renuevan
+solas mientras la tarea siga activa: `reconciliar` las extiende a hoy + 3 meses
+cuando les quedan menos de 30 días. Las creadas antes conservan su fecha de fin
+hasta esa primera renovación. La agenda cargada el 24/10/2026 (VTA/OP, CMV e
+Informe) termina el 31/01/2027.
 
 ### Trabajar sobre los locales de una tarea
 

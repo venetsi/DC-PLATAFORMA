@@ -33,7 +33,7 @@ export async function definirAgenda(fastify, asignacion, { recurrencia_tipo, rec
   const calendarId = asignacion.tarea.departamento.id_calendar_google
   if (!calendarId) throw Object.assign(new Error('El departamento todavia no tiene calendario propio'), { status: 409 })
 
-  // Sin vigencia_hasta explicita, la serie se acota a 6 meses y la renueva
+  // Sin vigencia_hasta explicita, la serie se acota a 3 meses y la renueva
   // reconciliar.js -- nunca infinita (ver lib/recurrencia.js).
   // Al editar, un cambio de agenda rige desde "desde" pero nunca antes de hoy:
   // el pasado ya ocurrio (y tiene lo marcado) y no se reescribe.

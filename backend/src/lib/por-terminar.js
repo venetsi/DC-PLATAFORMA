@@ -1,5 +1,5 @@
 // Series recurrentes que estan por terminar. Una serie acotada (UNTIL, la que
-// crea la app por 6 meses) o de fechas exactas (RDATE) deja de aparecer en
+// crea la app por 3 meses) o de fechas exactas (RDATE) deja de aparecer en
 // Calendar, en Mi agenda, en la TV y en los avisos SIN ningun error cuando
 // llega a su fin. Este aviso le dice a Direccion con tiempo que hay que
 // reagendar la secuencia (Agendas -> la tarea -> Cambiar cuando).

@@ -178,7 +178,7 @@ export default async function tareasRoutes(fastify) {
           recurrencia_tipo: agenda.recurrencia_tipo,
           recurrencia_config: agenda.recurrencia_config,
           vigencia_desde: agenda.vigencia_desde > hoy ? agenda.vigencia_desde : hoy,
-          vigencia_hasta: null, // horizonte nuevo de 6 meses, lo renueva reconciliar.js
+          vigencia_hasta: null, // horizonte nuevo de 3 meses, lo renueva reconciliar.js
           asignado_a: origen.asignado_a || ''
         })
         resultado.agendadas++
