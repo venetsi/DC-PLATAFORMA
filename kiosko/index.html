@@ -506,7 +506,9 @@
   // Chat). Un local solo de su grupo, o sin grupo, queda como estaba.
   var PEOR_ESTADO = ['vencida', 'pendiente', 'realizada'];
   function claveDeGrupo(ev) {
-    return ev.grupo ? ev.titulo + '|' + String(ev.fecha || ev.inicio || '').slice(0, 10) + '|' + ev.grupo : null;
+    // Con el departamento: dos departamentos pueden tener una tarea con el mismo nombre.
+    var depto = ev.departamento ? (ev.departamento.id || ev.departamento.nombre || '') : '';
+    return ev.grupo ? ev.titulo + '|' + String(ev.fecha || ev.inicio || '').slice(0, 10) + '|' + ev.grupo + '|' + depto : null;
   }
   function unicos(lista) {
     return lista.filter(function (x, i) { return x && lista.indexOf(x) === i; });

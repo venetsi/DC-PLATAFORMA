@@ -83,7 +83,7 @@ export function agruparDelDia(eventos, nombreLocal, dependencias, grupoLocal = n
     const local = localDe(props, nombreLocal)
     const grupo = (props.id_local_ext && grupoLocal.get(props.id_local_ext)) || null
     const prioridad = props.prioridad === 'ALTA' ? 'ALTA' : props.prioridad === 'NORMAL' ? 'NORMAL' : null
-    const clave = `${titulo}|${grupo ? `g:${grupo}` : `l:${local}`}|${prioridad || ''}`
+    const clave = `${props.id_departamento || ''}|${titulo}|${grupo ? `g:${grupo}` : `l:${local}`}|${prioridad || ''}`
     if (!lineas.has(clave)) lineas.set(clave, { titulo, prioridad, grupo, locales: new Set(), personas: new Set(), marcas: new Set() })
     const linea = lineas.get(clave)
     linea.locales.add(local)

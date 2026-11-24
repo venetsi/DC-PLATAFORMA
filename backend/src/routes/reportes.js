@@ -134,16 +134,24 @@ export default async function reportesRoutes(fastify) {
         grupo: nombre,
         ...contar(todas),
         locales: [...locs.entries()].map(([idLocal, lista]) => {
+          // Por tarea Y departamento: desde el 24/11/2026 dos departamentos pueden
+          // tener una tarea con el mismo nombre ("CMV" de Costos y de Auditoria),
+          // y no son la misma. Si en el local se repite el nombre, va con el departamento.
           const porTarea = new Map()
           for (const f of lista) {
-            if (!porTarea.has(f.nombre_tarea)) porTarea.set(f.nombre_tarea, [])
-            porTarea.get(f.nombre_tarea).push(f)
+            const clave = `${f.id_departamento}|${f.nombre_tarea}`
+            if (!porTarea.has(clave)) porTarea.set(clave, [])
+            porTarea.get(clave).push(f)
           }
+          const repetidos = new Set([...porTarea.values()].map((l) => l[0].nombre_tarea).filter((nom, i, arr) => arr.indexOf(nom) !== i))
+          const nombreTarea = (l) => (repetidos.has(l[0].nombre_tarea)
+            ? `${l[0].nombre_tarea} · ${visibles.find((d) => d.id === l[0].id_departamento)?.nombre || ''}`
+            : l[0].nombre_tarea)
           return {
             id_local_ext: idLocal,
             nombre: idLocal ? localPorId.get(idLocal)?.nombre || idLocal : EMPRESA,
             ...contar(lista),
-            tareas: [...porTarea.entries()].map(([nombreTarea, l]) => ({ nombre: nombreTarea, ...contar(l) })).sort((x, y) => y.vencidas - x.vencidas || x.nombre.localeCompare(y.nombre))
+            tareas: [...porTarea.values()].map((l) => ({ nombre: nombreTarea(l), ...contar(l) })).sort((x, y) => y.vencidas - x.vencidas || x.nombre.localeCompare(y.nombre))
           }
         }).sort((x, y) => (x.cumplimiento ?? 101) - (y.cumplimiento ?? 101) || x.nombre.localeCompare(y.nombre))
       }

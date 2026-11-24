@@ -80,7 +80,8 @@ export function agruparPorGrupo(tareas, grupoDeLocal) {
   for (const t of tareas) {
     const grupo = t.idLocal ? grupoDeLocal.get(t.idLocal) : null
     if (!grupo) continue
-    const clave = `${t.titulo}|${t.fechaISO}|${grupo}`
+    // Con el departamento: dos departamentos pueden tener una tarea con el mismo nombre.
+    const clave = `${t.titulo}|${t.fechaISO}|${grupo}|${t.idDepartamento || ''}`
     if (!porClave.has(clave)) porClave.set(clave, [])
     porClave.get(clave).push(t)
   }
@@ -93,7 +94,7 @@ export function agruparPorGrupo(tareas, grupoDeLocal) {
   const salida = []
   const puestos = new Set()
   for (const t of tareas) {
-    const clave = t.idLocal && grupoDeLocal.get(t.idLocal) ? `${t.titulo}|${t.fechaISO}|${grupoDeLocal.get(t.idLocal)}` : null
+    const clave = t.idLocal && grupoDeLocal.get(t.idLocal) ? `${t.titulo}|${t.fechaISO}|${grupoDeLocal.get(t.idLocal)}|${t.idDepartamento || ''}` : null
     const grupo = clave && grupos.get(clave)
     if (!grupo) salida.push(t)
     else if (!puestos.has(clave)) { puestos.add(clave); salida.push(grupo) }
