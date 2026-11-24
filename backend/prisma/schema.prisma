@@ -241,7 +241,9 @@ model DepartamentoCompartidoEnSpace {
 model Tarea {
   id              String   @id @default(uuid())
   id_departamento String
-  nombre          String   @unique
+  // Unico POR DEPARTAMENTO (ver @@unique abajo y prisma/sql/2026-11-24-nombre-por-departamento.sql):
+  // "CMV" de Costos y "CMV" de Auditoria son tareas distintas.
+  nombre          String
   descripcion     String?
   activa          Boolean  @default(true)
   created_at      DateTime @default(now())
@@ -251,6 +253,7 @@ model Tarea {
   asignaciones       TareaAsignacion[]
   seguimientosDePago PagoSeguimiento[]
 
+  @@unique([id_departamento, nombre])
   @@index([id_departamento, activa])
   @@map("tareas")
 }
@@ -332,8 +335,8 @@ model TareaAsignacionDepto {
 // append-only de description. Cuando se completa lo que esperaba, sale el
 // aviso de Chat "Ya podés hacerla" (lib/avisos-dependencias.js).
 //
-// Es entre TareaAsignacion y no entre Tarea (el catalogo) porque Tarea.nombre
-// es unico GLOBAL: "CMV" es una sola Tarea pero se asigna por local, asi que
+// Es entre TareaAsignacion y no entre Tarea (el catalogo) porque una Tarea
+// ("CMV") es una sola pero se asigna por local, asi que
 // "cargar ventas de TIAMO espera al CMV de TIAMO" no se podria expresar a
 // nivel catalogo -- se cumpliria con el CMV de cualquier local. Ademas,
 // evaluar el prerrequisito exige resolver un calendario y un evento

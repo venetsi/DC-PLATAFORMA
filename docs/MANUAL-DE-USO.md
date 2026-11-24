@@ -5,7 +5,7 @@ hacer, en qué local, cuándo, quién la tiene, y si ya se hizo. Todo vive en Go
 Calendar y se opera desde la plataforma o desde Google Chat.
 
 > Este manual es el que ves en **Ayuda** dentro de la plataforma. Se actualiza
-> cada vez que cambia algo. Actualizado el 15/10/2026.
+> cada vez que cambia algo. Actualizado el 24/11/2026.
 
 **Direcciones:**
 
@@ -214,10 +214,17 @@ De los departamentos que no son tuyos la ves en modo lectura. De los tuyos:
   quién y, si querés, la **urgencia** (🔴 o 🟢), y una frase abajo te dice exactamente qué se va a crear antes de
   confirmar. En **Más opciones** podés compartirla con otros departamentos: cada
   uno la ve en su agenda, y marcarla en uno la marca en todos.
-- **Una tarea, muchos locales**: el nombre no se repite, porque una misma tarea
-  se hace en todos sus locales y se ve como «P&L — TI AMO», «P&L — UAT». Si en
-  **+ Nueva tarea** ponés un nombre que ya existe, te ofrece **sumarle esos
-  locales** con la agenda y el responsable que cargaste.
+- **Una tarea, muchos locales**: dentro de un departamento el nombre no se
+  repite, porque una misma tarea se hace en todos sus locales y se ve como
+  «P&L — TI AMO», «P&L — UAT». Otro departamento sí puede tener una tarea con el
+  mismo nombre (el «CMV» de Costos y el de Auditoría son tareas distintas). Si en
+  **+ Nueva tarea** ponés un nombre que ya existe en el departamento, o uno que
+  empieza igual (por ejemplo «CMV PIPISTRELLO» cuando ya hay «CMV»), te ofrece
+  **sumarle esos locales** con la agenda y el responsable que cargaste.
+- **Si Google Calendar falla al crear**: si no se pudo agendar ningún local, no
+  se guarda nada y podés volver a intentar. Si fallaron algunos, la tarea queda con
+  los que sí; volvé a cargarla con el mismo nombre, tocá **Sumar** y se completan
+  los que faltaron.
 - **Cuándo** puede ser lunes a viernes, todos los días, algunos días de la
   semana, un día del mes, **un día hábil del mes** o una sola vez. Algunas tareas
   tienen **fechas exactas** (por ejemplo, las que vienen de una planilla): en
@@ -255,7 +262,10 @@ el reporte de Auditoría espere al CMV de Costos. Se configura en **Opciones
 avanzadas → + Depende de otra tarea**: elegís el departamento, la tarea y el local.
 Con **En todos los locales**, cada local de la tarea espera a la otra tarea en su
 mismo local, sin cargarlos de a uno; si la otra tarea no está en algún local, te lo
-dice.
+dice. Cuando después le sumás un local a una tarea, ese local **copia las esperas**
+de los demás: si el CMV de los otros locales espera al VTA/OP, el CMV del local
+nuevo espera al VTA/OP de ese local (si lo tiene), y lo que esperaba al CMV en los
+otros locales pasa a esperarlo también en el nuevo.
 
 **A qué espera.** Cada vez que le toca a la tarea, espera a la **última vez que le
 tocó a la otra desde su fecha anterior**. Ejemplo: si el CMV es el día 1 y el

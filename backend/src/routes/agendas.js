@@ -2,6 +2,8 @@ import { usuarioActual, puede, esAdminGlobal, departamentosDe, departamentosCon 
 import { leerRecurrence, MAX_DIA_HABIL, fechasDeConfig } from '../lib/recurrencia.js'
 import { clasificarInstancia, fechaDeInstancia, hoyEnArgentina } from '../lib/vencimiento.js'
 import { definirAgenda, asegurarAsignacion, cerrarAsignacion, INCLUDES_AGENDA, sumarDias, prioridadValida } from '../lib/agenda.js'
+import { buscarMismoNombre, resumirExistente, motivoDeError, deshacerAlta } from '../lib/alta-tarea.js'
+import { heredarDependencias } from '../lib/heredar-dependencias.js'
 
 // Pantalla "Agendas": ver y gestionar las tareas de uno o todos los
 // departamentos en un solo lugar. Direccion (admin) ve y opera todos; cada
@@ -151,31 +153,30 @@ export default async function agendasRoutes(fastify) {
     const locales = await localesDelAlcance(fastify.db, alcance)
     if (!locales.length) return reply.code(400).send({ error: 'Ese grupo no tiene locales activos' })
 
+    // El nombre es unico dentro del departamento: una tarea se hace en muchos
+    // locales, no se crea una por local. Si ya existe se devuelve cual es,
+    // para que el formulario ofrezca sumarle estos locales en vez de dejar
+    // solo el error (que llevaba a inventar nombres como "CMV ALDO").
+    const yaExiste = async () => reply.code(409).send({
+      error: `Ya existe una tarea llamada "${nombre}" en este departamento`,
+      existente: resumirExistente(await buscarMismoNombre(fastify.db, { idDepartamento: id_departamento, nombre }))
+    })
+    if (await buscarMismoNombre(fastify.db, { idDepartamento: id_departamento, nombre })) return yaExiste()
+
     let tarea
     try {
       tarea = await fastify.db.tarea.create({ data: { nombre, descripcion: descripcion || null, id_departamento } })
     } catch (err) {
       if (err.code !== 'P2002') throw err
-      // El nombre es unico: una tarea se hace en muchos locales, no se crea una
-      // por local. Se devuelve cual es, para que el formulario ofrezca sumarle
-      // estos locales en vez de dejar solo el error (que llevaba a inventar
-      // nombres como "P&L 3MONOS").
-      const existente = await fastify.db.tarea.findUnique({
-        where: { nombre },
-        select: { id: true, nombre: true, id_departamento: true, activa: true, departamento: { select: { nombre: true } } }
-      })
-      return reply.code(409).send({
-        error: `Ya existe una tarea llamada "${nombre}"`,
-        existente: existente && {
-          id: existente.id,
-          nombre: existente.nombre,
-          id_departamento: existente.id_departamento,
-          departamento: existente.departamento?.nombre || '',
-          activa: existente.activa
-        }
-      })
+      return yaExiste()
     }
     const r = await aplicarAlcance(tarea, { locales, agenda, asignado_a, compartir_con, prioridad })
+
+    // Todo o nada: si no se pudo agendar ningun local, no queda una tarea a
+    // medias que despues choca con "ya existe" al reintentar.
+    if (agenda && r.agendadas === 0 && r.errores.length && await deshacerAlta(fastify.db, tarea.id)) {
+      return reply.code(502).send({ error: `No se creó "${nombre}": ${r.errores[0]}. No quedó nada guardado; probá de nuevo en un rato.` })
+    }
     return reply.code(201).send({ tarea, ...r })
   })
 
@@ -194,20 +195,33 @@ export default async function agendasRoutes(fastify) {
     return aplicarAlcance(tarea, { locales, agenda, asignado_a, compartir_con, prioridad })
   })
 
+  // Suma cada local a la tarea y lo agenda. Ademas:
+  // - un local que ya estaba pero SIN agenda (quedo de un alta que fallo a
+  //   mitad de camino) se completa en vez de saltearse;
+  // - cada local nuevo hereda las esperas que tienen los demas locales de la
+  //   tarea (lib/heredar-dependencias.js).
   async function aplicarAlcance(tarea, { locales, agenda, asignado_a, compartir_con, prioridad }) {
-    const r = { asignaciones: 0, agendadas: 0, ya_existian: 0, errores: [] }
+    const r = { asignaciones: 0, agendadas: 0, ya_existian: 0, completadas: 0, esperas: 0, errores: [] }
+    const nombres = new Map((await fastify.db.extLocal.findMany({
+      where: { id: { in: locales.filter(Boolean) } },
+      select: { id: true, nombre: true }
+    })).map((l) => [l.id, l.nombre]))
+    const agendar = (asignacion) => definirAgenda(fastify, asignacion, { ...agenda, vigencia_hasta: null, asignado_a: asignado_a || '', ...(prioridad !== undefined ? { prioridad } : {}) })
+
     for (const idLocal of locales) {
       try {
         const { asignacion, yaActiva } = await asegurarAsignacion(fastify, { tarea, idLocal, asignadoA: asignado_a, compartirCon: compartir_con, prioridad })
-        if (yaActiva) { r.ya_existian++; continue }
-        r.asignaciones++
+        if (yaActiva && (!agenda || asignacion.id_calendar_event)) { r.ya_existian++; continue }
+        if (yaActiva) r.completadas++
+        else r.asignaciones++
         if (agenda) {
-          await definirAgenda(fastify, asignacion, { ...agenda, vigencia_hasta: null, asignado_a: asignado_a || '', ...(prioridad !== undefined ? { prioridad } : {}) })
+          await agendar(asignacion)
           r.agendadas++
         }
+        r.esperas += (await heredarDependencias(fastify.db, asignacion)).creadas
       } catch (err) {
         fastify.log.warn({ err: err.message, idLocal }, 'agendas: no se pudo agregar un local')
-        r.errores.push(`${idLocal || 'Toda la empresa'}: ${err.message}`)
+        r.errores.push(`${idLocal ? nombres.get(idLocal) || 'Un local' : 'Toda la empresa'}: ${motivoDeError(err)}`)
       }
     }
     return r

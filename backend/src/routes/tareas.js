@@ -32,8 +32,13 @@ export default async function tareasRoutes(fastify) {
       return reply.code(403).send({ error: 'Crear tareas lo puede hacer un MANAGER u OWNER del grupo del departamento' })
     }
 
-    const tarea = await fastify.db.tarea.create({ data: { nombre, id_departamento, descripcion } })
-    return reply.code(201).send(tarea)
+    try {
+      const tarea = await fastify.db.tarea.create({ data: { nombre, id_departamento, descripcion } })
+      return reply.code(201).send(tarea)
+    } catch (err) {
+      if (err.code === 'P2002') return reply.code(409).send({ error: `Ya existe una tarea llamada "${nombre}" en este departamento` })
+      throw err
+    }
   })
 
   fastify.patch('/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
@@ -100,14 +105,21 @@ export default async function tareasRoutes(fastify) {
       }
     }
 
-    const tarea = await fastify.db.tarea.update({
-      where: { id: request.params.id },
-      data: { nombre, descripcion, ...(activa !== undefined ? { activa } : {}) }
-    })
+    let tarea
+    try {
+      tarea = await fastify.db.tarea.update({
+        where: { id: request.params.id },
+        data: { nombre, descripcion, ...(activa !== undefined ? { activa } : {}) }
+      })
+    } catch (err) {
+      if (err.code === 'P2002') return reply.code(409).send({ error: `Ya existe una tarea llamada "${nombre}" en este departamento` })
+      throw err
+    }
     return reactivadas ? { ...tarea, reactivadas } : tarea
   })
 
-  // Duplica una tarea: nombre nuevo (Tarea.nombre es unico global), mismo o
+  // Duplica una tarea: nombre nuevo si queda en el mismo departamento (el nombre es unico por
+  // departamento), mismo o
   // otro departamento, y opcionalmente la misma agenda -- una asignacion nueva
   // por cada asignacion activa del original (mismo local, responsable y
   // departamentos compartidos), agendada con la regla del original leida de su
@@ -134,7 +146,7 @@ export default async function tareasRoutes(fastify) {
     try {
       copia = await fastify.db.tarea.create({ data: { nombre, id_departamento: idDestino, descripcion: original.descripcion } })
     } catch (err) {
-      if (err.code === 'P2002') return reply.code(409).send({ error: `Ya existe una tarea llamada "${nombre}"` })
+      if (err.code === 'P2002') return reply.code(409).send({ error: `Ya existe una tarea llamada "${nombre}" en ese departamento` })
       throw err
     }
 

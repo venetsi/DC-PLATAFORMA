@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { URGENCIAS } from '../../lib/urgencia.js'
 import Urgencia from '../../components/Urgencia.jsx'
-import { agendasApi } from '../../api/recursos.js'
+import { agendasApi, tareasApi } from '../../api/recursos.js'
+import { tareaParecida } from '../../lib/parecida.js'
 import EditorFrecuencia from '../../components/EditorFrecuencia.jsx'
 import SelectorAlcance, { ALCANCE_VACIO, alcanceCompleto, describirAlcance } from './SelectorAlcance.jsx'
 import { valorInicial, agendaDesdeValor, errorDeValor, describirAgenda, fechaCorta } from '../../lib/agenda-texto.js'
@@ -9,12 +10,17 @@ import { valorInicial, agendaDesdeValor, errorDeValor, describirAgenda, fechaCor
 // Lo que se le dice a la persona despues de crear (o de sumar locales a una
 // tarea que ya existia).
 export function mensajeDeCreacion(r) {
-  const errores = r.errores?.length ? ` Errores: ${r.errores.join('; ')}` : ''
+  const partes = []
   if (r.sumada) {
     const ya = r.ya_existian ? ` (${r.ya_existian} ya ${r.ya_existian === 1 ? 'estaba' : 'estaban'})` : ''
-    return `Se ${r.asignaciones === 1 ? 'sumó 1 local' : `sumaron ${r.asignaciones} locales`} a "${r.tarea.nombre}"${ya}.${errores}`
+    partes.push(`Se ${r.asignaciones === 1 ? 'sumó 1 local' : `sumaron ${r.asignaciones} locales`} a "${r.tarea.nombre}"${ya}.`)
+  } else {
+    partes.push(`"${r.tarea.nombre}" creada: ${r.agendadas} de ${r.asignaciones} agendadas.`)
   }
-  return `"${r.tarea.nombre}" creada: ${r.agendadas} de ${r.asignaciones} agendadas.${errores}`
+  if (r.completadas) partes.push(`${r.completadas === 1 ? 'Se completó 1 local que había' : `Se completaron ${r.completadas} locales que habían`} quedado sin agendar.`)
+  if (r.esperas) partes.push(`${r.esperas === 1 ? 'Se copió 1 espera' : `Se copiaron ${r.esperas} esperas`} de los otros locales.`)
+  if (r.errores?.length) partes.push(`No se pudieron agendar: ${r.errores.join('; ')}. Volvé a cargarla con el mismo nombre y tocá «Sumar»: se completan.`)
+  return partes.join(' ')
 }
 
 // Nueva tarea en un paso: que + donde + cuando + quien, y la frase de abajo
@@ -22,8 +28,9 @@ export function mensajeDeCreacion(r) {
 // `fechaInicial` (YYYY-MM-DD): al tocar un dia vacio en el calendario, la tarea
 // arranca como "una sola vez, ese dia" (se puede cambiar a una frecuencia).
 //
-// El nombre de una tarea es unico: una tarea se hace en muchos locales. Si ya
-// existe, en vez de solo el error se ofrece sumarle estos locales.
+// El nombre de una tarea es unico dentro del departamento: una tarea se hace
+// en muchos locales. Si ya existe (o lo escrito empieza con el nombre de una
+// que existe, como "CMV PIPISTRELLO"), se ofrece sumarle estos locales.
 export default function NuevaTarea({ departamentos, idDepartamentoInicial, locales, grupos, usuariosDe, onCreada, onCerrar, fechaInicial }) {
   const [nombre, setNombre] = useState('')
   const [idDepto, setIdDepto] = useState(departamentos.some((d) => d.id === idDepartamentoInicial) ? idDepartamentoInicial : departamentos[0]?.id || '')
@@ -37,6 +44,13 @@ export default function NuevaTarea({ departamentos, idDepartamentoInicial, local
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
   const [existente, setExistente] = useState(null) // la tarea con ese nombre, si ya habia una
+  const [catalogo, setCatalogo] = useState([])
+
+  useEffect(() => {
+    let vigente = true
+    tareasApi.listar().then((t) => { if (vigente) setCatalogo(t) }).catch(() => {})
+    return () => { vigente = false }
+  }, [])
 
   const usuarios = usuariosDe(idDepto)
   const depto = departamentos.find((d) => d.id === idDepto)
@@ -44,6 +58,7 @@ export default function NuevaTarea({ departamentos, idDepartamentoInicial, local
   const errorFrecuencia = errorDeValor(frecuencia)
   const listo = nombre.trim() && idDepto && alcanceCompleto(alcance) && !errorFrecuencia
   const quien = responsable ? usuarios.find((u) => u.email === responsable)?.nombre || responsable : 'sin responsable fijo (la hace el equipo)'
+  const parecida = existente ? null : tareaParecida(nombre, catalogo, idDepto)
 
   async function crear(e) {
     e.preventDefault()
@@ -74,19 +89,18 @@ export default function NuevaTarea({ departamentos, idDepartamentoInicial, local
   }
 
   // Sumar estos locales (con esta agenda y este responsable) a la que ya existe.
-  async function sumarAExistente() {
+  async function sumarA(tarea) {
+    if (!alcanceCompleto(alcance) || errorFrecuencia) return setError(errorFrecuencia || 'Elegí dónde (los locales) antes de sumar')
     setError('')
     setGuardando(true)
     try {
-      const r = await agendasApi.agregarAlcance(existente.id, { alcance, agenda, asignado_a: responsable || null, prioridad: urgencia || undefined, compartir_con: compartir })
-      onCreada({ ...r, sumada: true, tarea: { id: existente.id, nombre: existente.nombre, id_departamento: existente.id_departamento } })
+      const r = await agendasApi.agregarAlcance(tarea.id, { alcance, agenda, asignado_a: responsable || null, prioridad: urgencia || undefined, compartir_con: compartir })
+      onCreada({ ...r, sumada: true, tarea: { id: tarea.id, nombre: tarea.nombre, id_departamento: tarea.id_departamento } })
     } catch (err) {
       setError(err.response?.data?.error || 'No se pudieron sumar los locales')
       setGuardando(false)
     }
   }
-
-  const mismoDepto = existente && existente.id_departamento === idDepto
 
   return (
     <form className="card panel-nueva" onSubmit={crear}>
@@ -160,24 +174,33 @@ export default function NuevaTarea({ departamentos, idDepartamentoInicial, local
         {frecuencia.tipo !== 'UNICA' ? ` desde el ${fechaCorta(frecuencia.desde)}` : ''}, {quien}
         {compartir.length ? `, compartida con ${compartir.map((id) => departamentos.find((d) => d.id === id)?.nombre).join(', ')}` : ''}.
       </p>
+      {parecida && (
+        <div className="aviso-existente" role="status">
+          <p>
+            Ya hay <strong>{parecida.nombre}</strong> en {depto?.nombre}. Si es la misma tarea en otro local, sumale el local
+            en vez de crear otra: así entra en sus esperas y en sus reportes.
+          </p>
+          <button type="button" className="btn btn-secondary" onClick={() => sumarA(parecida)} disabled={guardando}>
+            Sumar a «{parecida.nombre}»
+          </button>
+        </div>
+      )}
       {existente && (
         <div className="aviso-existente" role="status">
           {!existente.activa ? (
-            <p>Hay una tarea desactivada llamada <strong>{existente.nombre}</strong> ({existente.departamento}). Para reusar el nombre, eliminala definitivamente desde Agendas (tildá «Desactivadas»), o elegí otro nombre.</p>
-          ) : mismoDepto ? (
+            <p>Hay una tarea desactivada llamada <strong>{existente.nombre}</strong> en {existente.departamento}. Para reusar el nombre, eliminala definitivamente desde Agendas (tildá «Desactivadas»), o elegí otro nombre.</p>
+          ) : (
             <p>
               Ya existe <strong>{existente.nombre}</strong> en {existente.departamento}. Una tarea se hace en muchos locales:
               ¿le sumo estos, con esta agenda y este responsable?
             </p>
-          ) : (
-            <p>Ya existe <strong>{existente.nombre}</strong> en {existente.departamento}. Para sumarle locales, elegí ese departamento; si es otra tarea, cambiale el nombre.</p>
           )}
         </div>
       )}
       {error && <p className="error-texto">{error}</p>}
       <div className="acciones">
-        {existente?.activa && mismoDepto ? (
-          <button type="button" className="btn" onClick={sumarAExistente} disabled={guardando}>
+        {existente?.activa ? (
+          <button type="button" className="btn" onClick={() => sumarA(existente)} disabled={guardando}>
             {guardando ? 'Sumando…' : `Sumar a «${existente.nombre}»`}
           </button>
         ) : (

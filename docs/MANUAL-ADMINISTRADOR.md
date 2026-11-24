@@ -223,12 +223,16 @@ departamento, OWNER (ver §1).
 
 **+ Nueva tarea** abre un formulario con:
 
-1. **Qué** — el nombre (único en toda la plataforma: una tarea se hace en
+1. **Qué** — el nombre (único dentro del departamento, sin distinguir
+   mayúsculas; otro departamento puede usar el mismo: una tarea se hace en
    muchos locales y se ve como «P&L — TI AMO», «P&L — UAT»…). Si ya existe
    en ese departamento, en vez del error ofrece **Sumar a «P&L»** esos
    locales, con la agenda y el responsable cargados (`POST /api/agendas/tareas`
-   devuelve 409 con `existente`). Si existe en otro departamento o está
-   desactivada, lo dice.
+   devuelve 409 con `existente`); lo mismo si lo escrito empieza con el nombre
+   de una que existe («P&L 3MONOS»). Si está desactivada, lo dice. Si Calendar
+   no agenda ningún local, el alta se deshace entera (502); si agenda algunos,
+   **Sumar** completa los que quedaron sin agenda. Cada local sumado copia las
+   esperas de los demás locales de la tarea (`lib/heredar-dependencias.js`).
 2. **Departamento** — si tenés más de uno.
 3. **Dónde** — toda la empresa, un grupo de locales entero, o locales
    puntuales (se agregan de a uno).
@@ -329,7 +333,7 @@ Y siempre disponibles:
 
 ### Renombrar, duplicar, desactivar, eliminar
 
-- **Renombrar** — cambia el nombre (sigue siendo único).
+- **Renombrar** — cambia el nombre (sigue siendo único dentro del departamento).
 - **Duplicar** — pide nombre y departamento, y opcionalmente copia la
   agenda: mismos locales, frecuencia, responsable y departamentos
   compartidos, **desde hoy** (no crea atrasadas hacia atrás). Las
