@@ -11,6 +11,7 @@ const ICONOS = {
   agenda: <><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 2v4M16 2v4" /></>,
   mias: <><path d="M9 11l3 3 8-8" /><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9" /></>,
   agendas: <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
+  circuito: <><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /><path d="M7 12h3M14 12h3" /></>,
   reportes: <><path d="M3 3v18h18" /><path d="M7 15l4-4 3 3 5-6" /></>,
   pantallas: <><rect x="2" y="4" width="20" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></>,
   documentos: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></>,
@@ -76,6 +77,7 @@ export default function Layout() {
         <nav className="lateral-nav" aria-label="Secciones">
           <Item to="/" icono="agenda" end>Mi agenda</Item>
           {departamento && <Item to="/mis-tareas" icono="mias">Mis tareas</Item>}
+          <Item to="/circuito" icono="circuito">Circuito</Item>
           {(esAdminGlobal || departamento) && <Item to="/agendas" icono="agendas">Agendas</Item>}
           {/* Los reportes los ven MANAGER y OWNER (y Direccion). */}
           {enAlguno('reportes') && <Item to="/reportes" icono="reportes">Reportes</Item>}

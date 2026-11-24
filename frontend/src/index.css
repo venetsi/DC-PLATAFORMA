@@ -976,3 +976,36 @@ select option { background: var(--bg-1); }
 .card { border: 1px solid var(--borde); }
 input[type="checkbox"], input[type="radio"] { accent-color: var(--gold); }
 .barra-celular-logo { height: 38px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Circuito (opcion C elegida el 24/11/2026): una fila por local con una barra
+   de tres tramos y quien lo frena.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.circuito-sub { font-size: 0.75rem; margin-top: 4px; }
+.circuito-barra { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 0.9rem; }
+.circuito-barra .segmentado { margin-bottom: 0; }
+.circuito-barra .segmentado button:disabled { opacity: 0.5; cursor: default; }
+.circuito-barra select { padding: 0.4rem 2rem 0.4rem 0.7rem; font-size: 0.78rem; }
+.circuito-leyenda { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.circuito-leyenda .st { height: 22px; padding: 0 8px; }
+.circuito-lista { padding: 0; overflow: hidden; }
+.circuito-fila { display: grid; grid-template-columns: 200px minmax(0, 1fr) 230px; gap: 16px; align-items: center; padding: 10px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.045); }
+.circuito-fila:last-child { border-bottom: 0; }
+.circuito-fila:hover { background: rgba(255, 255, 255, 0.024); }
+.circuito-local { display: flex; flex-direction: column; min-width: 0; }
+.circuito-local b { font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.circuito-local span { font-size: 0.66rem; color: var(--texto-3); }
+.circuito-pasos { display: grid; gap: 4px; }
+.circuito .st { height: 26px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 0.64rem; font-weight: 800; letter-spacing: 0.03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 6px; }
+.circuito .st.ok { background: rgba(76, 175, 125, 0.12); color: var(--verde); }
+.circuito .st.mal { background: rgba(224, 92, 92, 0.12); color: var(--rojo); }
+.circuito .st.pen { background: rgba(107, 166, 224, 0.12); color: var(--azul); }
+.circuito .st.esp { background: rgba(224, 168, 76, 0.12); color: var(--amarillo); }
+.circuito .st.no { background: rgba(255, 255, 255, 0.04); color: var(--texto-3); }
+.circuito-nota { font-size: 0.72rem; color: var(--texto-tenue); }
+.circuito-nota b { color: var(--texto); }
+@media (max-width: 900px) {
+  .circuito-fila { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .circuito-leyenda { margin-left: 0; }
+}
+a.btn { text-decoration: none; display: inline-flex; align-items: center; }

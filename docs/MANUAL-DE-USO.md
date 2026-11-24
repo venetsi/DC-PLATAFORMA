@@ -199,6 +199,29 @@ tenés atrasadas, pendientes y hechas.
 
 Con **Solo las que tengo asignadas** ves únicamente las que están a tu nombre.
 
+## Circuito
+
+**Circuito** muestra, para la semana, en qué paso está cada local del circuito
+entre sectores: hoy, **Auditoría (VTA/OP) → Costos (CMV) → Reportes (Informe)**.
+Cada local es una fila con un tramo por paso:
+
+| Tramo | Qué quiere decir |
+|---|---|
+| ✓ verde | Hecho esta semana (⊘: marcado «no aplica») |
+| rojo, con días | Atrasado: los días hábiles que lleva sin hacerse |
+| azul | Le toca hoy o más adelante en la semana |
+| ⏳ ámbar | Espera al paso anterior, que todavía no está hecho |
+| gris «—» | Ese local no tiene ese paso cargado |
+| gris «sin fecha» | No le toca esta semana |
+
+Arriba de todo quedan los locales más trabados, y al costado dice quién los frena
+(el primer paso sin hacer). Con las flechas se ven otras semanas y con el selector,
+un solo grupo.
+
+El circuito **no se configura aparte**: sale de las esperas que tiene cada tarea en
+Agendas (**Opciones avanzadas → Depende de otra tarea**). Si una tarea nueva espera a
+otra, entra sola al circuito; **Configurar circuito** lleva a Agendas.
+
 ## Agendas
 
 Acá se ven y se gestionan todas las tareas de cada departamento: dónde se hace

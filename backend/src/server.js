@@ -20,6 +20,7 @@ import dependenciasRoutes from './routes/dependencias.js'
 import instanciasRoutes from './routes/instancias.js'
 import reportesRoutes from './routes/reportes.js'
 import agendasRoutes from './routes/agendas.js'
+import circuitoRoutes from './routes/circuito.js'
 import tvRoutes from './routes/tv.js'
 import pantallasRoutes from './routes/pantallas.js'
 import chatRoutes from './routes/chat.js'
@@ -82,6 +83,7 @@ await app.register(dependenciasRoutes, { prefix: '/api/dependencias' })
 await app.register(instanciasRoutes, { prefix: '/api/instancias' })
 await app.register(reportesRoutes, { prefix: '/api/reportes' })
 await app.register(agendasRoutes, { prefix: '/api/agendas' })
+await app.register(circuitoRoutes, { prefix: '/api/circuito' })
 await app.register(tvRoutes, { prefix: '/api/tv' })
 await app.register(pantallasRoutes, { prefix: '/api/pantallas' })
 await app.register(chatRoutes, { prefix: '/api/chat' })

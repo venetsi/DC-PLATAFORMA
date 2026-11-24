@@ -107,3 +107,7 @@ export const agendasApi = {
   cambiarAgenda: (body) => api.post('/agendas/asignaciones/agenda', body).then((r) => r.data),
   quitar: (ids) => api.post('/agendas/asignaciones/quitar', { ids }).then((r) => r.data)
 }
+
+export const circuitoApi = {
+  ver: (semana) => api.get('/circuito', { params: semana ? { semana } : {} }).then((r) => r.data)
+}

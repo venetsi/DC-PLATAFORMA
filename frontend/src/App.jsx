@@ -12,6 +12,7 @@ import Agendas from './pages/Agendas.jsx'
 import Ayuda from './pages/Ayuda.jsx'
 import AdminRepositorios from './pages/admin/AdminRepositorios.jsx'
 import Pantallas from './pages/Pantallas.jsx'
+import Circuito from './pages/Circuito.jsx'
 
 // /tv es la direccion corta que muestra la TV (y la que lleva el QR): pasa a
 // Pantallas conservando ?codigo=.
@@ -32,6 +33,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<Calendario />} />
           <Route path="/mis-tareas" element={<MisTareas />} />
+          <Route path="/circuito" element={<Circuito />} />
           <Route path="/reportes" element={<Reportes />} />
           <Route path="/ayuda" element={<Ayuda />} />
           <Route path="/pantallas" element={<Pantallas />} />
