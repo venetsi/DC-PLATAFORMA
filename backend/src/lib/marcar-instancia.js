@@ -93,7 +93,7 @@ export async function marcarInstanciaYPropagar(deps, {
       .filter((d) => d?.id_calendar_google && d.id_calendar_google !== calendarId)
 
     const propagadas = []
-    for (const departamento of otros) {
+    await Promise.all(otros.map(async (departamento) => {
       // Una copia que falla no puede tumbar el marcado principal: antes, si
       // fallaba la del tercer departamento, el usuario veia un error aunque
       // su marca SI se habia aplicado.
@@ -103,7 +103,7 @@ export async function marcarInstanciaYPropagar(deps, {
           idAsignacion,
           fechaISO
         })
-        if (!instancia) continue
+        if (!instancia) return
         await gcal.marcarInstancia({
           calendarId: departamento.id_calendar_google,
           instanceId: instancia.id,
@@ -114,7 +114,7 @@ export async function marcarInstanciaYPropagar(deps, {
       } catch (err) {
         log.warn?.({ err: err.message, departamento: departamento.id }, 'no se pudo propagar el marcado')
       }
-    }
+    }))
     return propagadas
   }
 
@@ -131,7 +131,9 @@ export async function marcarInstanciaYPropagar(deps, {
     return { evento, yaEstaba: false, propagadas: [], avisos }
   }
 
-  const propagadas = await propagar()
-  await avisarDependientes()
+  // Las copias de otros departamentos y el aviso "Ya podés hacerla" no
+  // dependen uno del otro: van juntos (antes uno despues del otro; marcar
+  // desde la web tardaba 3,7 s de promedio en noviembre de 2026).
+  const [propagadas] = await Promise.all([propagar(), avisarDependientes()])
   return { evento, yaEstaba: false, propagadas, avisos }
 }

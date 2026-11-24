@@ -2,6 +2,7 @@ import fp from 'fastify-plugin'
 import { google } from 'googleapis'
 import { crearAuthClient } from '../lib/gcal-auth.js'
 import { cerrarSerie, restaurarSerie } from '../lib/cerrar-serie.js'
+import { envolverConCache } from '../lib/cache-calendario.js'
 
 // Backoff exponencial simple para 403/429 de cuota (recomendación de Google:
 // min((2^n)+random_ms, max)). No reintenta otros códigos de error.
@@ -30,7 +31,8 @@ function getCalendarClient() {
 }
 
 async function gcalPlugin(fastify) {
-  fastify.decorate('gcal', {
+  // Lecturas grandes con cache corta e invalidacion al escribir: ver lib/cache-calendario.js.
+  fastify.decorate('gcal', envolverConCache({
     async crearCalendarioDepartamento(nombre) {
       const calendar = await getCalendarClient()
       const { data } = await withBackoff(() =>
@@ -288,7 +290,7 @@ async function gcalPlugin(fastify) {
         calendar.acl.insert({ calendarId, requestBody: { role, scope: { type: 'group', value: groupEmail } } })
       )
     }
-  })
+  }))
 }
 
 export default fp(gcalPlugin)
