@@ -26,12 +26,13 @@ import { useMedia, CONSULTA_CELULAR, CONSULTA_TACTIL } from '../lib/pantalla.js'
 // Tablero (listas por departamento, estilo Trello), Calendario (el mes),
 // Agenda (la semana por dia y local), Cronograma (linea de tiempo por
 // departamento) y Semana (armada como el kiosko).
+// La Semana va primero y es la vista de entrada (diseño elegido el 24/11/2026).
 const VISTAS = [
-  { id: 'tablero', etiqueta: 'Tablero' },
-  { id: 'mes', etiqueta: 'Calendario' },
+  { id: 'semana', etiqueta: 'Semana (L-V)' },
   { id: 'agenda', etiqueta: 'Agenda' },
+  { id: 'tablero', etiqueta: 'Tablero' },
   { id: 'cronograma', etiqueta: 'Cronograma' },
-  { id: 'semana', etiqueta: 'Semana (L-V)' }
+  { id: 'mes', etiqueta: 'Calendario' }
 ]
 // Como se ordenan las columnas del Tablero: por departamento o por responsable
 // (se recuerda en este navegador).
@@ -48,9 +49,9 @@ const CLAVE_VISTA = 'dc_plataforma_vista'
 function vistaGuardada() {
   try {
     const v = localStorage.getItem(CLAVE_VISTA)
-    return VISTAS.some((x) => x.id === v) ? v : 'agenda'
+    return VISTAS.some((x) => x.id === v) ? v : 'semana'
   } catch {
-    return 'agenda'
+    return 'semana'
   }
 }
 // Cronograma: dos semanas a la vista, se avanza de a una.
@@ -600,8 +601,8 @@ export default function Calendario() {
     <div>
       <div className="agenda-cab">
         <div>
-          <h2 style={{ margin: 0, display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <span>Agenda</span>
+          <h2 className="titulo-pagina">
+            <span>Mi agenda</span>
             <span className="agenda-guion" aria-hidden="true">—</span>
             {opciones.length > 1 ? (
               <details className="selector-agendas">
@@ -659,14 +660,14 @@ export default function Calendario() {
             </a>
           )}
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          {puedeCrear && <button className="btn" onClick={() => abrirNueva(null)}>+ Nueva tarea</button>}
-          {vistas.map((v) => (
-            <button key={v.id} className={vista === v.id ? 'btn' : 'btn btn-secondary'} onClick={() => setVista(v.id)}>
-              {v.etiqueta}
-            </button>
-          ))}
-        </div>
+        {puedeCrear && <button className="btn" onClick={() => abrirNueva(null)}>+ Nueva tarea</button>}
+      </div>
+      <div className="segmentado" role="group" aria-label="Vista">
+        {vistas.map((v) => (
+          <button key={v.id} type="button" className={vista === v.id ? 'on' : ''} aria-pressed={vista === v.id} onClick={() => setVista(v.id)}>
+            {v.etiqueta}
+          </button>
+        ))}
       </div>
 
       {opciones.length > 0 && !idsVisibles.length && (

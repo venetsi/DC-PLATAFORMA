@@ -1,15 +1,27 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');
 
+/* Colores de gestion 2.0 (estilo noche de dcsmart2/packages/ui/tokens): azul
+   noche de fondo y dorado como acento. --teal quedo como nombre del acento por
+   compatibilidad con el resto de la hoja; hoy es el dorado de gestion. */
 :root {
-  --bg-0: #10161f;
-  --bg-1: #1a2230;
-  --gold: #c9b086;
-  --teal: #3fb6bd;
-  --verde: #3fb66a;
-  --amarillo: #e0b83f;
-  --rojo: #e05c3f;
-  --texto: #eef1f5;
-  --texto-tenue: #9aa5b4;
+  --bg-0: #19232f;
+  --bg-1: #1e2b3a;
+  --bg-lateral: #111820;
+  --bg-fijo: #1A2535;
+  --borde: rgba(255, 255, 255, 0.08);
+  --gold: #C9B086;
+  --gold-fuerte: #E1CBA0;
+  --gold-fondo: rgba(201, 176, 134, 0.11);
+  --teal: #C9B086;
+  --verde: #4CAF7D;
+  --amarillo: #E0A84C;
+  --rojo: #E05C5C;
+  --azul: #6BA6E0;
+  --texto: #F0EDE8;
+  --texto-tenue: rgba(240, 237, 232, 0.62);
+  --texto-3: rgba(240, 237, 232, 0.40);
+  --boton-texto: #1e2b38;
+  --lateral-ancho: 234px;
   color-scheme: dark;
 }
 
@@ -63,7 +75,7 @@ select:hover {
 select:focus {
   outline: none;
   border-color: var(--teal);
-  box-shadow: 0 0 0 2px rgba(63, 182, 189, 0.22);
+  box-shadow: 0 0 0 2px rgba(201, 176, 134, 0.22);
 }
 select:disabled {
   opacity: 0.5;
@@ -82,12 +94,13 @@ select option {
 }
 
 .btn {
-  background: var(--teal);
-  color: #06222a;
+  background: var(--gold);
+  color: var(--boton-texto);
   border: none;
-  border-radius: 6px;
-  padding: 0.5rem 1rem;
-  font-weight: 600;
+  border-radius: 10px;
+  padding: 0.55rem 1rem;
+  font-weight: 800;
+  font-size: 0.8rem;
 }
 
 .btn:disabled {
@@ -97,8 +110,9 @@ select option {
 
 .btn-secondary {
   background: transparent;
-  border: 1px solid var(--texto-tenue);
+  border: 1px solid rgba(201, 176, 134, 0.28);
   color: var(--texto);
+  font-weight: 600;
 }
 
 table {
@@ -108,20 +122,34 @@ table {
 
 th, td {
   text-align: left;
-  padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.45rem 0.7rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
 }
+/* Encabezados de tabla como en gestion: chicos, en mayuscula y tenues. */
+th {
+  font-size: 0.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--texto-3);
+  background: var(--bg-fijo);
+  border-bottom: 1px solid var(--borde);
+}
+tbody tr:hover td { background: rgba(255, 255, 255, 0.024); }
 
 .badge {
-  display: inline-block;
-  padding: 0.15rem 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.5rem;
   border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
 }
-.badge-verde { background: rgba(63, 182, 106, 0.2); color: var(--verde); }
-.badge-amarillo { background: rgba(224, 184, 63, 0.2); color: var(--amarillo); }
-.badge-rojo { background: rgba(224, 92, 63, 0.2); color: var(--rojo); }
+.badge-verde { background: rgba(76, 175, 125, 0.12); color: var(--verde); border: 1px solid rgba(76, 175, 125, 0.25); }
+.badge-amarillo { background: rgba(224, 168, 76, 0.12); color: var(--amarillo); border: 1px solid rgba(224, 168, 76, 0.25); }
+.badge-rojo { background: rgba(224, 92, 92, 0.12); color: var(--rojo); border: 1px solid rgba(224, 92, 92, 0.25); }
 
 /* Reskin de FullCalendar (vistas Semana/Mes) con la identidad DCSMART --
    por defecto trae un tema claro/generico que desentona con el resto de
@@ -132,7 +160,7 @@ th, td {
   --fc-page-bg-color: transparent;
   --fc-neutral-bg-color: #222c3d;
   --fc-list-event-hover-bg-color: rgba(255, 255, 255, 0.05);
-  --fc-today-bg-color: rgba(63, 182, 189, 0.08);
+  --fc-today-bg-color: rgba(201, 176, 134, 0.08);
   --fc-button-bg-color: #222c3d;
   --fc-button-border-color: rgba(255, 255, 255, 0.12);
   --fc-button-hover-bg-color: var(--teal);
@@ -157,7 +185,7 @@ th, td {
 .fc .fc-button:disabled { opacity: 0.45; }
 .fc .fc-button-primary:not(:disabled):active,
 .fc .fc-button-primary:not(:disabled).fc-button-active {
-  color: #06222a;
+  color: var(--boton-texto);
 }
 .fc .fc-col-header-cell-cushion {
   color: var(--gold);
@@ -270,7 +298,7 @@ th, td {
 .dep-chip { font-size: 0.72rem; line-height: 1.3; padding: 0.1rem 0.45rem; border-radius: 4px; overflow-wrap: anywhere; }
 .dep-chip.espera { background: rgba(224, 184, 63, 0.16); color: var(--amarillo); }
 .dep-chip.lista { background: rgba(63, 182, 106, 0.16); color: var(--verde); }
-.dep-chip.frena { background: rgba(63, 182, 189, 0.14); color: var(--teal); }
+.dep-chip.frena { background: rgba(201, 176, 134, 0.14); color: var(--teal); }
 /* En las listas (Agenda, Semana): una línea chica, sin fondo, que se corta. */
 .dep-etiquetas.compacta { gap: 0 0.5rem; margin-top: 0; }
 .dep-etiquetas.compacta .dep-chip { background: none; padding: 0; font-size: 0.68rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
@@ -432,7 +460,7 @@ th, td {
 .agendas-deptos { display: flex; flex-direction: column; gap: 0.15rem; position: sticky; top: 1rem; }
 .depto { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.45rem 0.65rem; border: 0; border-radius: 8px; background: none; color: var(--texto); font: inherit; font-size: 0.88rem; text-align: left; }
 .depto:hover { background: rgba(255, 255, 255, 0.04); }
-.depto.sel { background: rgba(63, 182, 189, 0.14); color: var(--teal); font-weight: 600; }
+.depto.sel { background: rgba(201, 176, 134, 0.14); color: var(--teal); font-weight: 600; }
 .depto:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }
 .agendas-main { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
 .agendas-cab { display: flex; justify-content: space-between; align-items: flex-end; gap: 0.75rem; flex-wrap: wrap; }
@@ -444,7 +472,7 @@ th, td {
 .tabla-agendas { width: 100%; border-collapse: collapse; }
 .tabla-agendas th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--texto-tenue); font-weight: 600; padding: 0.4rem 0.6rem; }
 .tabla-agendas td { padding: 0.55rem 0.6rem; border-top: 1px solid rgba(255, 255, 255, 0.06); vertical-align: top; font-size: 0.88rem; }
-.fila-tarea.abierta td { background: rgba(63, 182, 189, 0.05); }
+.fila-tarea.abierta td { background: rgba(201, 176, 134, 0.05); }
 .fila-tarea.inactiva { opacity: 0.6; }
 .fila-detalle > td { background: rgba(255, 255, 255, 0.02); padding: 0.75rem 1rem 1rem; }
 .acciones-fila { white-space: nowrap; text-align: right; }
@@ -468,15 +496,15 @@ th, td {
 .tabla-locales { width: 100%; border-collapse: collapse; }
 .tabla-locales th { text-align: left; font-size: 0.7rem; color: var(--texto-tenue); font-weight: 600; padding: 0.3rem 0.5rem; }
 .tabla-locales td { padding: 0.4rem 0.5rem; border-top: 1px solid rgba(255, 255, 255, 0.05); font-size: 0.84rem; cursor: pointer; }
-.tabla-locales tr.elegida td { background: rgba(63, 182, 189, 0.08); }
+.tabla-locales tr.elegida td { background: rgba(201, 176, 134, 0.08); }
 .barra-lote { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
 .barra-lote .btn { padding: 0.3rem 0.65rem; font-size: 0.78rem; }
-.panel-accion { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem; border: 1px solid rgba(63, 182, 189, 0.3); border-radius: 10px; }
+.panel-accion { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem; border: 1px solid rgba(201, 176, 134, 0.3); border-radius: 10px; }
 .panel-accion p { margin: 0; }
 .panel-peligro { border-color: rgba(224, 92, 63, 0.45); }
 .btn-peligro { background: var(--rojo); border-color: var(--rojo); color: #fff; }
 
-.panel-nueva { display: flex; flex-direction: column; gap: 0.75rem; border-color: rgba(63, 182, 189, 0.35); }
+.panel-nueva { display: flex; flex-direction: column; gap: 0.75rem; border-color: rgba(201, 176, 134, 0.35); }
 .panel-nueva-cab { display: flex; justify-content: space-between; align-items: center; }
 .panel-nueva-cab h3 { margin: 0; }
 .campos-nueva { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 0.75rem; }
@@ -490,9 +518,9 @@ th, td {
 .editor-frecuencia select, .selector-alcance select { padding-right: 2rem; }
 .dias-semana { display: flex; gap: 0.2rem; }
 .dia { padding: 0.25rem 0.45rem; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.15); background: none; color: var(--texto-tenue); font: inherit; font-size: 0.75rem; }
-.dia.on { background: rgba(63, 182, 189, 0.18); border-color: var(--teal); color: var(--teal); }
+.dia.on { background: rgba(201, 176, 134, 0.18); border-color: var(--teal); color: var(--teal); }
 .chips { display: flex; gap: 0.3rem; flex-wrap: wrap; }
-.chip { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.15rem 0.3rem 0.15rem 0.55rem; border-radius: 999px; background: rgba(63, 182, 189, 0.14); color: var(--teal); font-size: 0.75rem; }
+.chip { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.15rem 0.3rem 0.15rem 0.55rem; border-radius: 999px; background: rgba(201, 176, 134, 0.14); color: var(--teal); font-size: 0.75rem; }
 .chip button { background: none; border: 0; color: inherit; font-size: 0.9rem; line-height: 1; padding: 0 0.2rem; }
 .chip-check { display: inline-flex; gap: 0.3rem; align-items: center; font-size: 0.8rem; padding: 0.15rem 0.5rem; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 999px; }
 
@@ -539,7 +567,7 @@ th, td {
 .md th, .md td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255, 255, 255, 0.08); vertical-align: top; }
 .md th { color: var(--texto-tenue); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
 .md code { background: rgba(255, 255, 255, 0.07); padding: 0.05rem 0.35rem; border-radius: 4px; font-size: 0.85em; }
-.md blockquote { margin: 0 0 1rem; padding: 0.5rem 0.9rem; border-left: 3px solid var(--teal); border-radius: 0; background: rgba(63, 182, 189, 0.06); color: var(--texto-tenue); }
+.md blockquote { margin: 0 0 1rem; padding: 0.5rem 0.9rem; border-left: 3px solid var(--teal); border-radius: 0; background: rgba(201, 176, 134, 0.06); color: var(--texto-tenue); }
 .md blockquote p { margin: 0; }
 @media (max-width: 800px) {
   .ayuda { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
@@ -567,7 +595,7 @@ th, td {
 .st-semana { display: grid; grid-template-columns: minmax(0, 0.85fr) repeat(5, minmax(0, 1fr)); gap: 0.75rem; align-items: stretch; }
 .semana-tablero .dia-col { background: var(--bg-1); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 0.8rem 0.85rem; display: flex; flex-direction: column; min-width: 0; min-height: 14rem; transition: border-color 0.12s, background 0.12s; }
 .semana-tablero .dia-col.hoy { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal) inset; }
-.semana-tablero .dia-col.destino, .st-mini.destino { border-color: var(--teal); background: rgba(63, 182, 189, 0.1); }
+.semana-tablero .dia-col.destino, .st-mini.destino { border-color: var(--teal); background: rgba(201, 176, 134, 0.1); }
 .semana-tablero .dia-contenido { flex: 1; min-height: 0; }
 .dia-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.4rem; }
 .dia-crear { flex: 0 0 auto; width: 1.6rem; height: 1.6rem; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.12); background: none; color: var(--texto-tenue); font-size: 1rem; line-height: 1; padding: 0; }
@@ -631,7 +659,7 @@ th, td {
 .kanban-cuenta { margin-left: auto; font-size: 0.75rem; color: var(--texto-tenue); background: rgba(255, 255, 255, 0.06); border-radius: 999px; padding: 0.05rem 0.5rem; font-variant-numeric: tabular-nums; }
 .kanban-tarjetas { list-style: none; margin: 0; padding: 0 0.1rem; display: flex; flex-direction: column; gap: 0.45rem; overflow-y: auto; min-height: 0; }
 .kanban-tarjeta { background: var(--bg-0); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 8px; padding: 0.55rem 0.65rem; cursor: pointer; display: flex; flex-direction: column; gap: 0.25rem; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3); transition: border-color 0.12s; }
-.kanban-tarjeta:hover { border-color: rgba(63, 182, 189, 0.5); }
+.kanban-tarjeta:hover { border-color: rgba(201, 176, 134, 0.5); }
 .kanban-tarjeta:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
 .kanban-titulo { font-size: 0.88rem; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
 .kanban-meta { font-size: 0.75rem; color: var(--texto-tenue); }
@@ -660,7 +688,7 @@ th, td {
 .crono-depto { display: flex; align-items: center; gap: 0.45rem; padding: 0.5rem 0.6rem; font-size: 0.82rem; font-weight: 600; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
 .crono-celda { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.35rem 0.3rem; min-height: 3rem; border-left: 1px solid rgba(255, 255, 255, 0.04); border-bottom: 1px solid rgba(255, 255, 255, 0.05); min-width: 0; }
 .crono-celda.finde, .crono-dia.finde { background: rgba(255, 255, 255, 0.015); }
-.crono-celda.hoy { background: rgba(63, 182, 189, 0.05); }
+.crono-celda.hoy { background: rgba(201, 176, 134, 0.05); }
 .crono-barra { display: flex; justify-content: space-between; gap: 0.3rem; align-items: baseline; text-align: left; width: 100%; font: inherit; font-size: 0.72rem; padding: 0.2rem 0.35rem; border-radius: 4px; border: 0; border-left: 3px solid; background: rgba(255, 255, 255, 0.06); color: var(--texto); cursor: pointer; min-width: 0; }
 .crono-barra:hover { background: rgba(255, 255, 255, 0.11); }
 .crono-barra:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
@@ -684,7 +712,7 @@ th, td {
 .pantallas { display: flex; flex-direction: column; gap: 1rem; max-width: 860px; }
 .pantalla-conectar { display: flex; flex-direction: column; gap: 0.75rem; }
 .pantalla-conectar h3 { margin: 0; }
-.pantalla-conectar.destacada { border-color: rgba(63, 182, 189, 0.45); box-shadow: 0 0 0 1px rgba(63, 182, 189, 0.25) inset; }
+.pantalla-conectar.destacada { border-color: rgba(201, 176, 134, 0.45); box-shadow: 0 0 0 1px rgba(201, 176, 134, 0.25) inset; }
 .pantalla-conectar-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
 .pantalla-codigo-grande { color: var(--gold); letter-spacing: 0.12em; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pantalla-codigo { display: flex; gap: 0.5rem; flex-wrap: wrap; }
@@ -705,13 +733,13 @@ th, td {
 .pantalla-deptos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); gap: 0.4rem; }
 .pantalla-depto { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.65rem; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; cursor: pointer; font-size: 0.9rem; }
 .pantalla-depto:hover { border-color: rgba(255, 255, 255, 0.25); }
-.pantalla-depto.sel { border-color: var(--teal); background: rgba(63, 182, 189, 0.1); }
+.pantalla-depto.sel { border-color: var(--teal); background: rgba(201, 176, 134, 0.1); }
 .pantalla-depto input { margin: 0; accent-color: var(--teal); }
 .pantalla-depto .chip-depto { margin-right: 0; }
 .chip-depto.tachado { opacity: 0.45; }
 .pantalla-vistas { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 0.4rem; }
 .pantalla-vista { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.55rem 0.65rem; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; cursor: pointer; }
-.pantalla-vista.sel { border-color: var(--teal); background: rgba(63, 182, 189, 0.1); }
+.pantalla-vista.sel { border-color: var(--teal); background: rgba(201, 176, 134, 0.1); }
 .pantalla-vista input { margin: 0.2rem 0 0; accent-color: var(--teal); }
 .pantalla-vista span { display: flex; flex-direction: column; gap: 0.1rem; font-size: 0.88rem; }
 .pantalla-vista small { color: var(--texto-tenue); font-size: 0.75rem; }
@@ -828,3 +856,123 @@ th, td {
   /* Conectar una TV: se hace casi siempre desde el celular, recien escaneado el QR. */
   .pantalla-form .acciones .btn, .pantalla-codigo .btn, .pantalla-codigo input { min-height: 2.75rem; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Armado de gestion 2.0 (Layout.jsx): menu lateral + contenido.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.app-layout { display: grid; grid-template-columns: var(--lateral-ancho) minmax(0, 1fr); min-height: 100vh; }
+.lateral {
+  position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column;
+  background: var(--bg-lateral); border-right: 1px solid var(--borde); z-index: 30;
+}
+.lateral-marca { padding: 20px 18px 16px; border-bottom: 1px solid var(--borde); }
+.lateral-marca img { width: 168px; max-width: 100%; height: auto; display: block; }
+.lateral-nav { flex: 1; overflow-y: auto; padding: 12px 0; display: flex; flex-direction: column; gap: 2px; }
+.nav-item {
+  position: relative; display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px 9px 16px; margin: 0 8px; border-radius: 10px;
+  color: var(--texto-tenue); text-decoration: none; font-size: 0.8rem; font-weight: 600;
+  transition: background 0.15s, color 0.15s;
+}
+.nav-item svg { flex: 0 0 auto; }
+.nav-item:hover { background: rgba(255, 255, 255, 0.04); color: var(--texto); }
+.nav-item.active { background: var(--gold-fondo); color: var(--gold-fuerte); }
+.nav-item.active svg { color: var(--gold); }
+.nav-item.active::before {
+  content: ""; position: absolute; left: -8px; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 18px; border-radius: 0 3px 3px 0; background: var(--gold);
+}
+.nav-item:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.nav-seccion { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--texto-3); padding: 14px 24px 6px; }
+.lateral-usuario { display: flex; align-items: center; gap: 10px; padding: 14px 14px 14px 18px; border-top: 1px solid var(--borde); }
+.lateral-avatar { width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto; display: grid; place-items: center; background: var(--gold-fondo); color: var(--gold-fuerte); font-size: 0.7rem; font-weight: 800; }
+.lateral-usuario-datos { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.lateral-usuario-datos b { font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lateral-usuario-datos span { font-size: 0.62rem; color: var(--texto-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lateral-salir { background: none; border: 0; color: var(--texto-3); padding: 6px; border-radius: 8px; display: grid; place-items: center; }
+.lateral-salir:hover, .lateral-salir:focus-visible { color: var(--gold); background: rgba(255, 255, 255, 0.04); outline: none; }
+.contenido { min-width: 0; padding: 26px 28px; }
+.barra-celular, .lateral-fondo { display: none; }
+
+@media (max-width: 900px) {
+  .app-layout { grid-template-columns: minmax(0, 1fr); }
+  .barra-celular {
+    display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 20;
+    padding: 10px 16px; background: var(--bg-lateral); border-bottom: 1px solid var(--borde);
+  }
+  .barra-celular-menu { background: none; border: 0; color: var(--texto); padding: 6px; display: grid; place-items: center; }
+  .barra-celular-logo { height: 30px; width: auto; }
+  .lateral { position: fixed; left: 0; top: 0; width: var(--lateral-ancho); transform: translateX(-100%); transition: transform 0.22s ease; }
+  .lateral.abierto { transform: none; }
+  .lateral-fondo.abierto { display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); z-index: 25; }
+  .contenido { padding: 18px 16px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Mi agenda › Semana (opcion B elegida el 24/11/2026): una tarjeta por tarea
+   en cada columna de lunes a viernes, con el borde segun el estado y hoy en
+   dorado. La lista con viñetas queda para las demas vistas.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.semana-tablero .dia-col { background: transparent; border: 0; padding: 0; gap: 8px; min-height: 0; }
+.semana-tablero .dia-col.hoy { box-shadow: none; }
+.semana-tablero .dia-cab, .semana-tablero .st-atrasadas > .dia-nombre {
+  background: var(--bg-fijo); border-radius: 10px; padding: 8px 10px;
+}
+.semana-tablero .st-atrasadas > .dia-nombre { margin-bottom: -6px; border-radius: 10px 10px 0 0; }
+.semana-tablero .st-atrasadas > .dia-fecha { background: var(--bg-fijo); border-radius: 0 0 10px 10px; padding: 0 10px 8px; }
+.semana-tablero .dia-col.hoy .dia-cab { background: var(--gold-fondo); }
+.semana-tablero .dia-col.hoy .dia-nombre { color: var(--gold-fuerte); }
+.semana-tablero .dia-nombre { font-size: 0.72rem; font-weight: 800; }
+.semana-tablero .dia-fecha { font-size: 0.65rem; color: var(--texto-3); }
+.semana-tablero .st-atrasadas { border: 0 !important; }
+.semana-tablero .dia-col.destino { background: var(--gold-fondo); border-radius: 12px; }
+.semana-tablero .dia-vacio { font-size: 0.72rem; color: var(--texto-3); padding: 6px 10px; }
+.semana-tablero .tarea-bullets { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; }
+.semana-tablero .tarea-bullets li {
+  list-style: none; padding: 9px 10px; border-radius: 10px;
+  border: 1px solid var(--borde); border-left: 3px solid var(--azul);
+  background: rgba(255, 255, 255, 0.042); color: var(--texto); font-size: 0.75rem;
+  transition: background 0.13s, border-color 0.13s;
+}
+.semana-tablero .tarea-bullets li::before { content: none; }
+.semana-tablero .tarea-bullets li:hover { background: rgba(255, 255, 255, 0.07); }
+.semana-tablero .tarea-bullets li.vencida { border-left-color: var(--rojo); }
+.semana-tablero .tarea-bullets li.realizada { border-left-color: var(--verde); opacity: 0.65; text-decoration: none; }
+.semana-tablero .tarea-bullets li.realizada .tarea-texto > span:first-child { text-decoration: line-through; }
+.semana-tablero .tarea-bullets li.no_aplica { border-left-color: var(--texto-3); opacity: 0.6; }
+.semana-tablero .dia-col.hoy .tarea-bullets li.pendiente { border-left-color: var(--amarillo); }
+.semana-tablero .tarea-texto { gap: 3px; font-weight: 700; }
+.semana-tablero .tarea-persona { font-weight: 600; }
+
+/* Cabecera de pagina y selector de vista, como en gestion. */
+.titulo-pagina { margin: 0; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em; }
+.titulo-pagina .agenda-guion { color: var(--texto-3); font-weight: 400; }
+.titulo-pagina .selector-agendas summary { font-size: 0.78rem; padding: 0.4rem 0.75rem; }
+.segmentado { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--borde); border-radius: 10px; overflow: hidden; margin-bottom: 0.9rem; }
+.segmentado button { background: transparent; border: 0; color: var(--texto-tenue); font-size: 0.75rem; font-weight: 600; padding: 0.45rem 0.85rem; }
+.segmentado button + button { border-left: 1px solid var(--borde); }
+.segmentado button:hover { color: var(--texto); background: rgba(255, 255, 255, 0.03); }
+.segmentado button.on { background: var(--gold-fondo); color: var(--gold-fuerte); }
+.segmentado button:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+.lateral-marca img { width: 140px; }
+
+/* Campos y titulos de todas las pantallas con el estilo de gestion. Sin padding
+   aca: cada formulario conserva sus medidas. */
+input:is([type="text"], [type="search"], [type="email"], [type="date"], [type="number"], :not([type])), textarea {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--texto);
+  border: 1px solid rgba(201, 176, 134, 0.18);
+  border-radius: 8px;
+}
+input:is([type="text"], [type="search"], [type="email"], [type="date"], [type="number"], :not([type])):focus, textarea:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(201, 176, 134, 0.18);
+}
+input::placeholder, textarea::placeholder { color: var(--texto-3); }
+select { background-color: rgba(255, 255, 255, 0.04); border-color: rgba(201, 176, 134, 0.18); border-radius: 8px; }
+select option { background: var(--bg-1); }
+.contenido h2 { font-weight: 800; letter-spacing: -0.01em; }
+.card { border: 1px solid var(--borde); }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--gold); }
+.barra-celular-logo { height: 38px; }
